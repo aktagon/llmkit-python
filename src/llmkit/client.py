@@ -1,0 +1,583 @@
+"""Public entry points: prompt, prompt_stream, upload_file. Mirrors go/llmkit.go."""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+from typing import Any, Callable
+
+from .caching import apply_caching
+from .errors import APIError, ValidationError, parse_error
+from .http import do_multipart_post, do_post, do_sigv4_post, do_stream_post
+from .middleware import fire_post, fire_pre, resolve_model
+from .paths import (
+    contains_value,
+    extract_int_path,
+    extract_path,
+    remove_additional_properties,
+    set_additional_properties_false,
+    set_nested_field,
+)
+from .providers.generated.caching import caching_config
+from .providers.generated.middleware import Event, MiddlewareOp, Usage
+from .providers.generated.options import OptionKey, option_overrides, supported_options
+from .providers.generated.providers import PROVIDERS, ProviderName
+from .providers.generated.request import (
+    AuthScheme,
+    SystemPlacement,
+    auth_scheme,
+    file_upload_config,
+    structured_output,
+    system_placement,
+)
+from .providers.generated.stream import stream_config
+from .transforms import select_message_transform
+from .types import File, Options, Provider, Request, Response
+
+StreamCallback = Callable[[str], None]
+
+
+def prompt(
+    provider: Provider,
+    request: Request,
+    *,
+    temperature: float | None = None,
+    top_p: float | None = None,
+    top_k: int | None = None,
+    max_tokens: int | None = None,
+    stop_sequences: list[str] | None = None,
+    seed: int | None = None,
+    frequency_penalty: float | None = None,
+    presence_penalty: float | None = None,
+    thinking_budget: int | None = None,
+    reasoning_effort: str = "",
+    caching: bool = False,
+    cache_ttl: float = 0.0,
+    middleware: list | None = None,
+    request_timeout: float = 600.0,
+) -> Response:
+    """Send a one-shot request to an LLM provider."""
+    opts = Options(
+        temperature=temperature,
+        top_p=top_p,
+        top_k=top_k,
+        max_tokens=max_tokens,
+        stop_sequences=list(stop_sequences or []),
+        seed=seed,
+        frequency_penalty=frequency_penalty,
+        presence_penalty=presence_penalty,
+        thinking_budget=thinking_budget,
+        reasoning_effort=reasoning_effort,
+        caching=caching,
+        cache_ttl=cache_ttl,
+        middleware=list(middleware or []),
+        request_timeout=request_timeout,
+    )
+
+    _validate_provider(provider)
+    _validate_request(request)
+    _validate_options(provider, opts)
+
+    cfg = PROVIDERS.get(provider.name)
+    if cfg is None:
+        raise ValidationError(field="provider", message=f"unknown: {provider.name}")
+
+    base_event = Event(
+        op=MiddlewareOp.LLM_REQUEST,
+        provider=provider.name,
+        model=resolve_model(provider.model, cfg),
+    )
+    start = time.monotonic()
+    fire_pre(opts.middleware, base_event)
+
+    body, headers = _build_request(provider, request, opts, cfg)
+
+    if opts.caching:
+        try:
+            apply_caching(body, provider, opts, cfg)
+        except Exception as exc:
+            _fire_post_err(opts.middleware, base_event, exc, start)
+            raise
+
+    json_body = json.dumps(body).encode("utf-8")
+    url = _build_url(provider, cfg)
+
+    try:
+        if auth_scheme(ProviderName(provider.name)) == AuthScheme.SIG_V4:
+            region = os.environ.get(cfg.region_env_var, "")
+            secret_key = os.environ.get(cfg.secret_key_env_var, "")
+            session_token = os.environ.get(cfg.session_token_env_var, "")
+            resp_body = do_sigv4_post(
+                url,
+                json_body,
+                provider.api_key,
+                secret_key,
+                session_token,
+                region,
+                cfg.service_name,
+                timeout=opts.request_timeout,
+            )
+        else:
+            resp_body = do_post(url, json_body, headers, timeout=opts.request_timeout)
+    except APIError as raw_api_err:
+        err = parse_error(provider.name, raw_api_err.status_code, raw_api_err.message.encode("utf-8"), None)
+        _fire_post_err(opts.middleware, base_event, err, start)
+        raise err from raw_api_err
+    except Exception as exc:
+        _fire_post_err(opts.middleware, base_event, exc, start)
+        raise
+
+    resp = _parse_response(provider.name, resp_body)
+    post_event = Event(
+        op=MiddlewareOp.LLM_REQUEST,
+        provider=provider.name,
+        model=resolve_model(provider.model, cfg),
+        usage=resp.tokens,
+        duration=time.monotonic() - start,
+    )
+    fire_post(opts.middleware, post_event)
+    return resp
+
+
+def prompt_stream(
+    provider: Provider,
+    request: Request,
+    on_chunk: StreamCallback,
+    *,
+    temperature: float | None = None,
+    top_p: float | None = None,
+    top_k: int | None = None,
+    max_tokens: int | None = None,
+    stop_sequences: list[str] | None = None,
+    seed: int | None = None,
+    frequency_penalty: float | None = None,
+    presence_penalty: float | None = None,
+    thinking_budget: int | None = None,
+    reasoning_effort: str = "",
+    caching: bool = False,
+    cache_ttl: float = 0.0,
+    middleware: list | None = None,
+    request_timeout: float = 600.0,
+) -> Response:
+    """Streaming variant of `prompt`. Calls on_chunk(text) for each delta; returns accumulated response."""
+    opts = Options(
+        temperature=temperature,
+        top_p=top_p,
+        top_k=top_k,
+        max_tokens=max_tokens,
+        stop_sequences=list(stop_sequences or []),
+        seed=seed,
+        frequency_penalty=frequency_penalty,
+        presence_penalty=presence_penalty,
+        thinking_budget=thinking_budget,
+        reasoning_effort=reasoning_effort,
+        caching=caching,
+        cache_ttl=cache_ttl,
+        middleware=list(middleware or []),
+        request_timeout=request_timeout,
+    )
+
+    _validate_provider(provider)
+    _validate_request(request)
+    _validate_options(provider, opts)
+
+    cfg = PROVIDERS.get(provider.name)
+    if cfg is None:
+        raise ValidationError(field="provider", message=f"unknown: {provider.name}")
+
+    stream_cfg = stream_config(ProviderName(provider.name))
+    if stream_cfg is None:
+        raise ValidationError(field="provider", message=f"streaming not supported: {provider.name}")
+
+    base_event = Event(
+        op=MiddlewareOp.LLM_REQUEST,
+        provider=provider.name,
+        model=resolve_model(provider.model, cfg),
+    )
+    start = time.monotonic()
+    fire_pre(opts.middleware, base_event)
+
+    body, headers = _build_request(provider, request, opts, cfg)
+
+    if opts.caching:
+        try:
+            apply_caching(body, provider, opts, cfg)
+        except Exception as exc:
+            _fire_post_err(opts.middleware, base_event, exc, start)
+            raise
+
+    if stream_cfg.param:
+        body[stream_cfg.param] = True
+
+    json_body = json.dumps(body).encode("utf-8")
+    url = _build_url(provider, cfg)
+    if stream_cfg.endpoint:
+        url = _build_stream_url(provider, cfg, stream_cfg)
+
+    chunks: list[str] = []
+
+    def wrapped(chunk: str) -> None:
+        chunks.append(chunk)
+        on_chunk(chunk)
+
+    try:
+        usage = do_stream_post(url, json_body, headers, stream_cfg, wrapped, timeout=opts.request_timeout)
+    except Exception as exc:
+        _fire_post_err(opts.middleware, base_event, exc, start)
+        raise
+
+    post_event = Event(
+        op=MiddlewareOp.LLM_REQUEST,
+        provider=provider.name,
+        model=resolve_model(provider.model, cfg),
+        usage=usage,
+        duration=time.monotonic() - start,
+    )
+    fire_post(opts.middleware, post_event)
+    return Response(text="".join(chunks), tokens=usage)
+
+
+def upload_file(
+    provider: Provider,
+    path: str,
+    *,
+    middleware: list | None = None,
+    request_timeout: float = 600.0,
+) -> File:
+    """Upload a file to a provider and return a File reference."""
+    _validate_provider(provider)
+    cfg = PROVIDERS.get(provider.name)
+    if cfg is None:
+        raise ValidationError(field="provider", message=f"unknown: {provider.name}")
+    fu = file_upload_config(ProviderName(provider.name))
+    if fu is None:
+        raise ValidationError(field="provider", message=f"file upload not supported: {provider.name}")
+
+    mws = list(middleware or [])
+    base_event = Event(
+        op=MiddlewareOp.UPLOAD,
+        provider=provider.name,
+        model=resolve_model(provider.model, cfg),
+    )
+    start = time.monotonic()
+    fire_pre(mws, base_event)
+
+    with open(path, "rb") as f:
+        data = f.read()
+    name = os.path.basename(path)
+
+    base = provider.base_url or cfg.base_url
+    upload_url = base + fu.endpoint
+    if auth_scheme(ProviderName(provider.name)) == AuthScheme.QUERY_PARAM_KEY:
+        upload_url = upload_url + "?" + cfg.auth_query_param + "=" + provider.api_key
+
+    headers: dict[str, str] = {}
+    scheme = auth_scheme(ProviderName(provider.name))
+    if scheme == AuthScheme.BEARER_TOKEN:
+        headers[cfg.auth_header] = cfg.auth_prefix + " " + provider.api_key
+    elif scheme == AuthScheme.HEADER_API_KEY:
+        headers[cfg.auth_header] = provider.api_key
+    if cfg.required_header:
+        headers[cfg.required_header] = cfg.required_header_value
+    if fu.beta_header:
+        headers["anthropic-beta"] = fu.beta_header
+
+    extra_fields: dict[str, str] = {}
+    if fu.extra_fields_json:
+        try:
+            parsed = json.loads(fu.extra_fields_json)
+            if isinstance(parsed, dict):
+                extra_fields = {str(k): str(v) for k, v in parsed.items()}
+        except ValueError:
+            pass
+
+    if system_placement(ProviderName(provider.name)) == SystemPlacement.SIBLING_OBJECT:
+        metadata = {"file": {"display_name": name}}
+        extra_fields["metadata"] = json.dumps(metadata)
+        headers["X-Goog-Upload-Protocol"] = "multipart"
+
+    try:
+        resp_body, status_code = do_multipart_post(
+            upload_url, fu.field_name, name, data, extra_fields, headers, timeout=request_timeout
+        )
+    except Exception as exc:
+        _fire_post_err(mws, base_event, exc, start)
+        raise
+
+    if status_code >= 400:
+        err = parse_error(provider.name, status_code, resp_body, None)
+        _fire_post_err(mws, base_event, err, start)
+        raise err
+
+    try:
+        raw = json.loads(resp_body)
+    except ValueError as exc:
+        _fire_post_err(mws, base_event, exc, start)
+        raise
+
+    from .paths import detect_mime_type
+
+    file = File(mime_type=detect_mime_type(path))
+    if fu.response_id_path:
+        file.id = extract_path(raw, fu.response_id_path)
+    if fu.response_uri_path:
+        file.uri = extract_path(raw, fu.response_uri_path)
+    if fu.response_name_path:
+        file.name = extract_path(raw, fu.response_name_path)
+    if fu.response_mime_path:
+        file.mime_type = extract_path(raw, fu.response_mime_path)
+
+    post_event = Event(
+        op=MiddlewareOp.UPLOAD,
+        provider=provider.name,
+        model=resolve_model(provider.model, cfg),
+        duration=time.monotonic() - start,
+    )
+    fire_post(mws, post_event)
+    return file
+
+
+# =============================================================================
+# Validation
+# =============================================================================
+
+def _validate_provider(p: Provider) -> None:
+    if not p.api_key:
+        raise ValidationError(field="api_key", message="required")
+
+
+def _validate_request(req: Request) -> None:
+    if not req.user and not req.messages:
+        raise ValidationError(field="user", message="required")
+
+
+def _validate_options(p: Provider, opts: Options) -> None:
+    if p.name not in PROVIDERS:
+        return
+    supported = {o.key: o for o in supported_options(ProviderName(p.name))}
+
+    def require(opt_key: OptionKey, field_name: str) -> None:
+        if opt_key not in supported:
+            raise ValidationError(field=field_name, message=f"not supported by {p.name}")
+
+    if opts.top_k is not None:
+        require(OptionKey.TOP_K, "top_k")
+    if opts.seed is not None:
+        require(OptionKey.SEED, "seed")
+    if opts.frequency_penalty is not None:
+        require(OptionKey.FREQUENCY_PENALTY, "frequency_penalty")
+    if opts.presence_penalty is not None:
+        require(OptionKey.PRESENCE_PENALTY, "presence_penalty")
+    if opts.thinking_budget is not None:
+        require(OptionKey.THINKING_BUDGET, "thinking_budget")
+    if opts.reasoning_effort:
+        require(OptionKey.REASONING_EFFORT, "reasoning_effort")
+
+    overrides = {o.key: o for o in option_overrides(ProviderName(p.name))}
+    if opts.reasoning_effort and OptionKey.REASONING_EFFORT in overrides:
+        ov = overrides[OptionKey.REASONING_EFFORT]
+        allowed_csv = ",".join(ov.allowed_values)
+        if allowed_csv and not contains_value(allowed_csv, opts.reasoning_effort):
+            raise ValidationError(
+                field="reasoning_effort",
+                message=f"invalid value {opts.reasoning_effort!r}, must be one of: {allowed_csv}",
+            )
+
+
+# =============================================================================
+# URL and request builders
+# =============================================================================
+
+def _build_url(p: Provider, cfg) -> str:
+    base = p.base_url or cfg.base_url
+    endpoint = cfg.endpoint
+
+    if auth_scheme(ProviderName(p.name)) == AuthScheme.QUERY_PARAM_KEY:
+        endpoint = endpoint + "?" + cfg.auth_query_param + "=" + p.api_key
+
+    model = p.model or cfg.default_model
+    endpoint = endpoint.replace("{model}", model)
+    endpoint = endpoint.replace("{apiKey}", p.api_key)
+
+    if cfg.region_env_var:
+        region = os.environ.get(cfg.region_env_var, "")
+        base = base.replace("{region}", region)
+    return base + endpoint
+
+
+def _build_stream_url(p: Provider, cfg, stream_cfg) -> str:
+    base = p.base_url or cfg.base_url
+    endpoint = stream_cfg.endpoint
+    model = p.model or cfg.default_model
+    endpoint = endpoint.replace("{model}", model)
+    endpoint = endpoint.replace("{apiKey}", p.api_key)
+
+    if auth_scheme(ProviderName(p.name)) == AuthScheme.QUERY_PARAM_KEY:
+        sep = "&" if "?" in endpoint else "?"
+        endpoint = endpoint + sep + cfg.auth_query_param + "=" + p.api_key
+    return base + endpoint
+
+
+def _build_request(p: Provider, req: Request, opts: Options, cfg):
+    body: dict[str, Any] = {}
+    headers: dict[str, str] = {}
+
+    model = p.model or cfg.default_model
+    if cfg.model_in_body:
+        body["model"] = model
+
+    max_tokens = cfg.default_max_tokens
+    if opts.max_tokens is not None:
+        max_tokens = opts.max_tokens
+
+    supported = {o.key: o for o in supported_options(ProviderName(p.name))}
+
+    max_key = supported.get(OptionKey.MAX_TOKENS)
+    if max_key is not None:
+        body[max_key.json_key] = max_tokens
+
+    placement = system_placement(ProviderName(p.name))
+    if placement == SystemPlacement.TOP_LEVEL_FIELD:
+        if req.system:
+            body["system"] = req.system
+    elif placement == SystemPlacement.SIBLING_OBJECT:
+        if req.system:
+            body["system_instruction"] = {"parts": [{"text": req.system}]}
+
+    msg_transform = select_message_transform(cfg)
+    msg_transform(body, req, cfg)
+
+    if cfg.wraps_options_in:
+        opt_body: dict[str, Any] = {}
+        _add_options(opt_body, opts, supported)
+        if max_key is not None:
+            opt_body[max_key.json_key] = max_tokens
+            body.pop(max_key.json_key, None)
+        if opt_body:
+            body[cfg.wraps_options_in] = opt_body
+    else:
+        _add_options(body, opts, supported)
+
+    if req.schema:
+        _add_structured_output(body, headers, req.schema, p.name, cfg)
+
+    scheme = auth_scheme(ProviderName(p.name))
+    if scheme == AuthScheme.BEARER_TOKEN:
+        headers[cfg.auth_header] = cfg.auth_prefix + " " + p.api_key
+    elif scheme == AuthScheme.HEADER_API_KEY:
+        headers[cfg.auth_header] = p.api_key
+
+    if cfg.required_header:
+        headers[cfg.required_header] = cfg.required_header_value
+
+    return body, headers
+
+
+def _add_options(body: dict[str, Any], opts: Options, supported: dict) -> None:
+    def put(opt_key: OptionKey, value: Any) -> None:
+        mapping = supported.get(opt_key)
+        if mapping is not None:
+            body[mapping.json_key] = value
+
+    if opts.temperature is not None:
+        put(OptionKey.TEMPERATURE, opts.temperature)
+    if opts.top_p is not None:
+        put(OptionKey.TOP_P, opts.top_p)
+    if opts.top_k is not None:
+        put(OptionKey.TOP_K, opts.top_k)
+    if opts.stop_sequences:
+        put(OptionKey.STOP_SEQUENCES, opts.stop_sequences)
+    if opts.seed is not None:
+        put(OptionKey.SEED, opts.seed)
+    if opts.frequency_penalty is not None:
+        put(OptionKey.FREQUENCY_PENALTY, opts.frequency_penalty)
+    if opts.presence_penalty is not None:
+        put(OptionKey.PRESENCE_PENALTY, opts.presence_penalty)
+    if opts.thinking_budget is not None:
+        put(OptionKey.THINKING_BUDGET, opts.thinking_budget)
+    if opts.reasoning_effort:
+        put(OptionKey.REASONING_EFFORT, opts.reasoning_effort)
+
+
+def _add_structured_output(body: dict[str, Any], headers: dict[str, str], schema: str, provider_name: str, cfg) -> None:
+    so = structured_output(ProviderName(provider_name))
+    if so is None:
+        return
+    try:
+        parsed_schema = json.loads(schema)
+    except ValueError:
+        return
+
+    if so.enforce_strict:
+        set_additional_properties_false(parsed_schema)
+    if so.remove_additional_props:
+        remove_additional_properties(parsed_schema)
+
+    if so.beta_header:
+        headers["anthropic-beta"] = so.beta_header
+
+    path_parts = so.schema_path.split(".")
+    if len(path_parts) == 1:
+        format_obj = {
+            "type": so.format_type,
+            path_parts[0]: parsed_schema,
+        }
+        set_nested_field(body, so.format_field, format_obj)
+    else:
+        inner: dict[str, Any] = {
+            "name": "response",
+            path_parts[1]: parsed_schema,
+        }
+        if so.enforce_strict:
+            inner["strict"] = True
+        format_obj = {
+            "type": so.format_type,
+            path_parts[0]: inner,
+        }
+        set_nested_field(body, so.format_field, format_obj)
+
+
+# =============================================================================
+# Response parsing
+# =============================================================================
+
+def _parse_response(provider: str, body: bytes) -> Response:
+    try:
+        raw = json.loads(body)
+    except ValueError as exc:
+        raise APIError(
+            provider=provider,
+            message=f"unmarshal response: {exc}",
+            status_code=0,
+        ) from exc
+
+    cfg = PROVIDERS[provider]
+    text = extract_path(raw, cfg.response_text_path)
+    input_tokens = extract_int_path(raw, cfg.usage_input_path)
+    output_tokens = extract_int_path(raw, cfg.usage_output_path)
+    cache_creation, cache_read = _extract_cache_usage(raw, provider)
+
+    tokens = Usage(
+        input=input_tokens,
+        output=output_tokens,
+        cache_creation=cache_creation,
+        cache_read=cache_read,
+    )
+    return Response(text=text, tokens=tokens)
+
+
+def _extract_cache_usage(raw: dict[str, Any], provider: str) -> tuple[int, int]:
+    cc = caching_config(ProviderName(provider))
+    if cc is None:
+        return 0, 0
+    creation = extract_int_path(raw, cc.creation_tokens_path) if cc.creation_tokens_path else 0
+    read = extract_int_path(raw, cc.read_tokens_path) if cc.read_tokens_path else 0
+    return creation, read
+
+
+def _fire_post_err(mws: list, base_event: Event, exc: BaseException, start: float) -> None:
+    import dataclasses
+
+    ev = dataclasses.replace(base_event, err=str(exc), duration=time.monotonic() - start)
+    fire_post(mws, ev)
