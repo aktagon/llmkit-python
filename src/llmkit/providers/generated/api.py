@@ -60,14 +60,14 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
 
 CACHE_RESPONSE_FIELDS: tuple[APIResponseFieldDef, ...] = (
     APIResponseFieldDef(
-        py_field_name="cache_creation",
-        py_field_type="int",
-        source_path="cacheCreationTokensPath",
-    ),
-    APIResponseFieldDef(
         py_field_name="cache_read",
         py_field_type="int",
         source_path="cacheReadTokensPath",
+    ),
+    APIResponseFieldDef(
+        py_field_name="cache_write",
+        py_field_type="int",
+        source_path="cacheWriteTokensPath",
     ),
 )
 
@@ -79,4 +79,4 @@ def cache_usage_paths(provider: str) -> tuple[str, str]:
     config = caching_config(ProviderName(provider))
     if config is None:
         return "", ""
-    return config.creation_tokens_path, config.read_tokens_path
+    return config.write_tokens_path, config.read_tokens_path
