@@ -556,12 +556,12 @@ def _parse_response(provider: str, body: bytes) -> Response:
     text = extract_path(raw, cfg.response_text_path)
     input_tokens = extract_int_path(raw, cfg.usage_input_path)
     output_tokens = extract_int_path(raw, cfg.usage_output_path)
-    cache_creation, cache_read = _extract_cache_usage(raw, provider)
+    cache_write, cache_read = _extract_cache_usage(raw, provider)
 
     tokens = Usage(
         input=input_tokens,
         output=output_tokens,
-        cache_creation=cache_creation,
+        cache_write=cache_write,
         cache_read=cache_read,
     )
     return Response(text=text, tokens=tokens)
@@ -571,9 +571,9 @@ def _extract_cache_usage(raw: dict[str, Any], provider: str) -> tuple[int, int]:
     cc = caching_config(ProviderName(provider))
     if cc is None:
         return 0, 0
-    creation = extract_int_path(raw, cc.creation_tokens_path) if cc.creation_tokens_path else 0
+    write = extract_int_path(raw, cc.write_tokens_path) if cc.write_tokens_path else 0
     read = extract_int_path(raw, cc.read_tokens_path) if cc.read_tokens_path else 0
-    return creation, read
+    return write, read
 
 
 def _fire_post_err(mws: list, base_event: Event, exc: BaseException, start: float) -> None:
