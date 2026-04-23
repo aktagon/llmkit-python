@@ -591,7 +591,7 @@ def test_integration_anthropic_caching() -> None:
         caching=True,
     )
     assert resp.text != "", "empty response text"
-    print(f"cache_read={resp.tokens.cache_read} cache_creation={resp.tokens.cache_creation}")
+    print(f"cache_read={resp.tokens.cache_read} cache_write={resp.tokens.cache_write}")
 
 
 def test_integration_openai_caching() -> None:
@@ -604,5 +604,5 @@ def test_integration_openai_caching() -> None:
         caching=True,
     )
     assert resp.text != "", "empty response text"
-    print(f"cache_read={resp.tokens.cache_read} cache_creation={resp.tokens.cache_creation}")
+    print(f"cache_read={resp.tokens.cache_read} cache_write={resp.tokens.cache_write}")
 
