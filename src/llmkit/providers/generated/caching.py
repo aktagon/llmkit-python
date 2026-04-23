@@ -32,7 +32,7 @@ class ResourceLifecycleDef:
 class CachingDef:
     mode: CachingMode
     control_type: str = ""
-    creation_tokens_path: str = ""
+    write_tokens_path: str = ""
     read_tokens_path: str = ""
     default_ttl: str = ""
     lifecycle: ResourceLifecycleDef | None = None
@@ -42,7 +42,7 @@ _CACHING: dict[ProviderName, CachingDef] = {
     ProviderName.ANTHROPIC: CachingDef(
         mode=CachingMode.EXPLICIT_CACHING,
         control_type="ephemeral",
-        creation_tokens_path="usage.cache_creation_input_tokens",
+        write_tokens_path="usage.cache_creation_input_tokens",
         read_tokens_path="usage.cache_read_input_tokens",
         default_ttl="300",
         lifecycle=None,
@@ -50,7 +50,7 @@ _CACHING: dict[ProviderName, CachingDef] = {
     ProviderName.GOOGLE: CachingDef(
         mode=CachingMode.RESOURCE_CACHING,
         control_type="",
-        creation_tokens_path="",
+        write_tokens_path="",
         read_tokens_path="usageMetadata.cachedContentTokenCount",
         default_ttl="3600",
         lifecycle=(
@@ -71,7 +71,7 @@ _CACHING: dict[ProviderName, CachingDef] = {
     ProviderName.OPENAI: CachingDef(
         mode=CachingMode.AUTOMATIC_CACHING,
         control_type="",
-        creation_tokens_path="",
+        write_tokens_path="",
         read_tokens_path="usage.prompt_tokens_details.cached_tokens",
         default_ttl="",
         lifecycle=None,
@@ -87,4 +87,4 @@ def cache_usage_paths(provider: ProviderName) -> tuple[str, str]:
     config = _CACHING.get(provider)
     if config is None:
         return "", ""
-    return config.creation_tokens_path, config.read_tokens_path
+    return config.write_tokens_path, config.read_tokens_path
