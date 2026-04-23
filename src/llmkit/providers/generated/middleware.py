@@ -11,7 +11,7 @@ from typing import Any, Callable
 class Usage:
     input: int = 0
     output: int = 0
-    cache_creation: int = 0
+    cache_write: int = 0
     cache_read: int = 0
 
 
