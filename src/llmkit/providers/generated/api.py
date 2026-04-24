@@ -69,6 +69,21 @@ CACHE_RESPONSE_FIELDS: tuple[APIResponseFieldDef, ...] = (
         py_field_type="int",
         source_path="cacheWriteTokensPath",
     ),
+    APIResponseFieldDef(
+        py_field_name="input",
+        py_field_type="int",
+        source_path="usageInputPath",
+    ),
+    APIResponseFieldDef(
+        py_field_name="output",
+        py_field_type="int",
+        source_path="usageOutputPath",
+    ),
+    APIResponseFieldDef(
+        py_field_name="reasoning",
+        py_field_type="int",
+        source_path="reasoningTokensPath",
+    ),
 )
 
 
