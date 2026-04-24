@@ -13,6 +13,7 @@ class Usage:
     output: int = 0
     cache_write: int = 0
     cache_read: int = 0
+    reasoning: int = 0
 
 
 class MiddlewarePhase(str, Enum):
