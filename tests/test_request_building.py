@@ -135,3 +135,33 @@ def test_providers_registry_has_all_expected_keys() -> None:
         "ollama",
     }
     assert expected.issubset(llmkit.PROVIDERS.keys())
+
+
+def test_reasoning_tokens_extracted_for_openai() -> None:
+    """OpenAI o1/o3/o4 expose reasoning_tokens via completion_tokens_details."""
+    from llmkit.client import _parse_response
+
+    body = json.dumps({
+        "choices": [{"message": {"content": "reasoned answer"}}],
+        "usage": {
+            "prompt_tokens": 40,
+            "completion_tokens": 25,
+            "completion_tokens_details": {"reasoning_tokens": 17},
+        },
+    })
+    resp = _parse_response("openai", body.encode())
+    assert resp.tokens.input == 40
+    assert resp.tokens.output == 25
+    assert resp.tokens.reasoning == 17
+
+
+def test_reasoning_tokens_zero_for_unreported_provider() -> None:
+    """Anthropic does not report reasoning tokens separately; Usage.reasoning stays 0."""
+    from llmkit.client import _parse_response
+
+    body = json.dumps({
+        "content": [{"type": "text", "text": "hello"}],
+        "usage": {"input_tokens": 5, "output_tokens": 3},
+    })
+    resp = _parse_response("anthropic", body.encode())
+    assert resp.tokens.reasoning == 0
