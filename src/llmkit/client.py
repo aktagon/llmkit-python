@@ -557,12 +557,14 @@ def _parse_response(provider: str, body: bytes) -> Response:
     input_tokens = extract_int_path(raw, cfg.usage_input_path)
     output_tokens = extract_int_path(raw, cfg.usage_output_path)
     cache_write, cache_read = _extract_cache_usage(raw, provider)
+    reasoning = extract_int_path(raw, cfg.reasoning_tokens_path) if cfg.reasoning_tokens_path else 0
 
     tokens = Usage(
         input=input_tokens,
         output=output_tokens,
         cache_write=cache_write,
         cache_read=cache_read,
+        reasoning=reasoning,
     )
     return Response(text=text, tokens=tokens)
 
