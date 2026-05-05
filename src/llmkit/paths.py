@@ -121,6 +121,26 @@ def set_nested_field(body: dict[str, Any], path: str, value: Any) -> None:
     current[parts[-1]] = value
 
 
+def merge_into_parent(body: dict[str, Any], path: str, extras: dict[str, Any]) -> None:
+    """
+
+
+
+
+"""
+    parts = path.split(".")
+    if len(parts) == 1:
+        body.update(extras)
+        return
+    current = body
+    for part in parts[:-1]:
+        nxt = current.get(part)
+        if not isinstance(nxt, dict):
+            return
+        current = nxt
+    current.update(extras)
+
+
 def set_additional_properties_false(schema: Any) -> None:
     """"""
     if not isinstance(schema, dict):
