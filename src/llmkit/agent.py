@@ -250,19 +250,21 @@ class Agent:
             tool_def_transform = select_tool_def_transform(cfg)
             tool_def_transform(body, self.tools)
 
+        from .paths import set_nested_field
+
         if cfg.wraps_options_in:
             opt_body: dict[str, Any] = {}
-            _add_options(opt_body, self.opts, supported)
+            _add_options(opt_body, self.opts, self.provider.name)
             max_key = supported.get(OptionKey.MAX_TOKENS)
             if max_key is not None:
-                opt_body[max_key.json_key] = max_tokens
+                set_nested_field(opt_body, max_key.json_key, max_tokens)
             if opt_body:
                 body[cfg.wraps_options_in] = opt_body
         else:
             max_key = supported.get(OptionKey.MAX_TOKENS)
             if max_key is not None:
-                body[max_key.json_key] = max_tokens
-            _add_options(body, self.opts, supported)
+                set_nested_field(body, max_key.json_key, max_tokens)
+            _add_options(body, self.opts, self.provider.name)
 
         scheme = auth_scheme(ProviderName(self.provider.name))
         if scheme == AuthScheme.BEARER_TOKEN:
