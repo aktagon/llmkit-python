@@ -15,6 +15,7 @@ from .paths import (
     contains_value,
     extract_int_path,
     extract_path,
+    merge_into_parent,
     remove_additional_properties,
     set_additional_properties_false,
     set_nested_field,
@@ -450,14 +451,14 @@ def _build_request(p: Provider, req: Request, opts: Options, cfg):
 
     if cfg.wraps_options_in:
         opt_body: dict[str, Any] = {}
-        _add_options(opt_body, opts, supported)
+        _add_options(opt_body, opts, p.name)
         if max_key is not None:
-            opt_body[max_key.json_key] = max_tokens
-            body.pop(max_key.json_key, None)
+            set_nested_field(opt_body, max_key.json_key, max_tokens)
+            body.pop(max_key.json_key.split(".", 1)[0], None)
         if opt_body:
             body[cfg.wraps_options_in] = opt_body
     else:
-        _add_options(body, opts, supported)
+        _add_options(body, opts, p.name)
 
     if req.schema:
         _add_structured_output(body, headers, req.schema, p.name, cfg)
@@ -474,11 +475,31 @@ def _build_request(p: Provider, req: Request, opts: Options, cfg):
     return body, headers
 
 
-def _add_options(body: dict[str, Any], opts: Options, supported: dict) -> None:
+def _add_options(body: dict[str, Any], opts: Options, provider_name: str) -> None:
+    """Apply generation parameters to body, honouring dotted JSON keys + extra_fields.
+
+    JSON keys may be dotted (e.g. "thinking.budget_tokens") for providers that
+    require nested objects. Each option's per-provider OptionOverrideDef may
+    also carry extra_fields_json — sibling JSON merged into the same parent
+    path (e.g. {"type":"enabled"} alongside Anthropic's thinking.budget_tokens).
+    """
+    pname = ProviderName(provider_name)
+    supported = {o.key: o for o in supported_options(pname)}
+    overrides = {ov.key: ov for ov in option_overrides(pname)}
+
     def put(opt_key: OptionKey, value: Any) -> None:
         mapping = supported.get(opt_key)
-        if mapping is not None:
-            body[mapping.json_key] = value
+        if mapping is None:
+            return
+        set_nested_field(body, mapping.json_key, value)
+        ov = overrides.get(opt_key)
+        if ov and ov.extra_fields_json:
+            try:
+                extras = json.loads(ov.extra_fields_json)
+            except ValueError:
+                return
+            if isinstance(extras, dict):
+                merge_into_parent(body, mapping.json_key, extras)
 
     if opts.temperature is not None:
         put(OptionKey.TEMPERATURE, opts.temperature)
