@@ -121,6 +121,26 @@ def set_nested_field(body: dict[str, Any], path: str, value: Any) -> None:
     current[parts[-1]] = value
 
 
+def merge_into_parent(body: dict[str, Any], path: str, extras: dict[str, Any]) -> None:
+    """Merge extras into the dict that contains the leaf of path.
+
+    For "a.b.c" extras land in body["a"]["b"]; for "x" they land in body itself.
+    Used to attach static sibling fields (OptionOverrideDef.extra_fields_json)
+    next to a provider-specific dotted JSON key.
+    """
+    parts = path.split(".")
+    if len(parts) == 1:
+        body.update(extras)
+        return
+    current = body
+    for part in parts[:-1]:
+        nxt = current.get(part)
+        if not isinstance(nxt, dict):
+            return
+        current = nxt
+    current.update(extras)
+
+
 def set_additional_properties_false(schema: Any) -> None:
     """Recursively set additionalProperties=false and auto-fill required on object schemas."""
     if not isinstance(schema, dict):
