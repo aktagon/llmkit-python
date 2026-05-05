@@ -28,6 +28,23 @@ def test_anthropic_builds_top_level_system() -> None:
     assert headers["anthropic-version"] == "2023-06-01"
 
 
+def test_anthropic_thinking_budget_nests_dotted_path_with_extras() -> None:
+    """Regression: thinking.budget_tokens must nest into {thinking: {...}},
+    not be a literal top-level "thinking.budget_tokens" key. Anthropic
+    silently ignores unknown top-level keys, so this only shows up as a
+    body-shape check. extra_fields_json adds {"type":"enabled"} as a sibling.
+    """
+    cfg = PROVIDERS["anthropic"]
+    body, _headers = _build_request(
+        llmkit.Provider(name="anthropic", api_key="sk", model="claude-sonnet-4-6"),
+        llmkit.Request(user="hi"),
+        llmkit.Options(thinking_budget=1024),
+        cfg,
+    )
+    assert "thinking.budget_tokens" not in body
+    assert body["thinking"] == {"budget_tokens": 1024, "type": "enabled"}
+
+
 def test_openai_puts_system_in_messages_array() -> None:
     cfg = PROVIDERS["openai"]
     body, headers = _build_request(
