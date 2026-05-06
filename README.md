@@ -2,7 +2,7 @@
 
 Unified LLM client library. One API, multiple providers, zero external dependencies.
 
-The code is generated + hand-coded: a typed provider matrix is generated from a single source of truth, while request building, transport, streaming, caching, batching, and tool-loop behavior are hand-coded on top.
+The code is generated + hand-coded with the help of AI: a typed provider matrix is generated from a single source of truth, while request building, transport, streaming, caching, batching, and tool-loop behavior are hand-coded on top.
 
 ## Install
 
