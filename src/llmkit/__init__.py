@@ -17,6 +17,7 @@ from .agent import Agent
 from .batch import BatchHandle, prompt_batch, submit_batch, wait_batch
 from .client import StreamCallback, prompt, prompt_stream, upload_file
 from .errors import APIError, MiddlewareVetoError, ValidationError
+from .image import ImageData, ImageInput, ImageRequest, ImageResponse, generate_image
 from .providers.generated.middleware import (
     Event,
     MiddlewareFn,
@@ -34,6 +35,10 @@ __all__ = [
     "Event",
     "File",
     "Image",
+    "ImageData",
+    "ImageInput",
+    "ImageRequest",
+    "ImageResponse",
     "Message",
     "MiddlewareFn",
     "MiddlewareOp",
@@ -50,6 +55,7 @@ __all__ = [
     "Tool",
     "Usage",
     "ValidationError",
+    "generate_image",
     "prompt",
     "prompt_batch",
     "prompt_stream",
