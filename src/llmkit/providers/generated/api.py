@@ -46,9 +46,19 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
 
 API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
     APIEntryPointDef(
+        py_func="agent",
+        py_param_type="Provider",
+        comment="Constructs a stateful Agent that drives a multi-turn tool-calling loop. Per-language naming: Go NewAgent, TS class Agent, Python class Agent, Rust struct Agent.",
+    ),
+    APIEntryPointDef(
         py_func="generate_image",
         py_param_type="ImageRequest",
         comment="Synchronous text-to-image and image-to-image. Reference images go in ImageRequest.ReferenceImages (slice). Returns ImageResponse{ Images []ImageData, Text string, Usage }.",
+    ),
+    APIEntryPointDef(
+        py_func="prompt",
+        py_param_type="Request",
+        comment="One-shot synchronous request. Returns Response with text + Usage tokens.",
     ),
     APIEntryPointDef(
         py_func="prompt_batch",
@@ -56,9 +66,24 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         comment="Blocks until all responses ready. Handles async polling internally.",
     ),
     APIEntryPointDef(
+        py_func="prompt_stream",
+        py_param_type="Request",
+        comment="Streaming variant. Calls a per-chunk callback as deltas arrive; returns the accumulated Response on stream close.",
+    ),
+    APIEntryPointDef(
         py_func="submit_batch",
         py_param_type="list[Request]",
         comment="Returns BatchHandle immediately. Use WaitBatch to get results.",
+    ),
+    APIEntryPointDef(
+        py_func="upload_file",
+        py_param_type="Bytes",
+        comment="Uploads a file and returns a File handle suitable for inclusion in a Request.files slice.",
+    ),
+    APIEntryPointDef(
+        py_func="wait_batch",
+        py_param_type="BatchHandle",
+        comment="Polls the provider until the batch handle reaches terminal state, then returns the ordered list of Responses.",
     ),
 )
 
