@@ -27,6 +27,7 @@ class MiddlewareOp(str, Enum):
     CACHE_CREATE = "cache_create"
     UPLOAD = "upload"
     BATCH_SUBMIT = "batch_submit"
+    IMAGE_GENERATION = "image_generation"
 
 
 @dataclass

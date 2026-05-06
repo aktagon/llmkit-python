@@ -46,6 +46,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
 
 API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
     APIEntryPointDef(
+        py_func="generate_image",
+        py_param_type="ImageRequest",
+        comment="Synchronous text-to-image and image-to-image. Reference images go in ImageRequest.ReferenceImages (slice). Returns ImageResponse{ Images []ImageData, Text string, Usage }.",
+    ),
+    APIEntryPointDef(
         py_func="prompt_batch",
         py_param_type="list[Request]",
         comment="Blocks until all responses ready. Handles async polling internally.",
@@ -70,6 +75,11 @@ CACHE_RESPONSE_FIELDS: tuple[APIResponseFieldDef, ...] = (
         source_path="cacheWriteTokensPath",
     ),
     APIResponseFieldDef(
+        py_field_name="images",
+        py_field_type="list[ImageData]",
+        source_path="candidates[0].content.parts[*].inlineData",
+    ),
+    APIResponseFieldDef(
         py_field_name="input",
         py_field_type="int",
         source_path="usageInputPath",
@@ -83,6 +93,11 @@ CACHE_RESPONSE_FIELDS: tuple[APIResponseFieldDef, ...] = (
         py_field_name="reasoning",
         py_field_type="int",
         source_path="reasoningTokensPath",
+    ),
+    APIResponseFieldDef(
+        py_field_name="text",
+        py_field_type="str",
+        source_path="candidates[0].content.parts[*].text",
     ),
 )
 
