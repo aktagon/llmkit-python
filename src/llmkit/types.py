@@ -31,7 +31,15 @@ class File:
 
 
 @dataclass
-class Image:
+class InputImage:
+    """
+
+
+
+
+
+"""
+
     url: str
     mime_type: str = ""
     detail: str = ""
@@ -52,7 +60,7 @@ class Request:
     messages: list[Message] = field(default_factory=list)
     schema: str = ""
     files: list[File] = field(default_factory=list)
-    images: list[Image] = field(default_factory=list)
+    images: list[InputImage] = field(default_factory=list)
 
 
 @dataclass

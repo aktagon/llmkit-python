@@ -31,11 +31,34 @@ from .types import Provider
 
 
 @dataclass
-class ImageInput:
-    """"""
+class MediaRef:
+    """
+
+"""
 
     mime_type: str = ""
-    data: bytes = b""
+    bytes: bytes = b""
+
+
+@dataclass
+class Part:
+    """
+
+"""
+
+    text: str = ""
+    image: MediaRef | None = None
+
+
+def Text(s: str) -> Part:  # noqa: N802 — public constructor; PascalCase for parity with Go/TS.
+    """"""
+    return Part(text=s)
+
+
+def Image(mime: str, data: bytes) -> Part:  # noqa: N802 — public constructor.
+    """
+"""
+    return Part(image=MediaRef(mime_type=mime, bytes=data))
 
 
 @dataclass
@@ -48,11 +71,21 @@ class ImageData:
 
 @dataclass
 class ImageRequest:
-    """"""
+    """
 
-    prompt: str = ""
+
+
+
+
+
+
+
+
+"""
+
     model: str = ""
-    reference_images: list[ImageInput] = field(default_factory=list)
+    prompt: str = ""
+    parts: list[Part] = field(default_factory=list)
 
 
 @dataclass
@@ -77,10 +110,10 @@ def generate_image(
 """
     if not provider.api_key:
         raise ValidationError(field="api_key", message="required")
-    if not request.prompt:
-        raise ValidationError(field="prompt", message="required")
     if not request.model:
         raise ValidationError(field="model", message="required for image generation")
+
+    parts = _normalize_image_parts(request)
 
     cfg = PROVIDERS.get(provider.name)
     if cfg is None:
@@ -109,11 +142,12 @@ def generate_image(
             field="image_size",
             message=f"{image_size} not supported by {request.model}",
         )
-    if len(request.reference_images) > img_cfg.max_input_count:
+    image_count = sum(1 for p in parts if p.image is not None)
+    if image_count > img_cfg.max_input_count:
         raise ValidationError(
-            field="reference_images",
+            field="parts",
             message=(
-                f"{len(request.reference_images)} exceeds maximum "
+                f"{image_count} image parts exceeds maximum "
                 f"{img_cfg.max_input_count} for {provider.name}"
             ),
         )
@@ -128,7 +162,7 @@ def generate_image(
     fire_pre(mws, base_event)
 
     try:
-        body = _build_image_body(request, aspect_ratio, image_size, include_text)
+        body = _build_image_body(parts, aspect_ratio, image_size, include_text)
         json_body = json.dumps(body).encode("utf-8")
         url = _build_image_url(provider, cfg, request.model)
         headers = _image_auth_headers(provider, cfg, pname)
@@ -170,22 +204,39 @@ def _find_image_model(cfg: ImageGenDef, model_id: str) -> ImageModelDef | None:
     return None
 
 
+def _normalize_image_parts(request: ImageRequest) -> list[Part]:
+    """
+
+
+"""
+    has_prompt = bool(request.prompt)
+    has_parts = bool(request.parts)
+    if has_prompt and has_parts:
+        raise ValidationError(field="parts", message="set prompt or parts, not both")
+    if not has_prompt and not has_parts:
+        raise ValidationError(field="prompt", message="set either prompt or parts")
+    return [Text(request.prompt)] if has_prompt else list(request.parts)
+
+
 def _build_image_body(
-    request: ImageRequest,
+    parts: list[Part],
     aspect_ratio: str,
     image_size: str,
     include_text: bool,
 ) -> dict[str, Any]:
-    parts: list[dict[str, Any]] = [{"text": request.prompt}]
-    for ref in request.reference_images:
-        parts.append(
-            {
-                "inlineData": {
-                    "mimeType": ref.mime_type,
-                    "data": base64.b64encode(ref.data).decode("ascii"),
+    wire: list[dict[str, Any]] = []
+    for p in parts:
+        if p.image is not None:
+            wire.append(
+                {
+                    "inlineData": {
+                        "mimeType": p.image.mime_type,
+                        "data": base64.b64encode(p.image.bytes).decode("ascii"),
+                    }
                 }
-            }
-        )
+            )
+        else:
+            wire.append({"text": p.text})
 
     modalities = ["TEXT", "IMAGE"] if include_text else ["IMAGE"]
     generation_config: dict[str, Any] = {"responseModalities": modalities}
@@ -198,7 +249,7 @@ def _build_image_body(
         generation_config["imageConfig"] = img_config
 
     return {
-        "contents": [{"parts": parts}],
+        "contents": [{"parts": wire}],
         "generationConfig": generation_config,
     }
 
