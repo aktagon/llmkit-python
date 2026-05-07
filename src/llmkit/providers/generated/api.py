@@ -53,7 +53,7 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
     APIEntryPointDef(
         py_func="generate_image",
         py_param_type="ImageRequest",
-        comment="Synchronous text-to-image and image-to-image. Reference images go in ImageRequest.ReferenceImages (slice). Returns ImageResponse{ Images []ImageData, Text string, Usage }.",
+        comment="Synchronous text-to-image and image-to-image. Input is ImageRequest{ Model, Prompt, Parts []Part } where Parts is a positionally-ordered sequence of llm:Part (text or image MediaRef). Prompt is a sugar field for the text-only case (XOR with Parts; runtime synthesises []Part{Text(Prompt)} when only Prompt is set). Returns ImageResponse{ Images []ImageData, Text string, Usage }.",
     ),
     APIEntryPointDef(
         py_func="prompt",

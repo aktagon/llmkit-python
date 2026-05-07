@@ -70,12 +70,14 @@ Generate images from text, optionally conditioned on reference images for
 editing or composition. Currently supports Google's Nano Banana 2
 (`gemini-3.1-flash-image-preview`) and Pro (`gemini-3-pro-image-preview`).
 
+Text-to-image — pass `prompt` for the terse hot path:
+
 ```python
 resp = llmkit.generate_image(
     provider=llmkit.Provider(name="google", api_key=os.environ["GOOGLE_API_KEY"]),
     request=llmkit.ImageRequest(
-        prompt="A nano banana dish in a fancy restaurant",
         model="gemini-3.1-flash-image-preview",
+        prompt="A nano banana dish in a fancy restaurant",
     ),
     aspect_ratio="16:9",
     image_size="2K",
@@ -84,20 +86,29 @@ with open("out.png", "wb") as f:
     f.write(resp.images[0].data)
 ```
 
-Pass reference images to edit or compose:
+For editing or compositional generation, pass `parts` — an ordered list
+of text and image parts. The `Text(...)` and `Image(...)` constructors
+build each part; on-wire ordering matches the list order, so the model
+attends to descriptions and references in the pairing you intend:
 
 ```python
 edited = llmkit.generate_image(
     provider=provider,
     request=llmkit.ImageRequest(
-        prompt="Add snow and frost; overcast sky.",
         model="gemini-3.1-flash-image-preview",
-        reference_images=[
-            llmkit.ImageInput(mime_type="image/png", data=png_bytes),
+        parts=[
+            llmkit.Text("Person:"),
+            llmkit.Image("image/png", person_bytes),
+            llmkit.Text("Outfit:"),
+            llmkit.Image("image/png", outfit_bytes),
+            llmkit.Text("Generate the person wearing the outfit."),
         ],
     ),
 )
 ```
+
+Set exactly one of `prompt` or `parts` — both empty or both set raises
+`ValidationError`.
 
 Aspect ratios and sizes are validated against a per-model whitelist before
 the HTTP request — `image_size="512"` on Pro raises `ValidationError`

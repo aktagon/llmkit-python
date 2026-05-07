@@ -1,4 +1,4 @@
-"""Core public types: Provider, Request, Response, Message, File, Image, Tool, Options."""
+"""Core public types: Provider, Request, Response, Message, File, InputImage, Tool, Options."""
 
 from __future__ import annotations
 
@@ -31,7 +31,15 @@ class File:
 
 
 @dataclass
-class Image:
+class InputImage:
+    """Image attached to a text-generation request (vision input).
+
+    Distinct from llmkit.Image() — that's the Part constructor used for
+    image-generation calls. The two concepts target different capabilities;
+    aligning text generation onto Part-based vocabulary is tracked
+    separately (ADR-008 OQ-2).
+    """
+
     url: str
     mime_type: str = ""
     detail: str = ""
@@ -52,7 +60,7 @@ class Request:
     messages: list[Message] = field(default_factory=list)
     schema: str = ""
     files: list[File] = field(default_factory=list)
-    images: list[Image] = field(default_factory=list)
+    images: list[InputImage] = field(default_factory=list)
 
 
 @dataclass
