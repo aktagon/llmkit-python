@@ -17,7 +17,16 @@ from .agent import Agent
 from .batch import BatchHandle, prompt_batch, submit_batch, wait_batch
 from .client import StreamCallback, prompt, prompt_stream, upload_file
 from .errors import APIError, MiddlewareVetoError, ValidationError
-from .image import ImageData, ImageInput, ImageRequest, ImageResponse, generate_image
+from .image import (
+    Image,
+    ImageData,
+    ImageRequest,
+    ImageResponse,
+    MediaRef,
+    Part,
+    Text,
+    generate_image,
+)
 from .providers.generated.middleware import (
     Event,
     MiddlewareFn,
@@ -26,7 +35,7 @@ from .providers.generated.middleware import (
     Usage,
 )
 from .providers.generated.providers import PROVIDERS, ProviderConfig, ProviderName
-from .types import File, Image, Message, Options, Provider, Request, Response, Tool
+from .types import File, InputImage, Message, Options, Provider, Request, Response, Tool
 
 __all__ = [
     "APIError",
@@ -36,9 +45,12 @@ __all__ = [
     "File",
     "Image",
     "ImageData",
-    "ImageInput",
     "ImageRequest",
     "ImageResponse",
+    "InputImage",
+    "MediaRef",
+    "Part",
+    "Text",
     "Message",
     "MiddlewareFn",
     "MiddlewareOp",
