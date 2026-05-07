@@ -13,9 +13,10 @@ import pytest
 
 import llmkit
 from llmkit import (
-    ImageInput,
+    Image,
     ImageRequest,
     MiddlewareVetoError,
+    Text,
     ValidationError,
     generate_image,
 )
@@ -146,28 +147,35 @@ def test_generate_image_with_include_text_captures_text_part() -> None:
     assert resp.text == "Here is your image:"
 
 
-def test_generate_image_reference_images_round_trip_through_base64() -> None:
+def test_generate_image_parts_interleaved_compositional() -> None:
+    # ADR-008's motivating scenario: text and reference images interleaved
+    # so the model attends to the description-image pairing as intended.
+    ref_a = b"\x89PNGA"
+    ref_b = b"\x89PNGB"
     encoded = base64.b64encode(FAKE_PNG).decode("ascii")
     with _MockServer(_flash_response(encoded)) as server:
         generate_image(
             llmkit.Provider(name="google", api_key="k", base_url=server.url),
             ImageRequest(
-                prompt="Add snow",
                 model=FLASH_MODEL,
-                reference_images=[
-                    ImageInput(mime_type="image/png", data=FAKE_PNG),
-                    ImageInput(mime_type="image/png", data=FAKE_PNG),
+                parts=[
+                    Text("Person:"),
+                    Image("image/png", ref_a),
+                    Text("Outfit:"),
+                    Image("image/png", ref_b),
+                    Text("Generate the person wearing the outfit."),
                 ],
             ),
         )
     body = server.received_body
     assert body is not None
     parts = body["contents"][0]["parts"]
-    assert len(parts) == 3  # text + 2 inlineData
-    inline = parts[1]["inlineData"]
-    assert inline["mimeType"] == "image/png"
-    decoded = base64.b64decode(inline["data"])
-    assert decoded == FAKE_PNG
+    assert len(parts) == 5
+    assert parts[0] == {"text": "Person:"}
+    assert base64.b64decode(parts[1]["inlineData"]["data"]) == ref_a
+    assert parts[2] == {"text": "Outfit:"}
+    assert base64.b64decode(parts[3]["inlineData"]["data"]) == ref_b
+    assert parts[4] == {"text": "Generate the person wearing the outfit."}
 
 
 def test_generate_image_rejects_unsupported_aspect_on_pro() -> None:
@@ -190,14 +198,34 @@ def test_generate_image_rejects_512_size_on_pro() -> None:
     assert exc_info.value.field == "image_size"
 
 
-def test_generate_image_rejects_too_many_reference_images() -> None:
-    too_many = [ImageInput(mime_type="image/png", data=FAKE_PNG) for _ in range(15)]
+def test_generate_image_rejects_too_many_image_parts() -> None:
+    too_many = [Text("describe and edit:")] + [
+        Image("image/png", FAKE_PNG) for _ in range(15)
+    ]
     with pytest.raises(ValidationError) as exc_info:
         generate_image(
             llmkit.Provider(name="google", api_key="k", base_url="http://unused"),
-            ImageRequest(prompt="x", model=FLASH_MODEL, reference_images=too_many),
+            ImageRequest(model=FLASH_MODEL, parts=too_many),
         )
-    assert exc_info.value.field == "reference_images"
+    assert exc_info.value.field == "parts"
+
+
+def test_generate_image_rejects_both_prompt_and_parts() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        generate_image(
+            llmkit.Provider(name="google", api_key="k", base_url="http://unused"),
+            ImageRequest(model=FLASH_MODEL, prompt="x", parts=[Text("y")]),
+        )
+    assert exc_info.value.field == "parts"
+
+
+def test_generate_image_rejects_both_empty() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        generate_image(
+            llmkit.Provider(name="google", api_key="k", base_url="http://unused"),
+            ImageRequest(model=FLASH_MODEL),
+        )
+    assert exc_info.value.field == "prompt"
 
 
 def test_generate_image_requires_model() -> None:
