@@ -33,12 +33,97 @@ class APIResponseFieldDef:
 
 API_OPTIONS: tuple[APIOptionDef, ...] = (
     APIOptionDef(
+        py_func="with_aspect_ratio",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_bytes",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_caching",
         sub_options=(
             APISubOptionDef(
                 py_func="cache_t_t_l",
                 py_param_type="float",
             ),
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_file",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_filename",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_history",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_image",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_image_size",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_include_text",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_max_tokens",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_mime_type",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_model",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_path",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_schema",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_system",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_temperature",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_text",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_tool",
+        sub_options=(
         ),
     ),
 )
