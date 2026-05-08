@@ -62,6 +62,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_frequency_penalty",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_history",
         sub_options=(
         ),
@@ -102,7 +107,27 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_presence_penalty",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_reasoning_effort",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_schema",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_seed",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_stop_sequences",
         sub_options=(
         ),
     ),
@@ -122,7 +147,22 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_thinking_budget",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_tool",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_top_k",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_top_p",
         sub_options=(
         ),
     ),
