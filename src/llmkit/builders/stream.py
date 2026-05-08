@@ -40,20 +40,33 @@ async def text_stream(b: "Text", msg: str) -> AsyncIterator[str]:
         kwargs["middleware"] = list(b._middleware)
 
     loop = asyncio.get_running_loop()
-    queue: asyncio.Queue = asyncio.Queue()
+    # maxsize=64 caps memory if a hostile/buggy provider streams
+    # faster than the consumer drains. on_chunk runs on a worker
+    # thread, so it uses run_coroutine_threadsafe(...).result() to
+    # block the worker thread until queue.put completes — providing
+    # real backpressure across the thread boundary. Matches Go
+    # chan(64) and TS bounded-queue semantics.
+    queue: asyncio.Queue = asyncio.Queue(maxsize=64)
 
     def on_chunk(chunk: str) -> None:
-        # Called from the worker thread; cross back to the loop.
-        loop.call_soon_threadsafe(queue.put_nowait, chunk)
+        # Called from the worker thread; cross back to the loop and
+        # block the worker until the put succeeds (queue not full).
+        fut = asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
+        fut.result()
 
     async def producer() -> None:
+        # We're on the loop thread here. Use queue.put (await) so the
+        # bounded-queue backpressure applies to the sentinel as well.
+        # call_soon_threadsafe(put_nowait, ...) would silently raise
+        # QueueFull when the queue is at capacity and the consumer
+        # would hang waiting for a sentinel that never arrived.
         try:
             await asyncio.to_thread(
                 legacy_prompt_stream, provider, request, on_chunk, **kwargs
             )
-            loop.call_soon_threadsafe(queue.put_nowait, _DONE)
+            await queue.put(_DONE)
         except BaseException as exc:
-            loop.call_soon_threadsafe(queue.put_nowait, exc)
+            await queue.put(exc)
 
     task = asyncio.create_task(producer())
     try:
