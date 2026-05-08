@@ -213,55 +213,281 @@ def test_every_provider_factory() -> None:
         assert c.provider.name == expected_name
 
 
-# ---------- terminal stubs raise ----------
+# ---------- phase 3 wiring tests with a mock HTTP server ----------
 
 
-def _run(coro: object) -> object:
-    return asyncio.get_event_loop().run_until_complete(coro)  # type: ignore[arg-type]
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any
 
 
-def test_text_prompt_raises() -> None:
-    with pytest.raises(NotImplementedError, match="Text.prompt"):
-        asyncio.run(google("k").text.prompt("hi"))
+class _MockServer:
+    """Single-shot mock; serves the same canned response for every POST.
+
+    For test_phase3_*, we point the typed-builder Client's
+    ``provider.base_url`` at the mock and assert that the wired path
+    rolled chain config into the request and returned the parsed
+    response.
+    """
+
+    def __init__(self, response_body: dict[str, Any]):
+        self.response_body = response_body
+        self.last_path = ""
+        self.last_body: dict[str, Any] | None = None
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_args, **_kwargs):
+                pass
+
+            def do_POST(self):
+                outer.last_path = self.path
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                if raw:
+                    outer.last_body = json.loads(raw.decode("utf-8"))
+                payload = json.dumps(outer.response_body).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def do_GET(self):
+                outer.last_path = self.path
+                if self.path.endswith("/results"):
+                    line = json.dumps(
+                        {
+                            "custom_id": "req-0",
+                            "result": {
+                                "message": {
+                                    "content": [{"type": "text", "text": "ok"}],
+                                    "usage": {"input_tokens": 1, "output_tokens": 1},
+                                }
+                            },
+                        }
+                    ).encode("utf-8") + b"\n"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/x-jsonl")
+                    self.send_header("Content-Length", str(len(line)))
+                    self.end_headers()
+                    self.wfile.write(line)
+                    return
+                payload = json.dumps(outer.response_body).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(
+            target=self._httpd.serve_forever, daemon=True
+        )
+
+    def __enter__(self) -> "_MockServer":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join(timeout=2)
+
+    @property
+    def url(self) -> str:
+        port = self._httpd.server_port
+        return f"http://127.0.0.1:{port}"
 
 
-def test_text_stream_raises_on_iteration() -> None:
-    async def consume() -> None:
-        async for _ in google("k").text.stream("hi"):
+_ANTHROPIC_RESP = {
+    "content": [{"type": "text", "text": "ok"}],
+    "usage": {"input_tokens": 1, "output_tokens": 1},
+}
+
+
+def test_phase3_text_prompt_wires_against_legacy() -> None:
+    with _MockServer(_ANTHROPIC_RESP) as server:
+        c = anthropic("k")
+        c.provider.base_url = server.url
+        resp = asyncio.run(
+            c.text.system("be terse").max_tokens(50).prompt("hello")
+        )
+        assert resp.text == "ok"
+        body = server.last_body
+        assert body is not None
+        assert body["system"] == "be terse"
+        assert body["max_tokens"] == 50
+
+
+def test_phase3_text_batch_submits_and_returns_handle() -> None:
+    submit_resp = {"id": "msgbatch_123"}
+
+    with _MockServer(submit_resp) as server:
+        c = anthropic("k")
+        c.provider.base_url = server.url
+        handle = asyncio.run(c.text.system("s").submit_batch("p1", "p2"))
+        assert isinstance(handle, BatchHandle)
+        assert handle.id == "msgbatch_123"
+        body = server.last_body
+        assert body is not None
+        # Anthropic batch shape: {requests: [{custom_id, params: {...}}]}
+        assert isinstance(body["requests"], list)
+        assert body["requests"][0]["custom_id"] == "req-0"
+        assert body["requests"][1]["custom_id"] == "req-1"
+        # System propagates per-request through buildRequest.
+        assert body["requests"][0]["params"]["system"] == "s"
+
+
+def test_phase3_batch_handle_wait_polls_then_fetches_results() -> None:
+    poll_resp = {"id": "msgbatch_123", "processing_status": "ended"}
+    with _MockServer(poll_resp) as server:
+        from llmkit import Provider as ProviderType
+
+        handle = BatchHandle(
+            id="msgbatch_123",
+            provider=ProviderType(
+                name="anthropic", api_key="k", base_url=server.url
+            ),
+        )
+        responses = asyncio.run(handle.wait(poll_interval=0.01))
+        assert len(responses) == 1
+        assert responses[0].text == "ok"
+
+
+def test_phase3_upload_run_validates_xor() -> None:
+    c = openai("k")
+    # Empty: error
+    with pytest.raises(ValueError, match="exactly one of"):
+        asyncio.run(c.upload.run())
+    # Both: error
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        asyncio.run(c.upload.bytes(b"x").path("/p").run())
+    # Bytes-only: deferred
+    with pytest.raises(ValueError, match="not yet wired"):
+        asyncio.run(c.upload.bytes(b"x").run())
+
+
+def test_phase3_text_stream_yields_chunks() -> None:
+    """Stream wiring proves the asyncio.Queue + to_thread bridge works.
+
+    Uses a Bytes-style raw-SSE response. The OpenAI streaming format
+    is ``data: {...}\\n\\n`` per event; legacy prompt_stream parses
+    these into chunks via a callback. Our bridge piles them in an
+    asyncio.Queue and yields from the async generator.
+    """
+
+    class StreamHandler(BaseHTTPRequestHandler):
+        def log_message(self, *_args, **_kwargs):
             pass
 
-    with pytest.raises(NotImplementedError, match="Text.stream"):
-        asyncio.run(consume())
+        def do_POST(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            for chunk in (
+                'data: {"choices":[{"delta":{"content":"He"}}]}\n\n',
+                'data: {"choices":[{"delta":{"content":"llo"}}]}\n\n',
+                "data: [DONE]\n\n",
+            ):
+                self.wfile.write(chunk.encode("utf-8"))
+                self.wfile.flush()
+
+    httpd = HTTPServer(("127.0.0.1", 0), StreamHandler)
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    try:
+        c = openai("k")
+        c.provider.base_url = f"http://127.0.0.1:{httpd.server_port}"
+
+        async def consume() -> list[str]:
+            got: list[str] = []
+            async for chunk in c.text.stream("hi"):
+                got.append(chunk)
+            return got
+
+        chunks = asyncio.run(consume())
+        assert chunks == ["He", "llo"]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        t.join(timeout=2)
 
 
-def test_text_batch_raises() -> None:
-    with pytest.raises(NotImplementedError, match="Text.batch"):
-        asyncio.run(google("k").text.batch("p1", "p2"))
+def test_phase3_image_generate_wires() -> None:
+    google_img_resp = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {"inlineData": {"mimeType": "image/png", "data": "AAAA"}}
+                    ]
+                }
+            }
+        ],
+        "usageMetadata": {"promptTokenCount": 1, "candidatesTokenCount": 1},
+    }
+    with _MockServer(google_img_resp) as server:
+        c = google("k")
+        c.provider.base_url = server.url
+        resp = asyncio.run(
+            c.image.model("gemini-3.1-flash-image-preview").generate("a banana")
+        )
+        assert len(resp.images) == 1
+        assert resp.images[0].mime_type == "image/png"
 
 
-def test_text_submit_batch_raises() -> None:
-    with pytest.raises(NotImplementedError, match="Text.submit_batch"):
-        asyncio.run(google("k").text.submit_batch("p1"))
+# ---------- Agent stateful builder ----------
 
 
-def test_image_generate_raises() -> None:
-    with pytest.raises(NotImplementedError, match="Image.generate"):
-        asyncio.run(google("k").image.generate("a banana"))
+def test_phase3_agent_prompt_initializes_state_and_reuses() -> None:
+    with _MockServer(_ANTHROPIC_RESP) as server:
+        c = anthropic("k")
+        c.provider.base_url = server.url
+        bot = c.agent.system("be brief")
+        assert bot._state is None
+        r1 = asyncio.run(bot.prompt("hi"))
+        assert r1.text == "ok"
+        first_state = bot._state
+        assert first_state is not None
+        r2 = asyncio.run(bot.prompt("again"))
+        assert r2.text == "ok"
+        # Same state instance — history retained.
+        assert bot._state is first_state
 
 
-def test_agent_prompt_raises() -> None:
-    with pytest.raises(NotImplementedError, match="Agent.prompt"):
-        asyncio.run(google("k").agent.prompt("hi"))
+def test_phase3_agent_reset_clears_state() -> None:
+    with _MockServer(_ANTHROPIC_RESP) as server:
+        c = anthropic("k")
+        c.provider.base_url = server.url
+        bot = c.agent.system("s")
+        asyncio.run(bot.prompt("hi"))
+        assert bot._state is not None
+        bot.reset()
+        assert bot._state is None
 
 
-def test_agent_reset_raises() -> None:
-    with pytest.raises(NotImplementedError, match="Agent.reset"):
-        google("k").agent.reset()
+def test_phase3_agent_state_forking_load_bearing() -> None:
+    """Load-bearing contract test for PYTHON_BUILDER_POST_MUTATION["Agent"].
 
+    Without ``out._state = None`` after every chain method, a forked
+    clone via ``bot.system("new")`` would silently share its parent's
+    accumulated history through the same ``AgentState`` reference.
+    """
+    from llmkit import Provider as ProviderType
+    from llmkit.agent import Agent as LegacyAgent
+    from llmkit.builders.agent import AgentState
 
-def test_upload_run_raises() -> None:
-    with pytest.raises(NotImplementedError, match="Upload.run"):
-        asyncio.run(google("k").upload.run())
+    c = anthropic("k")
+    bot = c.agent.system("orig")
+    # Manually populate state to simulate post-init.
+    legacy = LegacyAgent(ProviderType(name="anthropic", api_key="k"))
+    bot._state = AgentState(legacy)
+
+    forked = bot.system("new")
+    assert bot._state is not None  # parent preserved
+    assert forked._state is None  # fork starts fresh
 
 
 # ---------- re-exported types are usable ----------
