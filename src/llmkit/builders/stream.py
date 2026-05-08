@@ -40,20 +40,33 @@ async def text_stream(b: "Text", msg: str) -> AsyncIterator[str]:
         kwargs["middleware"] = list(b._middleware)
 
     loop = asyncio.get_running_loop()
-    queue: asyncio.Queue = asyncio.Queue()
+    #
+    #
+    #
+    #
+    #
+    #
+    queue: asyncio.Queue = asyncio.Queue(maxsize=64)
 
     def on_chunk(chunk: str) -> None:
         #
-        loop.call_soon_threadsafe(queue.put_nowait, chunk)
+        #
+        fut = asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
+        fut.result()
 
     async def producer() -> None:
+        #
+        #
+        #
+        #
+        #
         try:
             await asyncio.to_thread(
                 legacy_prompt_stream, provider, request, on_chunk, **kwargs
             )
-            loop.call_soon_threadsafe(queue.put_nowait, _DONE)
+            await queue.put(_DONE)
         except BaseException as exc:
-            loop.call_soon_threadsafe(queue.put_nowait, exc)
+            await queue.put(exc)
 
     task = asyncio.create_task(producer())
     try:
