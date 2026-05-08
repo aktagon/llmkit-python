@@ -14,11 +14,15 @@ from __future__ import annotations
 import copy
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from ..batch import BatchHandle
 from ..image import ImageData, ImageResponse, MediaRef, Part
 from ..providers.generated.middleware import MiddlewareFn
 from ..types import File, Message, Response, Tool
+from .batch import BatchHandle
+
+if TYPE_CHECKING:
+    from .agent import AgentState
 
 
 @dataclass
@@ -26,6 +30,13 @@ class ProviderConfig:
     name: str
     api_key: str
     base_url: str = ""
+
+from .agent import agent_prompt, agent_reset
+from .batch import text_batch, text_submit_batch
+from .image import image_generate
+from .stream import text_stream
+from .text import text_prompt
+from .upload import upload_run
 
 # === Text — ChatCompletion builder ===
 
@@ -101,17 +112,17 @@ class Text:
         return out
 
     async def prompt(self, msg: str) -> Response:
-        raise NotImplementedError("plan 016 phase 3: Text.prompt not yet implemented")
+        return await text_prompt(self, msg)
 
     async def stream(self, msg: str) -> AsyncIterator[str]:
-        raise NotImplementedError("plan 016 phase 3: Text.stream not yet implemented")
-        yield  # unreachable; required to make Python treat this as an async generator
+        async for chunk in text_stream(self, msg):
+            yield chunk
 
     async def batch(self, *prompts: str) -> list[Response]:
-        raise NotImplementedError("plan 016 phase 3: Text.batch not yet implemented")
+        return await text_batch(self, *prompts)
 
     async def submit_batch(self, *prompts: str) -> BatchHandle:
-        raise NotImplementedError("plan 016 phase 3: Text.submit_batch not yet implemented")
+        return await text_submit_batch(self, *prompts)
 
 
 # === Image — ImageGeneration builder ===
@@ -170,7 +181,7 @@ class Image:
         return out
 
     async def generate(self, msg: str) -> ImageResponse:
-        raise NotImplementedError("plan 016 phase 3: Image.generate not yet implemented")
+        return await image_generate(self, msg)
 
 
 # === Agent — ToolCalling builder ===
@@ -187,47 +198,55 @@ class Agent:
         self._system: str = ""
         self._temperature: float | None = None
         self._tools: list[Tool] = []
+        self._state: "AgentState | None" = None
 
     def caching(self) -> "Agent":
         out = copy.copy(self)
         out._caching = True
+        out._state = None
         return out
 
     def max_tokens(self, n: int) -> "Agent":
         out = copy.copy(self)
         out._max_tokens = n
+        out._state = None
         return out
 
     def middleware(self, *fns: MiddlewareFn) -> "Agent":
         out = copy.copy(self)
         out._middleware = [*self._middleware, *fns]
+        out._state = None
         return out
 
     def model(self, name: str) -> "Agent":
         out = copy.copy(self)
         out._model = name
+        out._state = None
         return out
 
     def system(self, s: str) -> "Agent":
         out = copy.copy(self)
         out._system = s
+        out._state = None
         return out
 
     def temperature(self, t: float) -> "Agent":
         out = copy.copy(self)
         out._temperature = t
+        out._state = None
         return out
 
     def tool(self, t: Tool) -> "Agent":
         out = copy.copy(self)
         out._tools = [*self._tools, t]
+        out._state = None
         return out
 
     async def prompt(self, msg: str) -> Response:
-        raise NotImplementedError("plan 016 phase 3: Agent.prompt not yet implemented")
+        return await agent_prompt(self, msg)
 
     def reset(self) -> None:
-        raise NotImplementedError("plan 016 phase 3: Agent.reset not yet implemented")
+        return agent_reset(self)
 
 
 # === Upload — FileUpload builder ===
@@ -269,7 +288,7 @@ class Upload:
         return out
 
     async def run(self) -> File:
-        raise NotImplementedError("plan 016 phase 3: Upload.run not yet implemented")
+        return await upload_run(self)
 
 
 class Client:
