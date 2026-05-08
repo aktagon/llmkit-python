@@ -47,14 +47,22 @@ class Text:
         self.client = client
         self._caching: bool = False
         self._files: list[File] = []
+        self._frequency_penalty: float | None = None
         self._history: list[Message] = []
         self._parts: list[Part] = []
         self._max_tokens: int | None = None
         self._middleware: list[MiddlewareFn] = []
         self._model: str = ""
+        self._presence_penalty: float | None = None
+        self._reasoning_effort: str = ""
         self._schema: str = ""
+        self._seed: int | None = None
+        self._stop_sequences: list[str] = []
         self._system: str = ""
         self._temperature: float | None = None
+        self._thinking_budget: int | None = None
+        self._top_k: int | None = None
+        self._top_p: float | None = None
 
     def caching(self) -> "Text":
         out = copy.copy(self)
@@ -64,6 +72,11 @@ class Text:
     def file(self, id: str) -> "Text":  # ordered
         out = copy.copy(self)
         out._files = [*self._files, File(id=id)]
+        return out
+
+    def frequency_penalty(self, v: float) -> "Text":
+        out = copy.copy(self)
+        out._frequency_penalty = v
         return out
 
     def history(self, *msgs: Message) -> "Text":
@@ -91,9 +104,29 @@ class Text:
         out._model = name
         return out
 
+    def presence_penalty(self, v: float) -> "Text":
+        out = copy.copy(self)
+        out._presence_penalty = v
+        return out
+
+    def reasoning_effort(self, level: str) -> "Text":
+        out = copy.copy(self)
+        out._reasoning_effort = level
+        return out
+
     def schema(self, s: str) -> "Text":
         out = copy.copy(self)
         out._schema = s
+        return out
+
+    def seed(self, n: int) -> "Text":
+        out = copy.copy(self)
+        out._seed = n
+        return out
+
+    def stop_sequences(self, *seqs: str) -> "Text":
+        out = copy.copy(self)
+        out._stop_sequences = list(seqs)
         return out
 
     def system(self, s: str) -> "Text":
@@ -109,6 +142,21 @@ class Text:
     def text(self, s: str) -> "Text":  # ordered
         out = copy.copy(self)
         out._parts = [*self._parts, Part(text=s)]
+        return out
+
+    def thinking_budget(self, n: int) -> "Text":
+        out = copy.copy(self)
+        out._thinking_budget = n
+        return out
+
+    def top_k(self, n: int) -> "Text":
+        out = copy.copy(self)
+        out._top_k = n
+        return out
+
+    def top_p(self, v: float) -> "Text":
+        out = copy.copy(self)
+        out._top_p = v
         return out
 
     async def prompt(self, msg: str) -> Response:
@@ -192,17 +240,31 @@ class Agent:
     def __init__(self, client: "Client") -> None:
         self.client = client
         self._caching: bool = False
+        self._frequency_penalty: float | None = None
         self._max_tokens: int | None = None
         self._middleware: list[MiddlewareFn] = []
         self._model: str = ""
+        self._presence_penalty: float | None = None
+        self._reasoning_effort: str = ""
+        self._seed: int | None = None
+        self._stop_sequences: list[str] = []
         self._system: str = ""
         self._temperature: float | None = None
+        self._thinking_budget: int | None = None
         self._tools: list[Tool] = []
+        self._top_k: int | None = None
+        self._top_p: float | None = None
         self._state: "AgentState | None" = None
 
     def caching(self) -> "Agent":
         out = copy.copy(self)
         out._caching = True
+        out._state = None
+        return out
+
+    def frequency_penalty(self, v: float) -> "Agent":
+        out = copy.copy(self)
+        out._frequency_penalty = v
         out._state = None
         return out
 
@@ -224,6 +286,30 @@ class Agent:
         out._state = None
         return out
 
+    def presence_penalty(self, v: float) -> "Agent":
+        out = copy.copy(self)
+        out._presence_penalty = v
+        out._state = None
+        return out
+
+    def reasoning_effort(self, level: str) -> "Agent":
+        out = copy.copy(self)
+        out._reasoning_effort = level
+        out._state = None
+        return out
+
+    def seed(self, n: int) -> "Agent":
+        out = copy.copy(self)
+        out._seed = n
+        out._state = None
+        return out
+
+    def stop_sequences(self, *seqs: str) -> "Agent":
+        out = copy.copy(self)
+        out._stop_sequences = list(seqs)
+        out._state = None
+        return out
+
     def system(self, s: str) -> "Agent":
         out = copy.copy(self)
         out._system = s
@@ -236,9 +322,27 @@ class Agent:
         out._state = None
         return out
 
+    def thinking_budget(self, n: int) -> "Agent":
+        out = copy.copy(self)
+        out._thinking_budget = n
+        out._state = None
+        return out
+
     def tool(self, t: Tool) -> "Agent":
         out = copy.copy(self)
         out._tools = [*self._tools, t]
+        out._state = None
+        return out
+
+    def top_k(self, n: int) -> "Agent":
+        out = copy.copy(self)
+        out._top_k = n
+        out._state = None
+        return out
+
+    def top_p(self, v: float) -> "Agent":
+        out = copy.copy(self)
+        out._top_p = v
         out._state = None
         return out
 
