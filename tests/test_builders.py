@@ -513,3 +513,58 @@ def test_type_aliases_constructible() -> None:
     assert part.text == "hello"
     assert bh.id == "abc"
     assert mw is noop_middleware
+
+
+# ---------- A2 bounded stream queue ----------
+
+
+def test_stream_queue_applies_backpressure(monkeypatch) -> None:
+    """A2: worker thread is paced by consumer when queue fills.
+
+    Stub legacy_prompt_stream with a tight loop that pushes 200
+    chunks via on_chunk. Consumer drains with asyncio.sleep(1ms)
+    per chunk. Verify two invariants:
+
+    1. All 200 chunks arrive in order (no loss, no scrambling).
+    2. The producer is paced by the consumer: with maxsize=64
+       and 200 chunks at 1ms drain each, the worker must spend
+       at least ~135ms (200-64 chunks past the buffer × 1ms)
+       inside on_chunk. An unbounded queue completes in <5ms
+       because put_nowait never blocks.
+    """
+    import time
+
+    from llmkit.builders import stream as stream_mod
+    from llmkit.types import Response as _Resp
+
+    total = 200
+    consumer_delay = 0.001  # 1ms per chunk
+    producer_wallclock = {"value": 0.0}
+
+    def fake_legacy(provider, request, on_chunk, **kwargs):  # noqa: ARG001
+        start = time.monotonic()
+        for i in range(total):
+            on_chunk(f"{i} ")
+        producer_wallclock["value"] = time.monotonic() - start
+        return _Resp()
+
+    monkeypatch.setattr(stream_mod, "legacy_prompt_stream", fake_legacy)
+
+    async def run() -> list[str]:
+        c = anthropic("k")
+        got: list[str] = []
+        async for chunk in stream_mod.text_stream(c.text, "hi"):
+            got.append(chunk)
+            await asyncio.sleep(consumer_delay)
+        return got
+
+    got = asyncio.run(run())
+
+    assert got == [f"{i} " for i in range(total)], "chunks lost or out of order"
+    # Backpressure floor: 136 chunks must wait for consumer drain
+    # at >=1ms each. Allow generous slack (50ms) for scheduler noise.
+    min_expected = (total - 64) * consumer_delay * 0.5
+    assert producer_wallclock["value"] >= min_expected, (
+        f"producer ran in {producer_wallclock['value']*1000:.1f}ms, "
+        f"expected >= {min_expected*1000:.1f}ms — backpressure may be broken"
+    )
