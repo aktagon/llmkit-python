@@ -241,12 +241,37 @@ def prompt_stream(
 
 def upload_file(
     provider: Provider,
-    path: str,
+    source: str | os.PathLike[str] | bytes | bytearray,
     *,
+    filename: str | None = None,
+    mime_type: str = "",
     middleware: list | None = None,
     request_timeout: float = 600.0,
 ) -> File:
-    """Upload a file to a provider and return a File reference."""
+    """Upload a file to a provider and return a File reference.
+
+    ``source`` may be:
+
+    - ``str`` or ``os.PathLike`` — read the file from disk. The
+      multipart filename defaults to ``os.path.basename(source)``;
+      pass ``filename=`` to override.
+    - ``bytes`` (or ``bytearray``) — upload the buffer directly.
+      ``filename=`` is required.
+
+    ``mime_type`` overrides the filename-extension–based detection
+    used for the multipart Content-Type header.
+    """
+    if isinstance(source, (bytes, bytearray)):
+        if not filename:
+            raise ValidationError(field="filename", message="required when source is bytes")
+        data = bytes(source)
+        name = filename
+    else:
+        path = os.fspath(source)
+        with open(path, "rb") as f:
+            data = f.read()
+        name = filename or os.path.basename(path)
+
     _validate_provider(provider)
     cfg = PROVIDERS.get(provider.name)
     if cfg is None:
@@ -263,10 +288,6 @@ def upload_file(
     )
     start = time.monotonic()
     fire_pre(mws, base_event)
-
-    with open(path, "rb") as f:
-        data = f.read()
-    name = os.path.basename(path)
 
     base = provider.base_url or cfg.base_url
     upload_url = base + fu.endpoint
@@ -300,7 +321,8 @@ def upload_file(
 
     try:
         resp_body, status_code = do_multipart_post(
-            upload_url, fu.field_name, name, data, extra_fields, headers, timeout=request_timeout
+            upload_url, fu.field_name, name, data, extra_fields, headers,
+            timeout=request_timeout, mime_type=mime_type,
         )
     except Exception as exc:
         _fire_post_err(mws, base_event, exc, start)
@@ -319,7 +341,7 @@ def upload_file(
 
     from .paths import detect_mime_type
 
-    file = File(mime_type=detect_mime_type(path))
+    file = File(mime_type=mime_type or detect_mime_type(name))
     if fu.response_id_path:
         file.id = extract_path(raw, fu.response_id_path)
     if fu.response_uri_path:
