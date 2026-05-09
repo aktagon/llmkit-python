@@ -162,9 +162,8 @@ class Text:
     async def prompt(self, msg: str) -> Response:
         return await text_prompt(self, msg)
 
-    async def stream(self, msg: str) -> AsyncIterator[str]:
-        async for chunk in text_stream(self, msg):
-            yield chunk
+    def stream(self, msg: str) -> TextStream:
+        return text_stream(self, msg)
 
     async def batch(self, *prompts: str) -> list[Response]:
         return await text_batch(self, *prompts)
