@@ -120,8 +120,13 @@ def do_multipart_post(
     fields: dict[str, str],
     headers: dict[str, str],
     timeout: float = 600.0,
+    mime_type: str = "",
 ) -> tuple[bytes, int]:
-    """POST multipart/form-data. Returns (body, status_code); does NOT raise on 4xx/5xx."""
+    """POST multipart/form-data. Returns (body, status_code); does NOT raise on 4xx/5xx.
+
+    If ``mime_type`` is empty, Content-Type for the file part is derived
+    from the filename extension via :func:`detect_mime_type`.
+    """
     boundary = "----llmkit-python-" + os.urandom(16).hex()
     buf = io.BytesIO()
     for key, value in fields.items():
@@ -130,7 +135,8 @@ def do_multipart_post(
         buf.write(value.encode("utf-8"))
         buf.write(b"\r\n")
 
-    mime_type = detect_mime_type(filename)
+    if not mime_type:
+        mime_type = detect_mime_type(filename)
     buf.write(f"--{boundary}\r\n".encode())
     buf.write(
         f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode()
