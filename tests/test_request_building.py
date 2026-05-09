@@ -100,22 +100,25 @@ def test_google_url_appends_api_key_as_query_param() -> None:
 
 
 def test_validation_rejects_empty_api_key() -> None:
+    import asyncio
+
+    from llmkit.builders import new_client
+
     with pytest.raises(llmkit.ValidationError) as ei:
-        llmkit.prompt(
-            provider=llmkit.Provider(name="anthropic", api_key=""),
-            request=llmkit.Request(user="hi"),
-        )
+        c = new_client("anthropic", "")
+        asyncio.run(c.text.prompt("hi"))
     assert ei.value.field == "api_key"
 
 
 def test_validation_rejects_unsupported_option() -> None:
     # Anthropic does not support frequency_penalty per the ontology.
+    import asyncio
+
+    from llmkit.builders import new_client
+
     with pytest.raises(llmkit.ValidationError) as ei:
-        llmkit.prompt(
-            provider=llmkit.Provider(name="anthropic", api_key="sk-test"),
-            request=llmkit.Request(user="hi"),
-            frequency_penalty=0.5,
-        )
+        c = new_client("anthropic", "sk-test")
+        asyncio.run(c.text.frequency_penalty(0.5).prompt("hi"))
     assert ei.value.field == "frequency_penalty"
 
 
