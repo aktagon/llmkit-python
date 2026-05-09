@@ -58,6 +58,8 @@ def _init_agent(b: "Agent") -> AgentState:
         kwargs["thinking_budget"] = b._thinking_budget
     if b._reasoning_effort:
         kwargs["reasoning_effort"] = b._reasoning_effort
+    if b._max_tool_iterations is not None:
+        kwargs["max_tool_iterations"] = b._max_tool_iterations
     if b._caching:
         kwargs["caching"] = True
     if b._middleware:

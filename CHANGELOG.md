@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-011 chain-field propagation lint integrated into `make check`.
 - All eight sampling/decoding chain methods (`top_p`, `top_k`, `frequency_penalty`, `presence_penalty`, `seed`, `stop_sequences`, `thinking_budget`, `reasoning_effort`) now thread through to the wire body. They had been silently dropping since plan-016 phase 2b.
 - `*Agent` typed builder now propagates `caching()` to the underlying agent (D3.0 wired text but missed agent).
+- `Agent.max_tool_iterations(n)` chain method exposes the tool-loop depth cap (default 10) on the typed builder.
 
 ### Removed
 
