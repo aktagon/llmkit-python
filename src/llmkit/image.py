@@ -44,21 +44,12 @@ class MediaRef:
 class Part:
     """Universal multimodal input atom. Exactly one of text or image is
     set; both empty or both set is invalid (rejected by pre-flight).
-    Construct via the package-level Text() and Image() helpers."""
+    Typed-builder accumulators (``c.text.text(s)``, ``c.image.image(m, b)``,
+    ...) are the canonical user-facing path; users assembling Part lists
+    manually can construct Part(text=..., image=MediaRef(...)) directly."""
 
     text: str = ""
     image: MediaRef | None = None
-
-
-def Text(s: str) -> Part:  # noqa: N802 — public constructor; PascalCase for parity with Go/TS.
-    """Construct a text-bearing Part."""
-    return Part(text=s)
-
-
-def Image(mime: str, data: bytes) -> Part:  # noqa: N802 — public constructor.
-    """Construct an image-bearing Part. mime is the IANA media type
-    (e.g., 'image/png'); data is the raw bytes (not base64-encoded)."""
-    return Part(image=MediaRef(mime_type=mime, bytes=data))
 
 
 @dataclass
@@ -75,7 +66,7 @@ class ImageRequest:
 
     Input is provided in one of two mutually-exclusive forms:
       - prompt: terse sugar for the text-only hot path. Internally
-        desugars to parts=[Text(prompt)] before serialisation.
+        desugars to parts=[Part(text=prompt)] before serialisation.
       - parts: canonical multimodal sequence; required for editing and
         compositional generation where caller-controlled ordering matters.
 
@@ -207,7 +198,7 @@ def _find_image_model(cfg: ImageGenDef, model_id: str) -> ImageModelDef | None:
 def _normalize_image_parts(request: ImageRequest) -> list[Part]:
     """Enforce the XOR rule and produce the canonical list[Part] the rest
     of the pipeline operates on. When only prompt is set (the text-only
-    sugar path), synthesise [Text(prompt)]. Both empty or both set raises
+    sugar path), synthesise [Part(text=prompt)]. Both empty or both set raises
     ValidationError."""
     has_prompt = bool(request.prompt)
     has_parts = bool(request.parts)
@@ -215,7 +206,7 @@ def _normalize_image_parts(request: ImageRequest) -> list[Part]:
         raise ValidationError(field="parts", message="set prompt or parts, not both")
     if not has_prompt and not has_parts:
         raise ValidationError(field="prompt", message="set either prompt or parts")
-    return [Text(request.prompt)] if has_prompt else list(request.parts)
+    return [Part(text=request.prompt)] if has_prompt else list(request.parts)
 
 
 def _build_image_body(
