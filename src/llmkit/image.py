@@ -44,21 +44,12 @@ class MediaRef:
 class Part:
     """
 
+
+
 """
 
     text: str = ""
     image: MediaRef | None = None
-
-
-def Text(s: str) -> Part:  # noqa: N802 — public constructor; PascalCase for parity with Go/TS.
-    """"""
-    return Part(text=s)
-
-
-def Image(mime: str, data: bytes) -> Part:  # noqa: N802 — public constructor.
-    """
-"""
-    return Part(image=MediaRef(mime_type=mime, bytes=data))
 
 
 @dataclass
@@ -215,7 +206,7 @@ def _normalize_image_parts(request: ImageRequest) -> list[Part]:
         raise ValidationError(field="parts", message="set prompt or parts, not both")
     if not has_prompt and not has_parts:
         raise ValidationError(field="prompt", message="set either prompt or parts")
-    return [Text(request.prompt)] if has_prompt else list(request.parts)
+    return [Part(text=request.prompt)] if has_prompt else list(request.parts)
 
 
 def _build_image_body(
