@@ -126,6 +126,7 @@ def test_agent_chain() -> None:
     ag = (
         c.agent.caching()
         .max_tokens(1)
+        .max_tool_iterations(3)
         .middleware(noop_middleware)
         .model("a")
         .system("sys")
@@ -134,6 +135,7 @@ def test_agent_chain() -> None:
     )
     assert ag._caching is True
     assert ag._max_tokens == 1
+    assert ag._max_tool_iterations == 3
     assert len(ag._middleware) == 1
     assert ag._model == "a"
     assert ag._system == "sys"
