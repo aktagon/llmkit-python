@@ -236,6 +236,7 @@ class Agent:
         self._caching: bool = False
         self._frequency_penalty: float | None = None
         self._max_tokens: int | None = None
+        self._max_tool_iterations: int | None = None
         self._middleware: list[MiddlewareFn] = []
         self._model: str = ""
         self._presence_penalty: float | None = None
@@ -265,6 +266,12 @@ class Agent:
     def max_tokens(self, n: int) -> "Agent":
         out = copy.copy(self)
         out._max_tokens = n
+        out._state = None
+        return out
+
+    def max_tool_iterations(self, n: int) -> "Agent":
+        out = copy.copy(self)
+        out._max_tool_iterations = n
         out._state = None
         return out
 
