@@ -1,13 +1,20 @@
-"""Phase 3 slice 2b — bridges legacy sync ``prompt_stream`` (callback)
-to typed-builder ``async for chunk in text.stream(...)``.
+"""Trailing-handle stream wrapper for ``*Text.stream``.
 
-The legacy API is sync and blocks until the entire stream is consumed,
-calling a user-supplied ``on_chunk`` for each delta. Async-iterator
-semantics on the typed builder need a running task that yields chunks
-on demand. We bridge with ``asyncio.Queue`` + ``asyncio.to_thread``:
-the producer runs on a worker thread, chunks land in the queue via the
-callback (using ``loop.call_soon_threadsafe`` to cross the thread
-boundary), the async generator pulls from the queue.
+The legacy ``prompt_stream`` is sync and callback-driven, returning the
+final ``Response`` once the SSE socket drains. Async-iterator semantics
+on the typed builder need a running task that yields chunks on demand.
+We bridge with ``asyncio.Queue`` + ``asyncio.to_thread``: producer runs
+on a worker thread, chunks land in the queue via the callback (using
+``run_coroutine_threadsafe`` to cross the thread boundary), the async
+iterator pulls from the queue, and once the producer task completes we
+publish the final ``Response`` on ``self._response``.
+
+Usage::
+
+    stream = c.text.system("...").stream("hi")
+    async for chunk in stream:
+        print(chunk, end="")
+    print(stream.response.tokens)  # populated after iteration ends
 """
 
 from __future__ import annotations
@@ -17,6 +24,7 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
 from ..client import prompt_stream as legacy_prompt_stream
+from ..types import Response
 from .text import _build_provider, _build_request
 
 if TYPE_CHECKING:
@@ -26,61 +34,91 @@ if TYPE_CHECKING:
 _DONE = object()
 
 
-async def text_stream(b: "Text", msg: str) -> AsyncIterator[str]:
-    provider = _build_provider(b)
-    request = _build_request(b, msg)
-    kwargs: dict = {}
-    if b._max_tokens is not None:
-        kwargs["max_tokens"] = b._max_tokens
-    if b._temperature is not None:
-        kwargs["temperature"] = b._temperature
-    if b._caching:
-        kwargs["caching"] = True
-    if b._middleware:
-        kwargs["middleware"] = list(b._middleware)
+class TextStream:
+    """Async-iterable wrapper carrying the final Response after iteration.
 
-    loop = asyncio.get_running_loop()
-    # maxsize=64 caps memory if a hostile/buggy provider streams
-    # faster than the consumer drains. on_chunk runs on a worker
-    # thread, so it uses run_coroutine_threadsafe(...).result() to
-    # block the worker thread until queue.put completes — providing
-    # real backpressure across the thread boundary. Matches Go
-    # chan(64) and TS bounded-queue semantics.
-    queue: asyncio.Queue = asyncio.Queue(maxsize=64)
+    ``response`` is ``None`` before iteration completes; populated to a
+    ``Response`` instance once the producer task finishes (success or
+    error). ``error`` is the terminal exception, if any.
+    """
 
-    def on_chunk(chunk: str) -> None:
-        # Called from the worker thread; cross back to the loop and
-        # block the worker until the put succeeds (queue not full).
-        fut = asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
-        fut.result()
+    def __init__(self, b: "Text", msg: str) -> None:
+        self._b = b
+        self._msg = msg
+        self._response: Response | None = None
+        self._error: BaseException | None = None
+        self._consumed = False
 
-    async def producer() -> None:
-        # We're on the loop thread here. Use queue.put (await) so the
-        # bounded-queue backpressure applies to the sentinel as well.
-        # call_soon_threadsafe(put_nowait, ...) would silently raise
-        # QueueFull when the queue is at capacity and the consumer
-        # would hang waiting for a sentinel that never arrived.
+    @property
+    def response(self) -> Response | None:
+        """Accumulated response (text + tokens) once iteration completes."""
+        return self._response
+
+    @property
+    def error(self) -> BaseException | None:
+        """Terminal exception, if any."""
+        return self._error
+
+    def __aiter__(self) -> AsyncIterator[str]:
+        return self._iterate()
+
+    async def _iterate(self) -> AsyncIterator[str]:
+        if self._consumed:
+            return
+        self._consumed = True
+
+        b = self._b
+        provider = _build_provider(b)
+        request = _build_request(b, self._msg)
+        kwargs: dict = {}
+        if b._max_tokens is not None:
+            kwargs["max_tokens"] = b._max_tokens
+        if b._temperature is not None:
+            kwargs["temperature"] = b._temperature
+        if b._caching:
+            kwargs["caching"] = True
+        if b._middleware:
+            kwargs["middleware"] = list(b._middleware)
+
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue = asyncio.Queue(maxsize=64)
+
+        def on_chunk(chunk: str) -> None:
+            fut = asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
+            fut.result()
+
+        async def producer() -> None:
+            try:
+                resp = await asyncio.to_thread(
+                    legacy_prompt_stream, provider, request, on_chunk, **kwargs
+                )
+                # Stash the final response BEFORE the sentinel so the
+                # consumer sees it on its next `response` access after
+                # iteration ends (no race: queue ordering is fine, but
+                # python's MAYBE-released-before-sentinel is also fine
+                # because we publish on the producer task's completion).
+                self._response = resp
+                await queue.put(_DONE)
+            except BaseException as exc:
+                self._error = exc
+                await queue.put(exc)
+
+        task = asyncio.create_task(producer())
         try:
-            await asyncio.to_thread(
-                legacy_prompt_stream, provider, request, on_chunk, **kwargs
-            )
-            await queue.put(_DONE)
-        except BaseException as exc:
-            await queue.put(exc)
+            while True:
+                item = await queue.get()
+                if item is _DONE:
+                    return
+                if isinstance(item, BaseException):
+                    raise item
+                yield item  # type: ignore[misc]
+        finally:
+            # Consumer broke early — best-effort cancel the producer
+            # task. The worker thread itself can't be killed; the legacy
+            # prompt_stream will keep draining the HTTP socket.
+            if not task.done():
+                task.cancel()
 
-    task = asyncio.create_task(producer())
-    try:
-        while True:
-            item = await queue.get()
-            if item is _DONE:
-                return
-            if isinstance(item, BaseException):
-                raise item
-            yield item  # type: ignore[misc]
-    finally:
-        # Consumer broke early — best-effort cancel the producer task.
-        # The worker thread can't be killed; the legacy prompt_stream
-        # will continue until the HTTP socket drains. The task wrapper
-        # is cancellable, which is enough to release the awaiting loop.
-        if not task.done():
-            task.cancel()
+
+def text_stream(b: "Text", msg: str) -> TextStream:
+    return TextStream(b, msg)
