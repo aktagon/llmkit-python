@@ -3,7 +3,6 @@
 
 
 
-
 """
 
 from __future__ import annotations
@@ -11,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from ..client import upload_file as legacy_upload_file
+from ..client import upload_file as _upload_file
 from ..types import File, Provider
 
 if TYPE_CHECKING:
@@ -30,10 +29,9 @@ async def upload_run(b: "Upload") -> File:
         raise ValueError(
             "Upload: bytes() and path() are mutually exclusive"
         )
-    if has_bytes:
+    if has_bytes and not b._filename:
         raise ValueError(
-            "Upload: bytes() not yet wired (Python phase 3 follow-up); "
-            "use path() for now"
+            "Upload: filename() is required when bytes() is set"
         )
 
     provider = Provider(
@@ -43,10 +41,13 @@ async def upload_run(b: "Upload") -> File:
     if b.client.provider.base_url:
         provider.base_url = b.client.provider.base_url
 
+    source: bytes | str = b._bytes if has_bytes else b._path
     kwargs: dict = {}
     if b._middleware:
         kwargs["middleware"] = list(b._middleware)
+    if b._mime_type:
+        kwargs["mime_type"] = b._mime_type
+    if b._filename:
+        kwargs["filename"] = b._filename
 
-    return await asyncio.to_thread(
-        legacy_upload_file, provider, b._path, **kwargs
-    )
+    return await asyncio.to_thread(_upload_file, provider, source, **kwargs)
