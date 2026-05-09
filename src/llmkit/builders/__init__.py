@@ -181,7 +181,6 @@ class Image:
     def __init__(self, client: "Client") -> None:
         self.client = client
         self._aspect_ratio: str = ""
-        self._caching: bool = False
         self._parts: list[Part] = []
         self._image_size: str = ""
         self._include_text: bool = False
@@ -191,11 +190,6 @@ class Image:
     def aspect_ratio(self, r: str) -> "Image":
         out = copy.copy(self)
         out._aspect_ratio = r
-        return out
-
-    def caching(self) -> "Image":
-        out = copy.copy(self)
-        out._caching = True
         return out
 
     def image(self, mime: str, data: bytes) -> "Image":  # ordered

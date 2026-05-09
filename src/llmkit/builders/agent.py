@@ -58,6 +58,8 @@ def _init_agent(b: "Agent") -> AgentState:
         kwargs["thinking_budget"] = b._thinking_budget
     if b._reasoning_effort:
         kwargs["reasoning_effort"] = b._reasoning_effort
+    if b._caching:
+        kwargs["caching"] = True
     if b._middleware:
         kwargs["middleware"] = list(b._middleware)
 
