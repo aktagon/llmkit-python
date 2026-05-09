@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import threading
@@ -11,15 +12,8 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-import llmkit
-from llmkit import (
-    Image,
-    ImageRequest,
-    MiddlewareVetoError,
-    Text,
-    ValidationError,
-    generate_image,
-)
+from llmkit import MiddlewareVetoError, ValidationError
+from llmkit.builders import new_client
 
 FLASH_MODEL = "gemini-3.1-flash-image-preview"
 PRO_MODEL = "gemini-3-pro-image-preview"
@@ -95,14 +89,21 @@ def _flash_response(encoded: str, prompt_tokens: int = 12, output_tokens: int = 
     }
 
 
-def test_generate_image_google_flash_round_trips_png() -> None:
+def _client(server_url: str | None = None):
+    c = new_client("google", "test-key" if server_url else "k")
+    if server_url:
+        c.provider.base_url = server_url
+    else:
+        c.provider.base_url = "http://unused"
+    return c
+
+
+def test_image_generate_google_flash_round_trips_png() -> None:
     encoded = base64.b64encode(FAKE_PNG).decode("ascii")
     with _MockServer(_flash_response(encoded)) as server:
-        resp = generate_image(
-            llmkit.Provider(name="google", api_key="test-key", base_url=server.url),
-            ImageRequest(prompt="A nano banana dish", model=FLASH_MODEL),
-            aspect_ratio="16:9",
-            image_size="2K",
+        c = _client(server.url)
+        resp = asyncio.run(
+            c.image.model(FLASH_MODEL).aspect_ratio("16:9").image_size("2K").generate("A nano banana dish")
         )
 
     assert FLASH_MODEL + ":generateContent" in server.received_path
@@ -121,7 +122,7 @@ def test_generate_image_google_flash_round_trips_png() -> None:
     assert resp.text == ""
 
 
-def test_generate_image_with_include_text_captures_text_part() -> None:
+def test_image_generate_with_include_text_captures_text_part() -> None:
     encoded = base64.b64encode(FAKE_PNG).decode("ascii")
     response = {
         "candidates": [
@@ -137,35 +138,30 @@ def test_generate_image_with_include_text_captures_text_part() -> None:
         "usageMetadata": {"promptTokenCount": 5, "candidatesTokenCount": 100},
     }
     with _MockServer(response) as server:
-        resp = generate_image(
-            llmkit.Provider(name="google", api_key="k", base_url=server.url),
-            ImageRequest(prompt="x", model=FLASH_MODEL),
-            include_text=True,
+        c = _client(server.url)
+        resp = asyncio.run(
+            c.image.model(FLASH_MODEL).include_text().generate("x")
         )
     assert server.received_body is not None
     assert server.received_body["generationConfig"]["responseModalities"] == ["TEXT", "IMAGE"]
     assert resp.text == "Here is your image:"
 
 
-def test_generate_image_parts_interleaved_compositional() -> None:
+def test_image_generate_parts_interleaved_compositional() -> None:
     # ADR-008's motivating scenario: text and reference images interleaved
     # so the model attends to the description-image pairing as intended.
     ref_a = b"\x89PNGA"
     ref_b = b"\x89PNGB"
     encoded = base64.b64encode(FAKE_PNG).decode("ascii")
     with _MockServer(_flash_response(encoded)) as server:
-        generate_image(
-            llmkit.Provider(name="google", api_key="k", base_url=server.url),
-            ImageRequest(
-                model=FLASH_MODEL,
-                parts=[
-                    Text("Person:"),
-                    Image("image/png", ref_a),
-                    Text("Outfit:"),
-                    Image("image/png", ref_b),
-                    Text("Generate the person wearing the outfit."),
-                ],
-            ),
+        c = _client(server.url)
+        asyncio.run(
+            c.image.model(FLASH_MODEL)
+            .text("Person:")
+            .image("image/png", ref_a)
+            .text("Outfit:")
+            .image("image/png", ref_b)
+            .generate("Generate the person wearing the outfit.")
         )
     body = server.received_body
     assert body is not None
@@ -178,66 +174,54 @@ def test_generate_image_parts_interleaved_compositional() -> None:
     assert parts[4] == {"text": "Generate the person wearing the outfit."}
 
 
-def test_generate_image_rejects_unsupported_aspect_on_pro() -> None:
+def test_image_generate_rejects_unsupported_aspect_on_pro() -> None:
     with pytest.raises(ValidationError) as exc_info:
-        generate_image(
-            llmkit.Provider(name="google", api_key="k", base_url="http://unused"),
-            ImageRequest(prompt="x", model=PRO_MODEL),
-            aspect_ratio="8:1",
+        c = _client()
+        asyncio.run(
+            c.image.model(PRO_MODEL).aspect_ratio("8:1").generate("x")
         )
     assert exc_info.value.field == "aspect_ratio"
 
 
-def test_generate_image_rejects_512_size_on_pro() -> None:
+def test_image_generate_rejects_512_size_on_pro() -> None:
     with pytest.raises(ValidationError) as exc_info:
-        generate_image(
-            llmkit.Provider(name="google", api_key="k", base_url="http://unused"),
-            ImageRequest(prompt="x", model=PRO_MODEL),
-            image_size="512",
+        c = _client()
+        asyncio.run(
+            c.image.model(PRO_MODEL).image_size("512").generate("x")
         )
     assert exc_info.value.field == "image_size"
 
 
-def test_generate_image_rejects_too_many_image_parts() -> None:
-    too_many = [Text("describe and edit:")] + [
-        Image("image/png", FAKE_PNG) for _ in range(15)
-    ]
+def test_image_generate_rejects_too_many_image_parts() -> None:
     with pytest.raises(ValidationError) as exc_info:
-        generate_image(
-            llmkit.Provider(name="google", api_key="k", base_url="http://unused"),
-            ImageRequest(model=FLASH_MODEL, parts=too_many),
-        )
+        c = _client()
+        img = c.image.model(FLASH_MODEL).text("describe and edit:")
+        for _ in range(15):
+            img = img.image("image/png", FAKE_PNG)
+        asyncio.run(img.generate(""))
     assert exc_info.value.field == "parts"
 
 
-def test_generate_image_rejects_both_prompt_and_parts() -> None:
-    with pytest.raises(ValidationError) as exc_info:
-        generate_image(
-            llmkit.Provider(name="google", api_key="k", base_url="http://unused"),
-            ImageRequest(model=FLASH_MODEL, prompt="x", parts=[Text("y")]),
-        )
-    assert exc_info.value.field == "parts"
+# The "both prompt and parts set" XOR test from the legacy free-function
+# surface is no longer reachable via typed-builder: chain methods either
+# accumulate parts or pass a final-text msg, never both as a free-form pair.
 
 
-def test_generate_image_rejects_both_empty() -> None:
+def test_image_generate_rejects_neither_set() -> None:
     with pytest.raises(ValidationError) as exc_info:
-        generate_image(
-            llmkit.Provider(name="google", api_key="k", base_url="http://unused"),
-            ImageRequest(model=FLASH_MODEL),
-        )
+        c = _client()
+        asyncio.run(c.image.model(FLASH_MODEL).generate(""))
     assert exc_info.value.field == "prompt"
 
 
-def test_generate_image_requires_model() -> None:
+def test_image_generate_requires_model() -> None:
     with pytest.raises(ValidationError) as exc_info:
-        generate_image(
-            llmkit.Provider(name="google", api_key="k"),
-            ImageRequest(prompt="x"),
-        )
+        c = new_client("google", "k")
+        asyncio.run(c.image.generate("x"))
     assert exc_info.value.field == "model"
 
 
-def test_generate_image_middleware_fires_pre_then_post() -> None:
+def test_image_generate_middleware_fires_pre_then_post() -> None:
     encoded = base64.b64encode(FAKE_PNG).decode("ascii")
     ops: list[str] = []
     phases: list[str] = []
@@ -248,24 +232,22 @@ def test_generate_image_middleware_fires_pre_then_post() -> None:
         return None
 
     with _MockServer(_flash_response(encoded, prompt_tokens=1, output_tokens=2)) as server:
-        generate_image(
-            llmkit.Provider(name="google", api_key="k", base_url=server.url),
-            ImageRequest(prompt="x", model=FLASH_MODEL),
-            middleware=[mw],
+        c = _client(server.url)
+        asyncio.run(
+            c.image.model(FLASH_MODEL).middleware(mw).generate("x")
         )
     assert ops == ["image_generation", "image_generation"]
     assert phases == ["pre", "post"]
 
 
-def test_generate_image_middleware_pre_phase_can_veto() -> None:
+def test_image_generate_middleware_pre_phase_can_veto() -> None:
     def mw(event):
         if event.phase.value == "pre":
             return RuntimeError("no images today")
         return None
 
     with pytest.raises(MiddlewareVetoError):
-        generate_image(
-            llmkit.Provider(name="google", api_key="k", base_url="http://unused"),
-            ImageRequest(prompt="x", model=FLASH_MODEL),
-            middleware=[mw],
+        c = _client()
+        asyncio.run(
+            c.image.model(FLASH_MODEL).middleware(mw).generate("x")
         )
