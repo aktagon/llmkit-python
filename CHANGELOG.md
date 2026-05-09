@@ -5,6 +5,38 @@ All notable changes to the Python SDK are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Breaking
+
+- Legacy free-function layer removed from the public API (plan-018 D3, ADR-010). `llmkit.prompt`, `llmkit.prompt_stream`, `llmkit.generate_image`, `llmkit.upload_file`, `llmkit.prompt_batch`, `llmkit.submit_batch`, `llmkit.wait_batch`, the `llmkit.Agent` class, and the `Text(s)` / `Image(m, b)` Part constructors are no longer in the public API. Use the typed builder:
+
+  ```python
+  from llmkit.builders import new_client
+  c = new_client("anthropic", api_key)
+  resp = await c.text.system("...").temperature(0.7).prompt("hello")
+  ```
+
+  - `c.text.<chain>.prompt(msg)` — replaces `llmkit.prompt`.
+  - `c.text.<chain>.stream(msg)` — replaces `llmkit.prompt_stream`; returns an async iterator.
+  - `c.image.model(id).<chain>.generate(msg)` — replaces `llmkit.generate_image`.
+  - `c.upload.bytes(b).filename(n).run()` — replaces `llmkit.upload_file`.
+  - `c.text.<chain>.batch(*prompts)` / `.submit_batch(*prompts).wait()` — replaces the batch trio.
+  - `c.agent.<chain>.prompt(msg)` / `c.agent.reset()` — replaces the `Agent` class.
+
+- All typed-builder terminals are async; legacy synchronous callers must wrap with `asyncio.run(...)` or use within an existing event loop.
+
+### Added
+
+- ADR-011 chain-field propagation lint integrated into `make check`.
+- All eight sampling/decoding chain methods (`top_p`, `top_k`, `frequency_penalty`, `presence_penalty`, `seed`, `stop_sequences`, `thinking_budget`, `reasoning_effort`) now thread through to the wire body. They had been silently dropping since plan-016 phase 2b.
+- `*Agent` typed builder now propagates `caching()` to the underlying agent (D3.0 wired text but missed agent).
+
+### Removed
+
+- `caching()` chain method on the `Image` builder. The legacy `generate_image` runtime never accepted a caching option, so the chain method had been a silent no-op.
+- `Text(s)` and `Image(m, b)` Part constructor functions in `image.py`. Construct `Part(text="...")` and `Part(image=MediaRef(mime_type=m, bytes=b))` directly if assembling Part lists manually; the typed-builder accumulators are the canonical path.
+
 ## [0.3.0] — 2026-05-08
 
 ### Breaking
