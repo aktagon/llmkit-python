@@ -1,4 +1,7 @@
-"""Phase 3 slice 1 — wires Image.generate against legacy ``generate_image``."""
+"""D3.1 (plan-018) — owns Image.generate translation. The legacy
+``generate_image`` free function (formerly exported from llmkit.__init__)
+is reachable only as an internal helper from image.py; the typed-builder
+method is the only public entry point for image generation."""
 
 from __future__ import annotations
 
@@ -9,7 +12,7 @@ from ..image import (
     ImageRequest,
     ImageResponse,
     Part,
-    generate_image as legacy_generate_image,
+    generate_image as run_image_generation,
 )
 from ..types import Provider
 
@@ -30,10 +33,8 @@ async def image_generate(b: "Image", msg: str) -> ImageResponse:
     # append msg as final text Part and use the parts path; otherwise
     # use the prompt sugar path.
     if b._parts:
-        from ..image import Text as TextPart
-
         if msg:
-            request.parts = [*b._parts, TextPart(msg)]
+            request.parts = [*b._parts, Part(text=msg)]
         else:
             request.parts = list(b._parts)
     elif msg:
@@ -50,5 +51,5 @@ async def image_generate(b: "Image", msg: str) -> ImageResponse:
         kwargs["middleware"] = list(b._middleware)
 
     return await asyncio.to_thread(
-        legacy_generate_image, provider, request, **kwargs
+        run_image_generation, provider, request, **kwargs
     )
