@@ -364,9 +364,52 @@ def test_phase3_upload_run_validates_xor() -> None:
     # Both: error
     with pytest.raises(ValueError, match="mutually exclusive"):
         asyncio.run(c.upload.bytes(b"x").path("/p").run())
-    # Bytes-only: deferred
-    with pytest.raises(ValueError, match="not yet wired"):
+    # Bytes without filename: error
+    with pytest.raises(ValueError, match="filename"):
         asyncio.run(c.upload.bytes(b"x").run())
+
+
+def test_phase3_upload_run_bytes_branch_round_trips() -> None:
+    """Bytes branch posts the multipart body to the configured baseUrl.
+
+    Captures the raw multipart body and asserts the filename + payload
+    + mime override made it through.
+    """
+    captured: dict[str, bytes] = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_a, **_k):
+            pass
+
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length") or "0")
+            captured["body"] = self.rfile.read(length)
+            payload = b'{"id":"file-zzz"}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        c = openai("k")
+        c.provider.base_url = f"http://127.0.0.1:{server.server_port}"
+        result = asyncio.run(
+            c.upload.bytes(b"hello").filename("note.txt").mime_type("text/plain").run()
+        )
+        assert result.id == "file-zzz"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+    body = captured["body"]
+    assert b"hello" in body
+    assert b'filename="note.txt"' in body
+    assert b"Content-Type: text/plain" in body
 
 
 def test_phase3_text_stream_yields_chunks() -> None:
