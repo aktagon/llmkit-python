@@ -1,4 +1,7 @@
-""""""
+"""
+
+
+"""
 
 from __future__ import annotations
 
@@ -9,7 +12,7 @@ from ..image import (
     ImageRequest,
     ImageResponse,
     Part,
-    generate_image as legacy_generate_image,
+    generate_image as run_image_generation,
 )
 from ..types import Provider
 
@@ -30,10 +33,8 @@ async def image_generate(b: "Image", msg: str) -> ImageResponse:
     #
     #
     if b._parts:
-        from ..image import Text as TextPart
-
         if msg:
-            request.parts = [*b._parts, TextPart(msg)]
+            request.parts = [*b._parts, Part(text=msg)]
         else:
             request.parts = list(b._parts)
     elif msg:
@@ -50,5 +51,5 @@ async def image_generate(b: "Image", msg: str) -> ImageResponse:
         kwargs["middleware"] = list(b._middleware)
 
     return await asyncio.to_thread(
-        legacy_generate_image, provider, request, **kwargs
+        run_image_generation, provider, request, **kwargs
     )
