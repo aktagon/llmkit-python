@@ -2,20 +2,21 @@
 
 """Integration smoke tests against live provider APIs."""
 
+import asyncio
 import os
 
 import pytest
 
-import llmkit
+from llmkit.builders import new_client
 
 
 def test_integration_ai21() -> None:
     key = os.getenv("AI21_API_KEY")
     if not key:
         pytest.skip("AI21_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="ai21", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("ai21", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -25,23 +26,26 @@ def test_integration_ai21_stream() -> None:
     key = os.getenv("AI21_API_KEY")
     if not key:
         pytest.skip("AI21_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="ai21", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("ai21", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_anthropic() -> None:
     key = os.getenv("ANTHROPIC_API_KEY")
     if not key:
         pytest.skip("ANTHROPIC_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="anthropic", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("anthropic", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -51,23 +55,26 @@ def test_integration_anthropic_stream() -> None:
     key = os.getenv("ANTHROPIC_API_KEY")
     if not key:
         pytest.skip("ANTHROPIC_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="anthropic", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("anthropic", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_cerebras() -> None:
     key = os.getenv("CEREBRAS_API_KEY")
     if not key:
         pytest.skip("CEREBRAS_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="cerebras", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("cerebras", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -77,23 +84,26 @@ def test_integration_cerebras_stream() -> None:
     key = os.getenv("CEREBRAS_API_KEY")
     if not key:
         pytest.skip("CEREBRAS_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="cerebras", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("cerebras", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_cohere() -> None:
     key = os.getenv("COHERE_API_KEY")
     if not key:
         pytest.skip("COHERE_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="cohere", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("cohere", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -103,23 +113,26 @@ def test_integration_cohere_stream() -> None:
     key = os.getenv("COHERE_API_KEY")
     if not key:
         pytest.skip("COHERE_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="cohere", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("cohere", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_deepseek() -> None:
     key = os.getenv("DEEPSEEK_API_KEY")
     if not key:
         pytest.skip("DEEPSEEK_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="deepseek", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("deepseek", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -129,23 +142,26 @@ def test_integration_deepseek_stream() -> None:
     key = os.getenv("DEEPSEEK_API_KEY")
     if not key:
         pytest.skip("DEEPSEEK_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="deepseek", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("deepseek", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_doubao() -> None:
     key = os.getenv("ARK_API_KEY")
     if not key:
         pytest.skip("ARK_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="doubao", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("doubao", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -155,23 +171,26 @@ def test_integration_doubao_stream() -> None:
     key = os.getenv("ARK_API_KEY")
     if not key:
         pytest.skip("ARK_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="doubao", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("doubao", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_ernie() -> None:
     key = os.getenv("QIANFAN_API_KEY")
     if not key:
         pytest.skip("QIANFAN_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="ernie", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("ernie", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -181,23 +200,26 @@ def test_integration_ernie_stream() -> None:
     key = os.getenv("QIANFAN_API_KEY")
     if not key:
         pytest.skip("QIANFAN_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="ernie", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("ernie", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_fireworks() -> None:
     key = os.getenv("FIREWORKS_API_KEY")
     if not key:
         pytest.skip("FIREWORKS_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="fireworks", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("fireworks", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -207,23 +229,26 @@ def test_integration_fireworks_stream() -> None:
     key = os.getenv("FIREWORKS_API_KEY")
     if not key:
         pytest.skip("FIREWORKS_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="fireworks", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("fireworks", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_google() -> None:
     key = os.getenv("GOOGLE_API_KEY")
     if not key:
         pytest.skip("GOOGLE_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="google", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("google", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -233,23 +258,26 @@ def test_integration_google_stream() -> None:
     key = os.getenv("GOOGLE_API_KEY")
     if not key:
         pytest.skip("GOOGLE_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="google", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("google", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_grok() -> None:
     key = os.getenv("GROK_API_KEY")
     if not key:
         pytest.skip("GROK_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="grok", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("grok", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -259,23 +287,26 @@ def test_integration_grok_stream() -> None:
     key = os.getenv("GROK_API_KEY")
     if not key:
         pytest.skip("GROK_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="grok", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("grok", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_groq() -> None:
     key = os.getenv("GROQ_API_KEY")
     if not key:
         pytest.skip("GROQ_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="groq", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("groq", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -285,23 +316,26 @@ def test_integration_groq_stream() -> None:
     key = os.getenv("GROQ_API_KEY")
     if not key:
         pytest.skip("GROQ_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="groq", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("groq", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_minimax() -> None:
     key = os.getenv("MINIMAX_API_KEY")
     if not key:
         pytest.skip("MINIMAX_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="minimax", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("minimax", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -311,23 +345,26 @@ def test_integration_minimax_stream() -> None:
     key = os.getenv("MINIMAX_API_KEY")
     if not key:
         pytest.skip("MINIMAX_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="minimax", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("minimax", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_mistral() -> None:
     key = os.getenv("MISTRAL_API_KEY")
     if not key:
         pytest.skip("MISTRAL_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="mistral", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("mistral", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -337,23 +374,26 @@ def test_integration_mistral_stream() -> None:
     key = os.getenv("MISTRAL_API_KEY")
     if not key:
         pytest.skip("MISTRAL_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="mistral", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("mistral", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_moonshot() -> None:
     key = os.getenv("MOONSHOT_API_KEY")
     if not key:
         pytest.skip("MOONSHOT_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="moonshot", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("moonshot", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -363,23 +403,26 @@ def test_integration_moonshot_stream() -> None:
     key = os.getenv("MOONSHOT_API_KEY")
     if not key:
         pytest.skip("MOONSHOT_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="moonshot", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("moonshot", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_openai() -> None:
     key = os.getenv("OPENAI_API_KEY")
     if not key:
         pytest.skip("OPENAI_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="openai", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("openai", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -389,23 +432,26 @@ def test_integration_openai_stream() -> None:
     key = os.getenv("OPENAI_API_KEY")
     if not key:
         pytest.skip("OPENAI_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="openai", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("openai", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_openrouter() -> None:
     key = os.getenv("OPENROUTER_API_KEY")
     if not key:
         pytest.skip("OPENROUTER_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="openrouter", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("openrouter", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -415,23 +461,26 @@ def test_integration_openrouter_stream() -> None:
     key = os.getenv("OPENROUTER_API_KEY")
     if not key:
         pytest.skip("OPENROUTER_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="openrouter", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("openrouter", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_perplexity() -> None:
     key = os.getenv("PERPLEXITY_API_KEY")
     if not key:
         pytest.skip("PERPLEXITY_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="perplexity", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("perplexity", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -441,23 +490,26 @@ def test_integration_perplexity_stream() -> None:
     key = os.getenv("PERPLEXITY_API_KEY")
     if not key:
         pytest.skip("PERPLEXITY_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="perplexity", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("perplexity", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_qwen() -> None:
     key = os.getenv("DASHSCOPE_API_KEY")
     if not key:
         pytest.skip("DASHSCOPE_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="qwen", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("qwen", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -467,23 +519,26 @@ def test_integration_qwen_stream() -> None:
     key = os.getenv("DASHSCOPE_API_KEY")
     if not key:
         pytest.skip("DASHSCOPE_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="qwen", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("qwen", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_sambanova() -> None:
     key = os.getenv("SAMBANOVA_API_KEY")
     if not key:
         pytest.skip("SAMBANOVA_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="sambanova", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("sambanova", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -493,23 +548,26 @@ def test_integration_sambanova_stream() -> None:
     key = os.getenv("SAMBANOVA_API_KEY")
     if not key:
         pytest.skip("SAMBANOVA_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="sambanova", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("sambanova", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_together() -> None:
     key = os.getenv("TOGETHER_API_KEY")
     if not key:
         pytest.skip("TOGETHER_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="together", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("together", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -519,23 +577,26 @@ def test_integration_together_stream() -> None:
     key = os.getenv("TOGETHER_API_KEY")
     if not key:
         pytest.skip("TOGETHER_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="together", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("together", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_yi() -> None:
     key = os.getenv("YI_API_KEY")
     if not key:
         pytest.skip("YI_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="yi", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("yi", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -545,23 +606,26 @@ def test_integration_yi_stream() -> None:
     key = os.getenv("YI_API_KEY")
     if not key:
         pytest.skip("YI_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="yi", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("yi", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_zhipu() -> None:
     key = os.getenv("ZHIPU_API_KEY")
     if not key:
         pytest.skip("ZHIPU_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="zhipu", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
+    c = new_client("zhipu", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
     assert resp.tokens.input > 0, "no input tokens reported"
@@ -571,24 +635,26 @@ def test_integration_zhipu_stream() -> None:
     key = os.getenv("ZHIPU_API_KEY")
     if not key:
         pytest.skip("ZHIPU_API_KEY not set")
-    chunks: list[str] = []
-    resp = llmkit.prompt_stream(
-        provider=llmkit.Provider(name="zhipu", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        on_chunk=chunks.append,
-    )
-    assert resp.text != "", "empty response text"
+    c = new_client("zhipu", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
     assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
 
 
 def test_integration_anthropic_caching() -> None:
     key = os.getenv("ANTHROPIC_API_KEY")
     if not key:
         pytest.skip("ANTHROPIC_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="anthropic", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        caching=True,
+    c = new_client("anthropic", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").caching().prompt("ping")
     )
     assert resp.text != "", "empty response text"
     print(f"cache_read={resp.tokens.cache_read} cache_write={resp.tokens.cache_write}")
@@ -598,10 +664,9 @@ def test_integration_openai_caching() -> None:
     key = os.getenv("OPENAI_API_KEY")
     if not key:
         pytest.skip("OPENAI_API_KEY not set")
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="openai", api_key=key),
-        request=llmkit.Request(system="Reply with only the word pong", user="ping"),
-        caching=True,
+    c = new_client("openai", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").caching().prompt("ping")
     )
     assert resp.text != "", "empty response text"
     print(f"cache_read={resp.tokens.cache_read} cache_write={resp.tokens.cache_write}")

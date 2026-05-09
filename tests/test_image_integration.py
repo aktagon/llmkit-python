@@ -4,12 +4,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 
 import pytest
 
-import llmkit
-from llmkit import ImageRequest, generate_image
+from llmkit.builders import new_client
 
 
 def test_integration_image_google_gemini_3_pro_image_preview() -> None:
@@ -18,14 +18,13 @@ def test_integration_image_google_gemini_3_pro_image_preview() -> None:
         pytest.skip("GOOGLE_API_KEY not set")
     if not os.getenv("LLMKIT_RUN_SLOW_IMAGE"):
         pytest.skip("LLMKIT_RUN_SLOW_IMAGE not set; skipping gemini-3-pro-image-preview smoke")
-    resp = generate_image(
-        llmkit.Provider(name="google", api_key=key),
-        ImageRequest(
-            prompt="A simple red circle on a white background.",
-            model="gemini-3-pro-image-preview",
-        ),
-        aspect_ratio="1:1",
-        image_size="1K",
+    c = new_client("google", key)
+    resp = asyncio.run(
+        c.image
+        .model("gemini-3-pro-image-preview")
+        .aspect_ratio("1:1")
+        .image_size("1K")
+        .generate("A simple red circle on a white background.")
     )
     assert len(resp.images) > 0
     assert len(resp.images[0].data) > 0
@@ -36,14 +35,13 @@ def test_integration_image_google_gemini_3_1_flash_image_preview() -> None:
     key = os.getenv("GOOGLE_API_KEY")
     if not key:
         pytest.skip("GOOGLE_API_KEY not set")
-    resp = generate_image(
-        llmkit.Provider(name="google", api_key=key),
-        ImageRequest(
-            prompt="A simple red circle on a white background.",
-            model="gemini-3.1-flash-image-preview",
-        ),
-        aspect_ratio="1:1",
-        image_size="1K",
+    c = new_client("google", key)
+    resp = asyncio.run(
+        c.image
+        .model("gemini-3.1-flash-image-preview")
+        .aspect_ratio("1:1")
+        .image_size("1K")
+        .generate("A simple red circle on a white background.")
     )
     assert len(resp.images) > 0
     assert len(resp.images[0].data) > 0

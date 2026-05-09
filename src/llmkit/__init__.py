@@ -2,30 +2,27 @@
 
 Public surface:
 
-    import llmkit
-    resp = llmkit.prompt(
-        provider=llmkit.Provider(name="anthropic", api_key=key),
-        request=llmkit.Request(system="...", user="hello"),
-        temperature=0.7,
-    )
-    print(resp.text)
+    from llmkit.builders import new_client
+    c = new_client("anthropic", api_key)
+    resp = await c.text.system("...").temperature(0.7).prompt("hello")
+
+Plan-018 D3.x absorbed the legacy free-function layer (``prompt``,
+``prompt_stream``, ``generate_image``, ``upload_file``, batch trio,
+``Agent``) into typed-builder terminals; the public surface here is
+types + error classes + the ``Providers`` enum + the ``BatchHandle``
+class returned by ``c.text.submit_batch(...)``.
 """
 
 from __future__ import annotations
 
-from .agent import Agent
-from .batch import BatchHandle, prompt_batch, submit_batch, wait_batch
-from .client import StreamCallback, prompt, prompt_stream, upload_file
+from .batch import BatchHandle
 from .errors import APIError, MiddlewareVetoError, ValidationError
 from .image import (
-    Image,
     ImageData,
     ImageRequest,
     ImageResponse,
     MediaRef,
     Part,
-    Text,
-    generate_image,
 )
 from .providers.generated.middleware import (
     Event,
@@ -39,18 +36,15 @@ from .types import File, InputImage, Message, Options, Provider, Request, Respon
 
 __all__ = [
     "APIError",
-    "Agent",
     "BatchHandle",
     "Event",
     "File",
-    "Image",
     "ImageData",
     "ImageRequest",
     "ImageResponse",
     "InputImage",
     "MediaRef",
     "Part",
-    "Text",
     "Message",
     "MiddlewareFn",
     "MiddlewareOp",
@@ -63,15 +57,7 @@ __all__ = [
     "ProviderName",
     "Request",
     "Response",
-    "StreamCallback",
     "Tool",
     "Usage",
     "ValidationError",
-    "generate_image",
-    "prompt",
-    "prompt_batch",
-    "prompt_stream",
-    "submit_batch",
-    "upload_file",
-    "wait_batch",
 ]
