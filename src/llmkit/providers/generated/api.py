@@ -92,6 +92,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_max_tool_iterations",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_mime_type",
         sub_options=(
         ),
