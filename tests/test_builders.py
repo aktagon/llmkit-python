@@ -444,14 +444,19 @@ def test_phase3_text_stream_yields_chunks() -> None:
         c = openai("k")
         c.provider.base_url = f"http://127.0.0.1:{httpd.server_port}"
 
-        async def consume() -> list[str]:
+        async def consume() -> tuple[list[str], "TextStream"]:
             got: list[str] = []
-            async for chunk in c.text.stream("hi"):
+            stream = c.text.stream("hi")
+            async for chunk in stream:
                 got.append(chunk)
-            return got
+            return got, stream
 
-        chunks = asyncio.run(consume())
+        chunks, stream = asyncio.run(consume())
         assert chunks == ["He", "llo"]
+        # Trailing handle: after iteration, response is populated.
+        assert stream.response is not None
+        assert stream.response.text == "Hello"
+        assert stream.error is None
     finally:
         httpd.shutdown()
         httpd.server_close()
