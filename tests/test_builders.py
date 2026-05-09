@@ -105,7 +105,6 @@ def test_image_chain() -> None:
     c = google("k")
     img = (
         c.image.aspect_ratio("16:9")
-        .caching()
         .image("image/png", b"\xff")
         .image_size("2K")
         .include_text()
@@ -114,7 +113,6 @@ def test_image_chain() -> None:
         .text("compose")
     )
     assert img._aspect_ratio == "16:9"
-    assert img._caching is True
     assert img._image_size == "2K"
     assert img._include_text is True
     assert len(img._middleware) == 1
