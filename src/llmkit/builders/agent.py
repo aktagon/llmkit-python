@@ -42,6 +42,22 @@ def _init_agent(b: "Agent") -> AgentState:
         kwargs["max_tokens"] = b._max_tokens
     if b._temperature is not None:
         kwargs["temperature"] = b._temperature
+    if b._top_p is not None:
+        kwargs["top_p"] = b._top_p
+    if b._top_k is not None:
+        kwargs["top_k"] = b._top_k
+    if b._frequency_penalty is not None:
+        kwargs["frequency_penalty"] = b._frequency_penalty
+    if b._presence_penalty is not None:
+        kwargs["presence_penalty"] = b._presence_penalty
+    if b._seed is not None:
+        kwargs["seed"] = b._seed
+    if b._stop_sequences:
+        kwargs["stop_sequences"] = list(b._stop_sequences)
+    if b._thinking_budget is not None:
+        kwargs["thinking_budget"] = b._thinking_budget
+    if b._reasoning_effort:
+        kwargs["reasoning_effort"] = b._reasoning_effort
     if b._middleware:
         kwargs["middleware"] = list(b._middleware)
 
