@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `*Agent` typed builder now propagates `caching()` to the underlying agent (D3.0 wired text but missed agent).
 - `Agent.max_tool_iterations(n)` chain method exposes the tool-loop depth cap (default 10) on the typed builder.
 - `Upload.bytes()` is now wired end-to-end alongside `path()`. The internal `upload_file(provider, source, ...)` helper takes a single positional that can be a `str` / `os.PathLike` (read from disk) or `bytes` / `bytearray` (uploaded directly with the chained `filename()`). `mime_type()` overrides the filename-extension–based detection.
+- `TextStream` trailing-handle class. Iterate via `async for chunk in stream` to consume chunks; `stream.response` (property) returns the accumulated `Response` (text + tokens) once iteration ends, and `stream.error` exposes any terminal exception. Implements `__aiter__` so existing `async for` loops keep working.
+
+### Changed
+
+- **Breaking**: `c.text.stream(msg)` now returns `TextStream` instead of being an async generator (`AsyncIterator[str]`). The class still implements `__aiter__` so existing iteration code is source-compatible; type hints that referenced `AsyncIterator[str]` for the return value should be updated to `TextStream`.
 
 ### Removed
 
