@@ -60,13 +60,14 @@ class TextStream:
         return self._error
 
     def __aiter__(self) -> AsyncIterator[str]:
+        if self._consumed:
+            raise RuntimeError(
+                "TextStream is single-use; create a new stream to iterate again"
+            )
+        self._consumed = True
         return self._iterate()
 
     async def _iterate(self) -> AsyncIterator[str]:
-        if self._consumed:
-            return
-        self._consumed = True
-
         b = self._b
         provider = _build_provider(b)
         request = _build_request(b, self._msg)
@@ -81,6 +82,15 @@ class TextStream:
             kwargs["middleware"] = list(b._middleware)
 
         loop = asyncio.get_running_loop()
+        # Bounded queue gives natural backpressure when the consumer
+        # is slower than the producer — without it a fast SSE producer
+        # could buffer megabytes of pending chunks. Known limitation:
+        # if the consumer breaks out of iteration mid-stream and the
+        # queue is full, the worker thread can park indefinitely on
+        # `fut.result()` (the producer asyncio task is cancelled but
+        # that doesn't kill the worker). Tracked as a 1.0.x follow-up;
+        # workaround for callers is to consume the iterator to
+        # completion or use `asyncio.timeout(...)` around the loop.
         queue: asyncio.Queue = asyncio.Queue(maxsize=64)
 
         def on_chunk(chunk: str) -> None:
