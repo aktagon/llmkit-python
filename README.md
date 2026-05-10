@@ -1,8 +1,10 @@
 # llmkit (Python)
 
-Unified LLM client library. One API, multiple providers, zero external dependencies.
+Unified async LLM client library. One API, multiple providers, zero external dependencies (stdlib only — no `httpx`, no `pydantic`).
 
-The code is generated + hand-coded with the help of AI: a typed provider matrix is generated from a single source of truth, while request building, transport, streaming, caching, batching, and tool-loop behavior are hand-coded on top.
+The code is generated + hand-coded with the help of AI: a typed provider matrix and the typed-builder API surface are generated from a single source of truth, while request building, transport, streaming, caching, batching, and tool-loop behavior are hand-coded on top.
+
+Shares a code-generation pipeline with the [Go](https://github.com/aktagon/llmkit-go), [TypeScript](https://github.com/aktagon/llmkit-ts), and [Rust](https://github.com/aktagon/llmkit-rust) SDKs.
 
 ## Install
 
@@ -14,137 +16,252 @@ uv add llmkit
 
 Python 3.10 or later.
 
-## Quick start
+## Quick Start
 
 ```python
 import os
-import llmkit
+import asyncio
+from llmkit.builders import anthropic
 
-resp = llmkit.prompt(
-    provider=llmkit.Provider(name="anthropic", api_key=os.environ["ANTHROPIC_API_KEY"]),
-    request=llmkit.Request(system="Be concise.", user="Say hi"),
-    temperature=0.3,
-)
-print(resp.text)
-print(resp.tokens.input, "input tokens")
-```
-
-## Streaming
-
-```python
-def on_chunk(text: str) -> None:
-    print(text, end="", flush=True)
-
-resp = llmkit.prompt_stream(
-    provider=llmkit.Provider(name="openai", api_key=os.environ["OPENAI_API_KEY"]),
-    request=llmkit.Request(user="Write a haiku about caching."),
-    on_chunk=on_chunk,
-)
-```
-
-## Tool-calling agent
-
-```python
-def weather(args):
-    return f"It's sunny in {args['city']}."
-
-agent = llmkit.Agent(
-    llmkit.Provider(name="anthropic", api_key=os.environ["ANTHROPIC_API_KEY"]),
-)
-agent.set_system("You can look up weather with the 'weather' tool.")
-agent.add_tool(
-    llmkit.Tool(
-        name="weather",
-        description="Get weather for a city",
-        schema={"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]},
-        run=weather,
+async def main():
+    c = anthropic(os.environ["ANTHROPIC_API_KEY"])
+    resp = await (
+        c.text()
+        .system("Be concise.")
+        .temperature(0.3)
+        .prompt("Say hi")
     )
-)
-resp = agent.chat("What's the weather in Helsinki?")
-print(resp.text)
+    print(resp.text)
+    print(resp.usage.input, "input tokens")
+
+asyncio.run(main())
 ```
 
-## Image generation
-
-Generate images from text, optionally conditioned on reference images for
-editing or composition. Currently supports Google's Nano Banana 2
-(`gemini-3.1-flash-image-preview`) and Pro (`gemini-3-pro-image-preview`).
-
-Text-to-image — pass `prompt` for the terse hot path:
-
-```python
-resp = llmkit.generate_image(
-    provider=llmkit.Provider(name="google", api_key=os.environ["GOOGLE_API_KEY"]),
-    request=llmkit.ImageRequest(
-        model="gemini-3.1-flash-image-preview",
-        prompt="A nano banana dish in a fancy restaurant",
-    ),
-    aspect_ratio="16:9",
-    image_size="2K",
-)
-with open("out.png", "wb") as f:
-    f.write(resp.images[0].data)
-```
-
-For editing or compositional generation, pass `parts` — an ordered list
-of text and image parts. The `Text(...)` and `Image(...)` constructors
-build each part; on-wire ordering matches the list order, so the model
-attends to descriptions and references in the pairing you intend:
-
-```python
-edited = llmkit.generate_image(
-    provider=provider,
-    request=llmkit.ImageRequest(
-        model="gemini-3.1-flash-image-preview",
-        parts=[
-            llmkit.Text("Person:"),
-            llmkit.Image("image/png", person_bytes),
-            llmkit.Text("Outfit:"),
-            llmkit.Image("image/png", outfit_bytes),
-            llmkit.Text("Generate the person wearing the outfit."),
-        ],
-    ),
-)
-```
-
-Set exactly one of `prompt` or `parts` — both empty or both set raises
-`ValidationError`.
-
-Aspect ratios and sizes are validated against a per-model whitelist before
-the HTTP request — `image_size="512"` on Pro raises `ValidationError`
-without paying for a 4xx round-trip.
-
-| Model                 | Aspect ratios                                                               | Sizes           |
-| --------------------- | --------------------------------------------------------------------------- | --------------- |
-| Nano Banana 2 (Flash) | 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9, **1:4, 4:1, 1:8, 8:1** | 512, 1K, 2K, 4K |
-| Nano Banana Pro       | 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9                         | 1K, 2K, 4K      |
-
-Up to 14 reference images per request.
-
-## Batching
-
-```python
-requests = [llmkit.Request(user=f"Summarize: {text}") for text in corpus]
-responses = llmkit.prompt_batch(
-    provider=llmkit.Provider(name="anthropic", api_key=key),
-    requests=requests,
-)
-```
+The typed builder is the only public surface as of v1.0.0. One mental model — `client.<capability>().<chain>.<terminal>` — across every capability.
 
 ## Providers
 
-OpenAI, Anthropic, Google, Grok, Bedrock, OpenRouter, Groq, DeepSeek, Cohere, Mistral, Together, Fireworks, Cerebras, Doubao, Ernie, Moonshot, Qwen, Perplexity, SambaNova, Yi, AI21, Zhipu, MiniMax, Azure, Ollama, LM Studio, vLLM.
+Per-provider factory functions:
 
-Each provider has a default model, auth scheme, and feature matrix (caching, batching, streaming, tool calls, structured output, file upload) discoverable via `llmkit.PROVIDERS`.
+```
+ai21      anthropic  azure     bedrock   cerebras  cohere    deepseek
+doubao    ernie      fireworks google    grok      groq      lmstudio
+minimax   mistral    moonshot  ollama    openai    openrouter
+perplexity qwen      sambanova together  vllm      yi        zhipu
+```
 
-## API surface
+Or use the generic `new_client(name, api_key)`. 27 providers, 4 API shapes (OpenAI-compatible, Anthropic Messages, Google Generative AI, AWS Bedrock Converse). Bedrock auth uses SigV4; other providers use API-key auth.
 
-Entry points: `prompt`, `prompt_stream`, `upload_file`, `prompt_batch`, `submit_batch`, `wait_batch`, `Agent`.
+## API
 
-Types: `Provider`, `Request`, `Response`, `Message`, `File`, `Image`, `Tool`, `Options`, `Usage`, `Event`, `MiddlewareFn`, `MiddlewareOp`, `MiddlewarePhase`, `ProviderName`, `ProviderConfig`, `PROVIDERS`.
+### Text — one-shot prompt
 
-Errors: `APIError`, `ValidationError`, `MiddlewareVetoError`.
+```python
+resp = await (
+    c.text()
+    .system("You are helpful")
+    .temperature(0.7)
+    .max_tokens(200)
+    .prompt("What is 2+2?")
+)
+
+print(resp.text)              # "4"
+print(resp.usage.input)       # prompt tokens
+print(resp.usage.output)      # completion tokens
+print(resp.usage.cache_read)  # tokens served from cache
+print(resp.usage.cache_write) # tokens written to cache (Anthropic explicit)
+print(resp.usage.reasoning)   # internal reasoning tokens (OpenAI o-series, Gemini 2.5+)
+```
+
+Capability-scoped fields (`cache_read`, `cache_write`, `reasoning`) are zero when the provider doesn't report them separately.
+
+### Stream — async iteration with trailing handle
+
+```python
+stream = c.text().system("Be brief").stream("Tell me a joke")
+async for chunk in stream:
+    print(chunk, end="", flush=True)
+print("\nUsage:", stream.response().usage)
+```
+
+`TextStream` implements `__aiter__`. After iteration completes, `stream.response()` returns the final `Response` (with token counts) and `stream.error()` returns any terminal error. Handles both Anthropic-style typed events and OpenAI-style data-only frames internally.
+
+### Agent — tool loop
+
+```python
+from llmkit import Tool
+
+def add(args):
+    return str(args["a"] + args["b"])
+
+add_tool = Tool(
+    name="add",
+    description="Add two numbers",
+    schema={
+        "type": "object",
+        "properties": {"a": {"type": "number"}, "b": {"type": "number"}},
+    },
+    run=add,
+)
+
+bot = (
+    c.agent()
+    .system("You are a calculator.")
+    .tool(add_tool)
+    .max_tool_iterations(5)
+)
+resp = await bot.prompt("What is 2+3?")
+print(resp.text)
+```
+
+`*Agent` is **stateful** — repeated `bot.prompt(...)` calls accumulate history. Chain methods (`.system(...)`, `.tool(...)`) clone and reset state, so a forked builder gets a fresh conversation. `bot.reset()` clears state without dropping chained config.
+
+Tool dispatch covers Anthropic `tool_use`, OpenAI `tool_calls`, Google `functionCall`, and Bedrock Converse `toolUse`.
+
+### Image — text-to-image and edit
+
+Currently supports Google's Nano Banana 2 (`gemini-3.1-flash-image-preview`) and Pro (`gemini-3-pro-image-preview`).
+
+```python
+from llmkit.builders import google
+
+c = google(os.environ["GOOGLE_API_KEY"])
+img = await (
+    c.image()
+    .model("gemini-3.1-flash-image-preview")
+    .aspect_ratio("16:9")
+    .image_size("2K")
+    .generate("A nano banana dish, studio lighting")
+)
+
+with open("out.png", "wb") as f:
+    f.write(img.images[0].data)
+```
+
+For compositional editing, chain `.text(...)` and `.image(mime, bytes)` to interleave references with descriptions:
+
+```python
+await (
+    c.image()
+    .model("gemini-3.1-flash-image-preview")
+    .text("Person:")
+    .image("image/png", person_bytes)
+    .text("Outfit:")
+    .image("image/png", outfit_bytes)
+    .generate("Generate the person wearing the outfit.")
+)
+```
+
+Aspect ratios and sizes validate against a per-model whitelist before the HTTP request.
+
+### Upload — Path or Bytes
+
+```python
+from llmkit.builders import openai
+
+c = openai(os.environ["OPENAI_API_KEY"])
+
+# from a path
+file = await c.upload().path("./data.pdf").run()
+
+# from bytes (filename required)
+file2 = await (
+    c.upload()
+    .bytes(buf)
+    .filename("report.pdf")
+    .mime_type("application/pdf")
+    .run()
+)
+```
+
+### Batches
+
+```python
+results = await (
+    c.text()
+    .system("Be brief")
+    .batch(["Translate hello to French", "Translate hello to Spanish"])
+)
+for r in results:
+    print(r.text)
+```
+
+`.batch(prompts)` is `.submit_batch(prompts)` + `handle.wait()`. Use `.submit_batch(prompts)` to get a `BatchHandle` you can persist, then call `await handle.wait()` later. Both inline (Anthropic) and file-reference (OpenAI two-hop) flows are handled internally.
+
+### Caching
+
+```python
+# Anthropic — explicit cache_control wrap of the system prompt:
+await c.text().system(long_sys_prompt).caching().prompt("...")
+
+# OpenAI — automatic server-side caching (caching() is a hint; reads
+# surface in resp.usage.cache_read regardless):
+await c.text().system(long_sys_prompt).caching().prompt("...")
+
+# Google — pre-flight POST creates a cachedContents resource, then the
+# main call references it. Google requires ~1k+ tokens of system prompt:
+await c.text().system(big_sys_prompt).caching().prompt("...")
+```
+
+The mode is provider-specific and inferred from the provider config. The default TTL comes from `src/llmkit/providers/generated/caching.py` (Google: 3600s).
+
+## Options
+
+Across every `*Text` / `*Agent` builder:
+
+| Concept           | Method                 |
+| ----------------- | ---------------------- |
+| System prompt     | `.system(s)`           |
+| Model override    | `.model(name)`         |
+| Sampling          | `.temperature(t)`      |
+| Token cap         | `.max_tokens(n)`       |
+| Caching           | `.caching()`           |
+| Conversation hist | `.history(msgs)`       |
+| Structured output | `.schema(json)`        |
+| Middleware hooks  | `.middleware(fns)`     |
+| Reasoning effort  | `.reasoning_effort(l)` |
+| Thinking budget   | `.thinking_budget(n)`  |
+
+Sampling hyperparameters (`.top_p`, `.top_k`, `.seed`, `.frequency_penalty`, `.presence_penalty`, `.stop_sequences`) are validated per provider; unsupported options raise `ValidationError` rather than silently dropping.
+
+The Image builder has a narrower set: `.model`, `.aspect_ratio`, `.image_size`, `.include_text`, `.text`, `.image`, `.middleware`. Upload: `.path`, `.bytes`, `.filename`, `.mime_type`, `.middleware`.
+
+## Middleware
+
+```python
+from llmkit import Event, MiddlewareFn
+
+def log_usage(e):
+    if e.op == "llm_request" and e.phase == "post":
+        print(f"{e.provider}/{e.model}: {e.usage.input} in, {e.usage.output} out")
+    return None
+
+await c.text().middleware([log_usage]).prompt("...")
+```
+
+Pre-phase middleware can veto by returning a non-None error message; post-phase runs for observation only. Wired at six sites: text prompt, text stream, agent LLM call, agent tool execution, upload, batch submit, Google resource caching pre-flight.
+
+## Self-hosted endpoints
+
+```python
+from llmkit.builders import openai
+
+c = openai("anything").with_base_url("http://localhost:8080/v1")
+```
+
+Works for any OpenAI-compatible server (vLLM, LM Studio, Ollama, corporate gateways).
+
+## Architecture
+
+- **Generated** (`src/llmkit/providers/generated/*.py`, `src/llmkit/builders/__init__.py`) — per-provider config + the typed-builder API surface. Pure data and class skeletons, no business logic.
+- **Hand-coded** (`src/llmkit/{client,types,errors,http,transforms,middleware,caching,batch,agent,sigv4,paths}.py`, plus `builders/{text,agent,image,stream,batch,upload}.py`) — HTTP, request shaping, SSE consumer, agent tool loop, SigV4 signing, caching, batch lifecycle, multipart upload, middleware fanout, builder terminals.
+
+Transforms dispatch on config fields (`system_placement`, `wraps_options_in`, `auth_scheme`), not provider names.
+
+## Mirror
+
+This repo is a read-only mirror of a private monorepo. File issues here; code patches should target the private source via `christian@aktagon.com`.
 
 ## License
 
-MIT.
+MIT

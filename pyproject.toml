@@ -1,16 +1,47 @@
 [project]
 name = "llmkit"
-version = "0.3.0"
-description = "Unified LLM client library. Single API, multiple providers, zero dependencies."
+version = "1.0.0"
+description = "Unified LLM client library. Single API, 27 providers, zero dependencies."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Aktagon Ltd.", email = "christian@aktagon.com" }]
 dependencies = []
+keywords = [
+    "llm",
+    "ai",
+    "anthropic",
+    "openai",
+    "google",
+    "gemini",
+    "bedrock",
+    "claude",
+    "gpt",
+    "agent",
+    "sdk",
+    "streaming",
+    "tool-calling",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 
 [project.urls]
 Homepage = "https://github.com/aktagon/llmkit-python"
 Source = "https://github.com/aktagon/llmkit-python"
+Issues = "https://github.com/aktagon/llmkit-python/issues"
+Changelog = "https://github.com/aktagon/llmkit-python/blob/master/CHANGELOG.md"
 
 [build-system]
 requires = ["hatchling"]

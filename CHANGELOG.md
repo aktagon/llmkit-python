@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-05-09
+
 ### Breaking
 
 - Legacy free-function layer removed from the public API (plan-018 D3, ADR-010). `llmkit.prompt`, `llmkit.prompt_stream`, `llmkit.generate_image`, `llmkit.upload_file`, `llmkit.prompt_batch`, `llmkit.submit_batch`, `llmkit.wait_batch`, the `llmkit.Agent` class, and the `Text(s)` / `Image(m, b)` Part constructors are no longer in the public API. Use the typed builder:

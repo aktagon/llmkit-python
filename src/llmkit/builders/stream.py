@@ -60,13 +60,14 @@ class TextStream:
         return self._error
 
     def __aiter__(self) -> AsyncIterator[str]:
+        if self._consumed:
+            raise RuntimeError(
+                "TextStream is single-use; create a new stream to iterate again"
+            )
+        self._consumed = True
         return self._iterate()
 
     async def _iterate(self) -> AsyncIterator[str]:
-        if self._consumed:
-            return
-        self._consumed = True
-
         b = self._b
         provider = _build_provider(b)
         request = _build_request(b, self._msg)
@@ -81,6 +82,15 @@ class TextStream:
             kwargs["middleware"] = list(b._middleware)
 
         loop = asyncio.get_running_loop()
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        #
         queue: asyncio.Queue = asyncio.Queue(maxsize=64)
 
         def on_chunk(chunk: str) -> None:
