@@ -590,6 +590,18 @@ def test_integration_together_stream() -> None:
     assert "".join(chunks) != "", "empty stream output"
 
 
+def test_integration_vertex() -> None:
+    key = os.getenv("VERTEX_BEARER_TOKEN")
+    if not key:
+        pytest.skip("VERTEX_BEARER_TOKEN not set")
+    c = new_client("vertex", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
+    )
+    assert resp.text != "", "empty response text"
+    assert resp.tokens.input > 0, "no input tokens reported"
+
+
 def test_integration_yi() -> None:
     key = os.getenv("YI_API_KEY")
     if not key:

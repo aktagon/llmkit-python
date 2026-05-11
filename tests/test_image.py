@@ -812,3 +812,139 @@ def test_image_google_and_grok_reject_mask() -> None:
             .generate("x")
         )
     assert excinfo.value.field == "mask"
+
+
+# =============================================================================
+# Vertex Imagen (plan 021) — JSONPredict input mode, bearer auth
+# =============================================================================
+
+VERTEX_IMAGEN_3 = "imagen-3.0-generate-002"
+
+
+def _vertex_response(b64: str, n: int = 1, mime: str = "image/png") -> dict[str, Any]:
+    preds = []
+    for _ in range(n):
+        entry: dict[str, Any] = {"bytesBase64Encoded": b64}
+        if mime:
+            entry["mimeType"] = mime
+        preds.append(entry)
+    return {"predictions": preds}
+
+
+def test_image_vertex_generations_happy_path() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _MockServer(_vertex_response(encoded, 1, "image/png")) as server:
+        c = new_client("vertex", "test-token")
+        c.provider.base_url = server.url
+        resp = asyncio.run(
+            c.image.model(VERTEX_IMAGEN_3).generate("A red circle")
+        )
+        # Path: /{model}:predict
+        assert server.received_path == f"/{VERTEX_IMAGEN_3}:predict"
+        # Bearer auth header
+        assert server.received_headers.get("Authorization") == "Bearer test-token"
+        # Body shape
+        body = server.received_body or {}
+        assert isinstance(body["instances"], list) and len(body["instances"]) == 1
+        instance = body["instances"][0]
+        assert instance["prompt"] == "A red circle"
+        # No image on generation path
+        assert "image" not in instance
+        # sampleCount defaults to 1
+        assert body["parameters"]["sampleCount"] == 1
+        # Response decode
+        assert len(resp.images) == 1
+        assert resp.images[0].data == FAKE_PNG
+        assert resp.images[0].mime_type == "image/png"
+        # Vertex predict does not return token counts
+        assert resp.tokens.input == 0
+        assert resp.tokens.output == 0
+
+
+def test_image_vertex_edit_carries_image_on_instance() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    ref_bytes = bytes([0x01, 0x02, 0x03, 0x04])
+    expected_b64 = base64.b64encode(ref_bytes).decode("ascii")
+    with _MockServer(_vertex_response(encoded, 1)) as server:
+        c = new_client("vertex", "test-token")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.image.model(VERTEX_IMAGEN_3)
+            .image("image/png", ref_bytes)
+            .generate("Make it winter")
+        )
+        body = server.received_body or {}
+        instance = body["instances"][0]
+        assert instance["image"]["bytesBase64Encoded"] == expected_b64
+
+
+def test_image_vertex_mask_attaches_to_instance() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    mask_bytes = bytes([0xAA, 0xBB, 0xCC])
+    expected_mask_b64 = base64.b64encode(mask_bytes).decode("ascii")
+    with _MockServer(_vertex_response(encoded, 1)) as server:
+        c = new_client("vertex", "test-token")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.image.model(VERTEX_IMAGEN_3)
+            .image("image/png", bytes([0x01]))
+            .mask("image/png", mask_bytes)
+            .generate("Inpaint here")
+        )
+        body = server.received_body or {}
+        instance = body["instances"][0]
+        assert instance["mask"]["image"]["bytesBase64Encoded"] == expected_mask_b64
+
+
+def test_image_vertex_count_maps_to_sample_count() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _MockServer(_vertex_response(encoded, 4)) as server:
+        c = new_client("vertex", "test-token")
+        c.provider.base_url = server.url
+        resp = asyncio.run(
+            c.image.model(VERTEX_IMAGEN_3).count(4).generate("x")
+        )
+        body = server.received_body or {}
+        assert body["parameters"]["sampleCount"] == 4
+        assert len(resp.images) == 4
+
+
+def test_image_vertex_aspect_ratio_maps_to_parameters() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _MockServer(_vertex_response(encoded, 1)) as server:
+        c = new_client("vertex", "test-token")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.image.model(VERTEX_IMAGEN_3).aspect_ratio("16:9").generate("x")
+        )
+        body = server.received_body or {}
+        assert body["parameters"]["aspectRatio"] == "16:9"
+
+
+def test_image_vertex_extra_fields_spread_into_parameters() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _MockServer(_vertex_response(encoded, 1)) as server:
+        c = new_client("vertex", "test-token")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.image.model(VERTEX_IMAGEN_3)
+            .extra_fields({"negativePrompt": "ugly", "safetySetting": "block_some"})
+            .generate("x")
+        )
+        body = server.received_body or {}
+        assert body["parameters"]["negativePrompt"] == "ugly"
+        assert body["parameters"]["safetySetting"] == "block_some"
+
+
+def test_image_vertex_rejects_quality_output_format_background() -> None:
+    c = new_client("vertex", "test-token")
+    c.provider.base_url = "http://unused"
+
+    for chain, expected_field in [
+        (lambda b: b.quality("high"), "quality"),
+        (lambda b: b.output_format("png"), "output_format"),
+        (lambda b: b.background("transparent"), "background"),
+    ]:
+        with pytest.raises(ValidationError) as excinfo:
+            asyncio.run(chain(c.image.model(VERTEX_IMAGEN_3)).generate("x"))
+        assert excinfo.value.field == expected_field
