@@ -95,6 +95,33 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
             ),
         ),
     ),
+    ProviderName.VERTEX: ImageGenDef(
+        input_mode="JSONPredict",
+        output_mode="Base64Inline",
+        max_input_count=1,
+        gen_endpoint="",
+        edit_endpoint="",
+        models=(
+            ImageModelDef(
+                model_id="imagen-3.0-fast-generate-001",
+                label="Imagen 3 Fast",
+                aspect_ratios=("16:9", "1:1", "3:4", "4:3", "9:16"),
+                image_sizes=(),
+            ),
+            ImageModelDef(
+                model_id="imagen-3.0-generate-002",
+                label="Imagen 3",
+                aspect_ratios=("16:9", "1:1", "3:4", "4:3", "9:16"),
+                image_sizes=(),
+            ),
+            ImageModelDef(
+                model_id="imagen-4.0-generate-preview-06-06",
+                label="Imagen 4 Preview",
+                aspect_ratios=("16:9", "1:1", "3:4", "4:3", "9:16"),
+                image_sizes=(),
+            ),
+        ),
+    ),
 }
 
 

@@ -120,7 +120,7 @@ Tool dispatch covers Anthropic `tool_use`, OpenAI `tool_calls`, Google `function
 
 ### Image — text-to-image and edit
 
-Supports Google's Nano Banana 2 (`gemini-3.1-flash-image-preview`) and Pro (`gemini-3-pro-image-preview`); OpenAI's `gpt-image-2`, `gpt-image-1.5`, `gpt-image-1`, and `gpt-image-1-mini`; xAI's `grok-imagine-image-quality`.
+Supports Google's Nano Banana 2 (`gemini-3.1-flash-image-preview`) and Pro (`gemini-3-pro-image-preview`); OpenAI's `gpt-image-2`, `gpt-image-1.5`, `gpt-image-1`, and `gpt-image-1-mini`; xAI's `grok-imagine-image-quality`; Google Cloud Vertex AI's Imagen 3 / Imagen 4 (`imagen-3.0-generate-002`, `imagen-3.0-fast-generate-001`, `imagen-4.0-generate-preview-06-06`).
 
 ```python
 from llmkit.builders import google
@@ -185,6 +185,34 @@ resp = await (
 OpenAI gpt-image-\* models require organization verification — see [platform.openai.com/docs/guides/your-data#organization-verification](https://platform.openai.com/docs/guides/your-data#organization-verification).
 
 Up to 14 reference images per Google request, 16 per OpenAI request.
+
+#### Vertex AI Imagen (Google Cloud)
+
+Vertex Imagen uses the `:predict` endpoint family and OAuth bearer auth instead of API keys. The SDK takes a bearer token (string); caller manages OAuth refresh externally (e.g. `gcloud auth print-access-token`, service-account JSON, or workload identity).
+
+```python
+import os
+from llmkit.builders import vertex
+
+# Caller substitutes {project_id} and {location} before passing the URL.
+base_url = (
+    "https://us-central1-aiplatform.googleapis.com"
+    "/v1/projects/my-gcp-project/locations/us-central1/publishers/google/models"
+)
+
+c = vertex(os.environ["VERTEX_BEARER_TOKEN"])
+c.provider.base_url = base_url
+
+resp = await (
+    c.image()
+    .model("imagen-3.0-generate-002")
+    .aspect_ratio("16:9")
+    .count(2)
+    .generate("A red circle")
+)
+```
+
+Edit-mode (single image into `instances[0].image`) and inpainting (`.mask(mime, bytes)` into `instances[0].mask.image`) work the same way. Imagen-specific knobs like `negativePrompt` and `safetySetting` are reachable through `.extra_fields(...)` — they spread into the request's `parameters` block. Vertex's `:predict` response does not carry token counts; `resp.tokens` stays zero.
 
 ### Upload — Path or Bytes
 
