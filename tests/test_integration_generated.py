@@ -272,9 +272,9 @@ def test_integration_google_stream() -> None:
 
 
 def test_integration_grok() -> None:
-    key = os.getenv("GROK_API_KEY")
+    key = os.getenv("XAI_API_KEY")
     if not key:
-        pytest.skip("GROK_API_KEY not set")
+        pytest.skip("XAI_API_KEY not set")
     c = new_client("grok", key)
     resp = asyncio.run(
         c.text.system("Reply with only the word pong").prompt("ping")
@@ -284,9 +284,9 @@ def test_integration_grok() -> None:
 
 
 def test_integration_grok_stream() -> None:
-    key = os.getenv("GROK_API_KEY")
+    key = os.getenv("XAI_API_KEY")
     if not key:
-        pytest.skip("GROK_API_KEY not set")
+        pytest.skip("XAI_API_KEY not set")
     c = new_client("grok", key)
 
     async def _run() -> list[str]:

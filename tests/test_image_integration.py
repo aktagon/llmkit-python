@@ -47,3 +47,84 @@ def test_integration_image_google_gemini_3_1_flash_image_preview() -> None:
     assert len(resp.images[0].data) > 0
     assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
 
+
+def test_integration_image_grok_grok_imagine_image_quality() -> None:
+    key = os.getenv("XAI_API_KEY")
+    if not key:
+        pytest.skip("XAI_API_KEY not set")
+    c = new_client("grok", key)
+    resp = asyncio.run(
+        c.image
+        .model("grok-imagine-image-quality")
+        .aspect_ratio("1:1")
+        .generate("A simple red circle on a white background.")
+    )
+    assert len(resp.images) > 0
+    assert len(resp.images[0].data) > 0
+
+
+def test_integration_image_openai_gpt_image_1() -> None:
+    key = os.getenv("OPENAI_API_KEY")
+    if not key:
+        pytest.skip("OPENAI_API_KEY not set")
+    if not os.getenv("LLMKIT_RUN_SLOW_IMAGE"):
+        pytest.skip("LLMKIT_RUN_SLOW_IMAGE not set; skipping gpt-image-1 smoke")
+    c = new_client("openai", key)
+    resp = asyncio.run(
+        c.image
+        .model("gpt-image-1")
+        .generate("A simple red circle on a white background.")
+    )
+    assert len(resp.images) > 0
+    assert len(resp.images[0].data) > 0
+    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+
+
+def test_integration_image_openai_gpt_image_1_mini() -> None:
+    key = os.getenv("OPENAI_API_KEY")
+    if not key:
+        pytest.skip("OPENAI_API_KEY not set")
+    if not os.getenv("LLMKIT_RUN_SLOW_IMAGE"):
+        pytest.skip("LLMKIT_RUN_SLOW_IMAGE not set; skipping gpt-image-1-mini smoke")
+    c = new_client("openai", key)
+    resp = asyncio.run(
+        c.image
+        .model("gpt-image-1-mini")
+        .generate("A simple red circle on a white background.")
+    )
+    assert len(resp.images) > 0
+    assert len(resp.images[0].data) > 0
+    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+
+
+def test_integration_image_openai_gpt_image_1_5() -> None:
+    key = os.getenv("OPENAI_API_KEY")
+    if not key:
+        pytest.skip("OPENAI_API_KEY not set")
+    if not os.getenv("LLMKIT_RUN_SLOW_IMAGE"):
+        pytest.skip("LLMKIT_RUN_SLOW_IMAGE not set; skipping gpt-image-1.5 smoke")
+    c = new_client("openai", key)
+    resp = asyncio.run(
+        c.image
+        .model("gpt-image-1.5")
+        .generate("A simple red circle on a white background.")
+    )
+    assert len(resp.images) > 0
+    assert len(resp.images[0].data) > 0
+    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+
+
+def test_integration_image_openai_gpt_image_2() -> None:
+    key = os.getenv("OPENAI_API_KEY")
+    if not key:
+        pytest.skip("OPENAI_API_KEY not set")
+    c = new_client("openai", key)
+    resp = asyncio.run(
+        c.image
+        .model("gpt-image-2")
+        .generate("A simple red circle on a white background.")
+    )
+    assert len(resp.images) > 0
+    assert len(resp.images[0].data) > 0
+    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+
