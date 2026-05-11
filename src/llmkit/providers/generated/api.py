@@ -38,6 +38,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_background",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_bytes",
         sub_options=(
         ),
@@ -49,6 +54,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
                 py_func="cache_t_t_l",
                 py_param_type="float",
             ),
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_count",
+        sub_options=(
         ),
     ),
     APIOptionDef(
@@ -87,6 +97,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_mask",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_max_tokens",
         sub_options=(
         ),
@@ -107,12 +122,22 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_output_format",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_path",
         sub_options=(
         ),
     ),
     APIOptionDef(
         py_func="with_presence_penalty",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_quality",
         sub_options=(
         ),
     ),

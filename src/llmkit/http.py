@@ -158,6 +158,49 @@ def do_multipart_post(
         return exc.read(), exc.code
 
 
+def do_multipart_post_multi(
+    url: str,
+    files: list[tuple[str, str, str, bytes]],
+    fields: dict[str, str],
+    headers: dict[str, str],
+    timeout: float = 600.0,
+) -> tuple[bytes, int]:
+    """POST multipart/form-data with one or more file parts plus zero-or-more
+    plain string fields. ``files`` items are ``(field_name, filename, mime_type, data)``;
+    field_name may end in "[]" when the API expects an array (e.g. OpenAI's "image[]").
+    Returns ``(body, status_code)``; does NOT raise on 4xx/5xx.
+    """
+    boundary = "----llmkit-python-" + os.urandom(16).hex()
+    buf = io.BytesIO()
+    for key, value in fields.items():
+        buf.write(f"--{boundary}\r\n".encode())
+        buf.write(f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode())
+        buf.write(value.encode("utf-8"))
+        buf.write(b"\r\n")
+    for field_name, filename, mime_type, data in files:
+        if not mime_type:
+            mime_type = detect_mime_type(filename)
+        buf.write(f"--{boundary}\r\n".encode())
+        buf.write(
+            f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode()
+        )
+        buf.write(f"Content-Type: {mime_type}\r\n\r\n".encode())
+        buf.write(data)
+        buf.write(b"\r\n")
+    buf.write(f"--{boundary}--\r\n".encode())
+
+    body = buf.getvalue()
+    req = urllib.request.Request(url, data=body, method="POST")
+    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+    for key, value in headers.items():
+        req.add_header(key, value)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read(), resp.status
+    except urllib.error.HTTPError as exc:
+        return exc.read(), exc.code
+
+
 def do_stream_post(
     url: str,
     body: bytes,
