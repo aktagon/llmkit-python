@@ -31,6 +31,7 @@ class ProviderName(str, Enum):
     QWEN = "qwen"
     SAMBANOVA = "sambanova"
     TOGETHER = "together"
+    VERTEX = "vertex"
     VLLM = "vllm"
     YI = "yi"
     ZHIPU = "zhipu"
@@ -61,6 +62,7 @@ ALL_PROVIDER_NAMES: tuple[ProviderName, ...] = (
     ProviderName.QWEN,
     ProviderName.SAMBANOVA,
     ProviderName.TOGETHER,
+    ProviderName.VERTEX,
     ProviderName.VLLM,
     ProviderName.YI,
     ProviderName.ZHIPU,
@@ -902,6 +904,37 @@ PROVIDERS: dict[str, ProviderConfig] = {
         model_in_body=True,
         error_message_path="error.message",
         error_type_path="error.type",
+        access_key_env_var="",
+        secret_key_env_var="",
+        session_token_env_var="",
+        region_env_var="",
+        service_name="",
+    ),
+    "vertex": ProviderConfig(
+        name="vertex",
+        base_url="https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/google/models",
+        endpoint="/{model}:predict",
+        default_model="imagen-3.0-generate-002",
+        env_var="VERTEX_BEARER_TOKEN",
+        default_max_tokens=0,
+        response_text_path="",
+        auth_scheme="BearerToken",
+        auth_header="Authorization",
+        auth_prefix="Bearer",
+        auth_query_param="",
+        required_header="",
+        required_header_value="",
+        system_placement="MessageInArray",
+        role_mappings={
+            "user": "user",
+        },
+        usage_input_path="",
+        usage_output_path="",
+        reasoning_tokens_path="",
+        wraps_options_in="",
+        model_in_body=False,
+        error_message_path="error.message",
+        error_type_path="error.status",
         access_key_env_var="",
         secret_key_env_var="",
         session_token_env_var="",
