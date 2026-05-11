@@ -251,3 +251,564 @@ def test_image_generate_middleware_pre_phase_can_veto() -> None:
         asyncio.run(
             c.image.model(FLASH_MODEL).middleware(mw).generate("x")
         )
+
+
+# ===== OpenAI Image API (plan 020 phase 4) =====
+#
+# Two endpoints: /v1/images/generations (JSON; no image parts) and
+# /v1/images/edits (multipart/form-data; one or more image parts).
+# Output is forced to b64_json so the response shape stays uniform.
+
+OPENAI_IMAGE_2 = "gpt-image-2"
+
+
+def _openai_image_response(encoded: str, n: int = 1) -> dict[str, Any]:
+    return {
+        "created": 1700000000,
+        "data": [{"b64_json": encoded} for _ in range(n)],
+        "usage": {"input_tokens": 7, "output_tokens": 1500},
+    }
+
+
+class _OpenAIMockServer:
+    """Mock that captures either JSON (generations) or multipart (edits)
+    bodies. Parses multipart with stdlib ``email`` so test assertions can
+    walk fields and image[] files in caller order.
+    """
+
+    def __init__(self, response_body: dict[str, Any]):
+        self.response_body = response_body
+        self.received_path = ""
+        self.received_headers: dict[str, str] = {}
+        self.received_json: dict[str, Any] | None = None
+        self.received_form_fields: dict[str, str] = {}
+        self.received_form_files: dict[str, list[dict[str, Any]]] = {}
+        self.hit = False
+
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_args, **_kwargs):
+                pass
+
+            def do_POST(self):
+                outer.hit = True
+                outer.received_path = urlparse(self.path).path
+                outer.received_headers = dict(self.headers.items())
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                ctype = self.headers.get("Content-Type", "")
+                if ctype.startswith("multipart/form-data"):
+                    import email
+                    full = b"Content-Type: " + ctype.encode() + b"\r\n\r\n" + raw
+                    msg = email.message_from_bytes(full)
+                    for part in msg.walk():
+                        if part.is_multipart():
+                            continue
+                        cd = part.get("Content-Disposition", "")
+                        if not cd or "form-data" not in cd:
+                            continue
+                        name = part.get_param("name", header="content-disposition")
+                        filename = part.get_param("filename", header="content-disposition")
+                        payload = part.get_payload(decode=True) or b""
+                        if filename:
+                            outer.received_form_files.setdefault(name, []).append(
+                                {
+                                    "filename": filename,
+                                    "mime": part.get_content_type(),
+                                    "bytes": payload,
+                                }
+                            )
+                        else:
+                            outer.received_form_fields[name] = payload.decode("utf-8")
+                else:
+                    outer.received_json = json.loads(raw.decode("utf-8")) if raw else {}
+
+                payload = json.dumps(outer.response_body).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+
+    def __enter__(self) -> "_OpenAIMockServer":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join(timeout=2)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_port}"
+
+
+def _openai_client(server_url: str | None = None):
+    c = new_client("openai", "test-key")
+    c.provider.base_url = server_url or "http://unused"
+    return c
+
+
+def test_image_generate_openai_generations_omits_response_format() -> None:
+    """gpt-image-* always returns b64_json and rejects the
+    response_format parameter — must be absent on the wire."""
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_openai_image_response(encoded)) as server:
+        c = _openai_client(server.url)
+        resp = asyncio.run(c.image.model(OPENAI_IMAGE_2).generate("A red circle"))
+
+    assert server.received_path == "/v1/images/generations"
+    assert server.received_headers.get("Authorization") == "Bearer test-key"
+    body = server.received_json
+    assert body is not None
+    assert body["model"] == OPENAI_IMAGE_2
+    assert body["prompt"] == "A red circle"
+    assert "response_format" not in body
+    assert "size" not in body
+
+    assert len(resp.images) == 1
+    assert resp.images[0].data == FAKE_PNG
+    assert resp.tokens.input == 7
+    assert resp.tokens.output == 1500
+
+
+def test_image_generate_openai_edits_single_reference() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    ref_bytes = bytes([0x89, 0x50, 0x4E, 0x47, 0x41])
+    with _OpenAIMockServer(_openai_image_response(encoded)) as server:
+        c = _openai_client(server.url)
+        resp = asyncio.run(
+            c.image.model(OPENAI_IMAGE_2)
+            .image("image/png", ref_bytes)
+            .generate("Add a hat")
+        )
+
+    assert server.received_path == "/v1/images/edits"
+    assert server.received_form_fields["model"] == OPENAI_IMAGE_2
+    assert server.received_form_fields["prompt"] == "Add a hat"
+    files = server.received_form_files["image[]"]
+    assert len(files) == 1
+    assert files[0]["bytes"] == ref_bytes
+    assert files[0]["mime"] == "image/png"
+    assert len(resp.images) == 1
+
+
+def test_image_generate_openai_edits_three_references_preserves_caller_order() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    ref_a = bytes([0x89, 0x50, 0x41])
+    ref_b = bytes([0x89, 0x50, 0x42])
+    ref_c = bytes([0x89, 0x50, 0x43])
+    with _OpenAIMockServer(_openai_image_response(encoded)) as server:
+        c = _openai_client(server.url)
+        asyncio.run(
+            c.image.model(OPENAI_IMAGE_2)
+            .image("image/png", ref_a)
+            .image("image/png", ref_b)
+            .image("image/png", ref_c)
+            .generate("Combine them")
+        )
+
+    files = server.received_form_files["image[]"]
+    assert len(files) == 3
+    assert files[0]["bytes"] == ref_a
+    assert files[1]["bytes"] == ref_b
+    assert files[2]["bytes"] == ref_c
+
+
+def test_image_generate_openai_extra_fields_quality_propagates() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_openai_image_response(encoded)) as server:
+        c = _openai_client(server.url)
+        asyncio.run(
+            c.image.model(OPENAI_IMAGE_2)
+            .extra_fields({"quality": "high"})
+            .generate("x")
+        )
+    assert server.received_json is not None
+    assert server.received_json["quality"] == "high"
+
+
+def test_image_generate_openai_extra_fields_n_returns_n_images() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_openai_image_response(encoded, n=4)) as server:
+        c = _openai_client(server.url)
+        resp = asyncio.run(
+            c.image.model(OPENAI_IMAGE_2)
+            .extra_fields({"n": 4})
+            .generate("x")
+        )
+    assert server.received_json is not None
+    assert server.received_json["n"] == 4
+    assert len(resp.images) == 4
+
+
+def test_image_generate_openai_arbitrary_size_accepted() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_openai_image_response(encoded)) as server:
+        c = _openai_client(server.url)
+        asyncio.run(
+            c.image.model(OPENAI_IMAGE_2).image_size("1536x1024").generate("x")
+        )
+    assert server.received_json is not None
+    assert server.received_json["size"] == "1536x1024"
+
+
+def test_image_generate_openai_middleware_fires_both_branches() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    for branch in ("generations", "edits"):
+        ops: list[str] = []
+        phases: list[str] = []
+
+        def mw(event):
+            ops.append(event.op.value)
+            phases.append(event.phase.value)
+            return None
+
+        with _OpenAIMockServer(_openai_image_response(encoded)) as server:
+            c = _openai_client(server.url)
+            b = c.image.model(OPENAI_IMAGE_2).middleware(mw)
+            if branch == "edits":
+                b = b.image("image/png", bytes([0x89, 0x50, 0x4E]))
+            asyncio.run(b.generate("x"))
+        assert ops == ["image_generation", "image_generation"], branch
+        assert phases == ["pre", "post"], branch
+
+
+def test_image_generate_openai_middleware_veto_skips_http() -> None:
+    def mw(event):
+        if event.phase.value == "pre":
+            return RuntimeError("blocked")
+        return None
+
+    with _OpenAIMockServer(_openai_image_response("")) as server:
+        c = _openai_client(server.url)
+        with pytest.raises(MiddlewareVetoError):
+            asyncio.run(
+                c.image.model(OPENAI_IMAGE_2).middleware(mw).generate("x")
+            )
+        assert server.hit is False
+
+
+# ===== xAI Grok Imagine =====
+#
+# JSON throughout — both endpoints. Image refs travel as data URLs in the
+# body. response_format must be forced to b64_json (xAI defaults to URL).
+
+GROK_IMAGINE_QUALITY = "grok-imagine-image-quality"
+
+
+def _grok_image_response(
+    encoded: str, n: int = 1, mime: str | None = "image/png"
+) -> dict[str, Any]:
+    data: list[dict[str, Any]] = []
+    for _ in range(n):
+        entry: dict[str, Any] = {"b64_json": encoded}
+        if mime:
+            entry["mime_type"] = mime
+        data.append(entry)
+    return {"data": data, "usage": {"cost_in_usd_ticks": 1234567}}
+
+
+def _grok_client(server_url: str | None = None):
+    c = new_client("grok", "test-key")
+    c.provider.base_url = server_url or "http://unused"
+    return c
+
+
+def test_image_generate_grok_generations_forces_b64_json() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_grok_image_response(encoded)) as server:
+        c = _grok_client(server.url)
+        resp = asyncio.run(c.image.model(GROK_IMAGINE_QUALITY).generate("A red circle"))
+
+    assert server.received_path == "/v1/images/generations"
+    body = server.received_json
+    assert body is not None
+    assert body["model"] == GROK_IMAGINE_QUALITY
+    assert body["prompt"] == "A red circle"
+    # xAI defaults to URL — we must force b64_json on the wire.
+    assert body["response_format"] == "b64_json"
+    assert "image" not in body
+    assert "images" not in body
+    assert len(resp.images) == 1
+    assert resp.images[0].data == FAKE_PNG
+    assert resp.images[0].mime_type == "image/png"
+    # xAI reports cost_in_usd_ticks, not tokens. Both should remain zero.
+    assert resp.tokens.input == 0
+    assert resp.tokens.output == 0
+
+
+def test_image_generate_grok_aspect_ratio_and_resolution() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_grok_image_response(encoded)) as server:
+        c = _grok_client(server.url)
+        asyncio.run(
+            c.image.model(GROK_IMAGINE_QUALITY)
+            .aspect_ratio("16:9")
+            .image_size("2k")
+            .generate("x")
+        )
+    body = server.received_json
+    assert body is not None
+    assert body["aspect_ratio"] == "16:9"
+    # image_size maps to xAI's `resolution` field (different name from OpenAI's `size`).
+    assert body["resolution"] == "2k"
+
+
+def test_image_generate_grok_rejects_unsupported_aspect_ratio() -> None:
+    c = _grok_client()
+    with pytest.raises(ValidationError):
+        asyncio.run(
+            c.image.model(GROK_IMAGINE_QUALITY)
+            .aspect_ratio("4:5")
+            .generate("x")
+        )
+
+
+def test_image_generate_grok_accepts_auto_aspect_ratio() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_grok_image_response(encoded)) as server:
+        c = _grok_client(server.url)
+        asyncio.run(
+            c.image.model(GROK_IMAGINE_QUALITY)
+            .aspect_ratio("auto")
+            .generate("x")
+        )
+    body = server.received_json
+    assert body is not None
+    assert body["aspect_ratio"] == "auto"
+
+
+def test_image_generate_grok_edits_single_reference_as_data_url() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    ref_bytes = bytes([0x89, 0x50, 0x4E, 0x47, 0x41])
+    expected_data_url = (
+        "data:image/png;base64," + base64.b64encode(ref_bytes).decode("ascii")
+    )
+    with _OpenAIMockServer(_grok_image_response(encoded)) as server:
+        c = _grok_client(server.url)
+        asyncio.run(
+            c.image.model(GROK_IMAGINE_QUALITY)
+            .image("image/png", ref_bytes)
+            .generate("Add a hat")
+        )
+
+    assert server.received_path == "/v1/images/edits"
+    body = server.received_json
+    assert body is not None
+    # Single ref → `image: {url: "data:..."}` (not `images: [...]`).
+    assert body["image"] == {"url": expected_data_url}
+    assert "images" not in body
+
+
+def test_image_generate_grok_edits_three_references_as_images_array_in_order() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    ref_a = bytes([0x89, 0x41])
+    ref_b = bytes([0x89, 0x42])
+    ref_c = bytes([0x89, 0x43])
+    with _OpenAIMockServer(_grok_image_response(encoded)) as server:
+        c = _grok_client(server.url)
+        asyncio.run(
+            c.image.model(GROK_IMAGINE_QUALITY)
+            .image("image/png", ref_a)
+            .image("image/png", ref_b)
+            .image("image/png", ref_c)
+            .generate("Combine them")
+        )
+    body = server.received_json
+    assert body is not None
+    images = body["images"]
+    assert len(images) == 3
+    assert images[0]["url"].endswith(base64.b64encode(ref_a).decode("ascii"))
+    assert images[1]["url"].endswith(base64.b64encode(ref_b).decode("ascii"))
+    assert images[2]["url"].endswith(base64.b64encode(ref_c).decode("ascii"))
+    assert "image" not in body
+
+
+def test_image_generate_grok_extra_fields_n_returns_n_images() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_grok_image_response(encoded, n=4)) as server:
+        c = _grok_client(server.url)
+        resp = asyncio.run(
+            c.image.model(GROK_IMAGINE_QUALITY)
+            .extra_fields({"n": 4})
+            .generate("x")
+        )
+    body = server.received_json
+    assert body is not None
+    assert body["n"] == 4
+    assert len(resp.images) == 4
+
+
+def test_image_generate_grok_middleware_fires_both_branches() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    for branch in ("generations", "edits"):
+        ops: list[str] = []
+        phases: list[str] = []
+
+        def mw(event):
+            ops.append(event.op.value)
+            phases.append(event.phase.value)
+            return None
+
+        with _OpenAIMockServer(_grok_image_response(encoded)) as server:
+            c = _grok_client(server.url)
+            b = c.image.model(GROK_IMAGINE_QUALITY).middleware(mw)
+            if branch == "edits":
+                b = b.image("image/png", bytes([0x89, 0x50, 0x4E]))
+            asyncio.run(b.generate("x"))
+        assert ops == ["image_generation", "image_generation"], branch
+        assert phases == ["pre", "post"], branch
+
+
+# =============================================================================
+# Plan 020 phase 2 — typed image-gen knob tests
+# =============================================================================
+
+
+def test_image_openai_typed_quality_lands_in_body() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_openai_image_response(encoded)) as server:
+        c = _openai_client(server.url)
+        asyncio.run(c.image.model(OPENAI_IMAGE_2).quality("high").generate("x"))
+    assert server.received_json is not None
+    assert server.received_json.get("quality") == "high"
+
+
+def test_image_openai_typed_output_format_lands_in_body() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_openai_image_response(encoded)) as server:
+        c = _openai_client(server.url)
+        asyncio.run(c.image.model(OPENAI_IMAGE_2).output_format("webp").generate("x"))
+    assert server.received_json is not None
+    assert server.received_json.get("output_format") == "webp"
+
+
+def test_image_openai_typed_background_lands_in_body() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_openai_image_response(encoded)) as server:
+        c = _openai_client(server.url)
+        asyncio.run(c.image.model(OPENAI_IMAGE_2).background("transparent").generate("x"))
+    assert server.received_json is not None
+    assert server.received_json.get("background") == "transparent"
+
+
+def test_image_openai_typed_count_lands_as_n() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_openai_image_response(encoded, n=3)) as server:
+        c = _openai_client(server.url)
+        resp = asyncio.run(c.image.model(OPENAI_IMAGE_2).count(3).generate("x"))
+    assert server.received_json is not None
+    assert server.received_json.get("n") == 3
+    assert len(resp.images) == 3
+
+
+def test_image_openai_typed_knobs_propagate_as_multipart_fields() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_openai_image_response(encoded, n=2)) as server:
+        c = _openai_client(server.url)
+        asyncio.run(
+            c.image.model(OPENAI_IMAGE_2)
+            .quality("medium")
+            .output_format("png")
+            .background("auto")
+            .count(2)
+            .image("image/png", FAKE_PNG)
+            .generate("edit it")
+        )
+    assert server.received_form_fields.get("quality") == "medium"
+    assert server.received_form_fields.get("output_format") == "png"
+    assert server.received_form_fields.get("background") == "auto"
+    assert server.received_form_fields.get("n") == "2"
+
+
+def test_image_google_rejects_openai_typed_knobs() -> None:
+    c = new_client("google", "k")
+    cases = [
+        ("quality", lambda b: b.quality("high")),
+        ("output_format", lambda b: b.output_format("png")),
+        ("background", lambda b: b.background("auto")),
+        ("count", lambda b: b.count(2)),
+    ]
+    for field, build in cases:
+        builder = build(c.image.model(FLASH_MODEL))
+        with pytest.raises(ValidationError) as excinfo:
+            asyncio.run(builder.generate("x"))
+        assert excinfo.value.field == field, f"{field}: {excinfo.value.field}"
+
+
+def test_image_grok_rejects_quality_outputformat_background() -> None:
+    c = new_client("grok", "k")
+    cases = [
+        ("quality", lambda b: b.quality("high")),
+        ("output_format", lambda b: b.output_format("png")),
+        ("background", lambda b: b.background("auto")),
+    ]
+    for field, build in cases:
+        builder = build(c.image.model(GROK_IMAGINE_QUALITY))
+        with pytest.raises(ValidationError) as excinfo:
+            asyncio.run(builder.generate("x"))
+        assert excinfo.value.field == field, f"{field}: {excinfo.value.field}"
+
+
+def test_image_grok_typed_count_lands_as_n() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer(_grok_image_response(encoded, n=2)) as server:
+        c = _grok_client(server.url)
+        resp = asyncio.run(c.image.model(GROK_IMAGINE_QUALITY).count(2).generate("x"))
+    assert server.received_json is not None
+    assert server.received_json.get("n") == 2
+    assert len(resp.images) == 2
+
+
+def test_image_openai_mask_attaches_to_edit_multipart() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    mask_bytes = bytes([0xDE, 0xAD, 0xBE, 0xEF])
+    with _OpenAIMockServer(_openai_image_response(encoded)) as server:
+        c = _openai_client(server.url)
+        asyncio.run(
+            c.image.model(OPENAI_IMAGE_2)
+            .image("image/png", FAKE_PNG)
+            .mask("image/png", mask_bytes)
+            .generate("patch")
+        )
+    masks = server.received_form_files.get("mask") or []
+    assert len(masks) == 1, f"expected one mask file, got {server.received_form_files}"
+    assert masks[0]["bytes"] == mask_bytes
+    assert masks[0]["mime"] == "image/png"
+
+
+def test_image_openai_mask_without_image_parts_rejected() -> None:
+    c = new_client("openai", "k")
+    with pytest.raises(ValidationError) as excinfo:
+        asyncio.run(
+            c.image.model(OPENAI_IMAGE_2)
+            .mask("image/png", bytes([0xDE, 0xAD]))
+            .generate("x")
+        )
+    assert excinfo.value.field == "mask"
+
+
+def test_image_google_and_grok_reject_mask() -> None:
+    g = new_client("google", "k")
+    with pytest.raises(ValidationError) as excinfo:
+        asyncio.run(
+            g.image.model(FLASH_MODEL)
+            .mask("image/png", bytes([0xDE, 0xAD]))
+            .generate("x")
+        )
+    assert excinfo.value.field == "mask"
+
+    x = new_client("grok", "k")
+    with pytest.raises(ValidationError) as excinfo:
+        asyncio.run(
+            x.image.model(GROK_IMAGINE_QUALITY)
+            .mask("image/png", bytes([0xDE, 0xAD]))
+            .generate("x")
+        )
+    assert excinfo.value.field == "mask"
