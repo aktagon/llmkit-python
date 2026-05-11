@@ -128,3 +128,51 @@ def test_integration_image_openai_gpt_image_2() -> None:
     assert len(resp.images[0].data) > 0
     assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
 
+
+def test_integration_image_vertex_imagen_3_0_fast_generate_001() -> None:
+    key = os.getenv("VERTEX_BEARER_TOKEN")
+    if not key:
+        pytest.skip("VERTEX_BEARER_TOKEN not set")
+    c = new_client("vertex", key)
+    resp = asyncio.run(
+        c.image
+        .model("imagen-3.0-fast-generate-001")
+        .aspect_ratio("1:1")
+        .generate("A simple red circle on a white background.")
+    )
+    assert len(resp.images) > 0
+    assert len(resp.images[0].data) > 0
+    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+
+
+def test_integration_image_vertex_imagen_3_0_generate_002() -> None:
+    key = os.getenv("VERTEX_BEARER_TOKEN")
+    if not key:
+        pytest.skip("VERTEX_BEARER_TOKEN not set")
+    c = new_client("vertex", key)
+    resp = asyncio.run(
+        c.image
+        .model("imagen-3.0-generate-002")
+        .aspect_ratio("1:1")
+        .generate("A simple red circle on a white background.")
+    )
+    assert len(resp.images) > 0
+    assert len(resp.images[0].data) > 0
+    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+
+
+def test_integration_image_vertex_imagen_4_0_generate_preview_06_06() -> None:
+    key = os.getenv("VERTEX_BEARER_TOKEN")
+    if not key:
+        pytest.skip("VERTEX_BEARER_TOKEN not set")
+    c = new_client("vertex", key)
+    resp = asyncio.run(
+        c.image
+        .model("imagen-4.0-generate-preview-06-06")
+        .aspect_ratio("1:1")
+        .generate("A simple red circle on a white background.")
+    )
+    assert len(resp.images) > 0
+    assert len(resp.images[0].data) > 0
+    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+
