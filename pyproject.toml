@@ -1,7 +1,7 @@
 [project]
 name = "llmkit"
 version = "1.0.0"
-description = "Unified LLM client library. Single API, 27 providers, zero dependencies."
+description = "Unified LLM client library for Python — one API, 27 providers (Anthropic, OpenAI, Google Gemini, AWS Bedrock, Mistral, Groq, DeepSeek, +20 more), zero external dependencies (stdlib only)."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -10,15 +10,17 @@ dependencies = []
 keywords = [
     "llm",
     "ai",
+    "llm-client",
+    "ai-sdk",
+    "agents",
     "anthropic",
+    "claude",
     "openai",
-    "google",
+    "gpt",
     "gemini",
     "bedrock",
-    "claude",
-    "gpt",
-    "agent",
-    "sdk",
+    "mistral",
+    "groq",
     "streaming",
     "tool-calling",
 ]
@@ -38,7 +40,7 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/aktagon/llmkit-python"
+Homepage = "https://llmkit.aktagon.com"
 Source = "https://github.com/aktagon/llmkit-python"
 Issues = "https://github.com/aktagon/llmkit-python/issues"
 Changelog = "https://github.com/aktagon/llmkit-python/blob/master/CHANGELOG.md"
