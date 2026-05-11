@@ -47,6 +47,54 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
             ),
         ),
     ),
+    ProviderName.GROK: ImageGenDef(
+        input_mode="JSONInlineRefs",
+        output_mode="Base64Inline",
+        max_input_count=16,
+        gen_endpoint="/v1/images/generations",
+        edit_endpoint="/v1/images/edits",
+        models=(
+            ImageModelDef(
+                model_id="grok-imagine-image-quality",
+                label="Grok Imagine Quality",
+                aspect_ratios=("16:9", "19.5:9", "1:1", "1:2", "20:9", "2:1", "2:3", "3:2", "3:4", "4:3", "9:16", "9:19.5", "9:20", "auto"),
+                image_sizes=(),
+            ),
+        ),
+    ),
+    ProviderName.OPENAI: ImageGenDef(
+        input_mode="MultipartForm",
+        output_mode="Base64Inline",
+        max_input_count=16,
+        gen_endpoint="/v1/images/generations",
+        edit_endpoint="/v1/images/edits",
+        models=(
+            ImageModelDef(
+                model_id="gpt-image-1",
+                label="GPT Image 1",
+                aspect_ratios=(),
+                image_sizes=(),
+            ),
+            ImageModelDef(
+                model_id="gpt-image-1-mini",
+                label="GPT Image 1 Mini",
+                aspect_ratios=(),
+                image_sizes=(),
+            ),
+            ImageModelDef(
+                model_id="gpt-image-1.5",
+                label="GPT Image 1.5",
+                aspect_ratios=(),
+                image_sizes=(),
+            ),
+            ImageModelDef(
+                model_id="gpt-image-2",
+                label="GPT Image 2",
+                aspect_ratios=(),
+                image_sizes=(),
+            ),
+        ),
+    ),
 }
 
 

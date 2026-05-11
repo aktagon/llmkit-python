@@ -47,8 +47,20 @@ async def image_generate(b: "Image", msg: str) -> ImageResponse:
         kwargs["image_size"] = b._image_size
     if b._include_text:
         kwargs["include_text"] = True
+    if b._quality:
+        kwargs["quality"] = b._quality
+    if b._output_format:
+        kwargs["output_format"] = b._output_format
+    if b._background:
+        kwargs["background"] = b._background
+    if b._count is not None:
+        kwargs["count"] = b._count
+    if b._mask is not None:
+        kwargs["mask"] = b._mask
     if b._middleware:
         kwargs["middleware"] = list(b._middleware)
+    if b._extra_fields:
+        kwargs["extra_fields"] = dict(b._extra_fields)
 
     return await asyncio.to_thread(
         run_image_generation, provider, request, **kwargs
