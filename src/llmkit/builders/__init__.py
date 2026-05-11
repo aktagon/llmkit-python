@@ -180,15 +180,31 @@ class Image:
     def __init__(self, client: "Client") -> None:
         self.client = client
         self._aspect_ratio: str = ""
+        self._background: str = ""
+        self._count: int | None = None
         self._parts: list[Part] = []
         self._image_size: str = ""
         self._include_text: bool = False
+        self._mask: MediaRef | None = None
         self._middleware: list[MiddlewareFn] = []
         self._model: str = ""
+        self._output_format: str = ""
+        self._quality: str = ""
+        self._extra_fields: "dict[str, Any] | None" = None
 
     def aspect_ratio(self, r: str) -> "Image":
         out = copy.copy(self)
         out._aspect_ratio = r
+        return out
+
+    def background(self, s: str) -> "Image":
+        out = copy.copy(self)
+        out._background = s
+        return out
+
+    def count(self, n: int) -> "Image":
+        out = copy.copy(self)
+        out._count = n
         return out
 
     def image(self, mime: str, data: bytes) -> "Image":  # ordered
@@ -206,6 +222,11 @@ class Image:
         out._include_text = True
         return out
 
+    def mask(self, mime: str, data: bytes) -> "Image":
+        out = copy.copy(self)
+        out._mask = MediaRef(mime_type=mime, bytes=data)
+        return out
+
     def middleware(self, *fns: MiddlewareFn) -> "Image":
         out = copy.copy(self)
         out._middleware = [*self._middleware, *fns]
@@ -216,9 +237,26 @@ class Image:
         out._model = name
         return out
 
+    def output_format(self, s: str) -> "Image":
+        out = copy.copy(self)
+        out._output_format = s
+        return out
+
+    def quality(self, s: str) -> "Image":
+        out = copy.copy(self)
+        out._quality = s
+        return out
+
     def text(self, s: str) -> "Image":  # ordered
         out = copy.copy(self)
         out._parts = [*self._parts, Part(text=s)]
+        return out
+
+    def extra_fields(self, extras: "dict[str, Any]") -> "Image":
+        out = copy.copy(self)
+        merged = dict(self._extra_fields or {})
+        merged.update(extras)
+        out._extra_fields = merged
         return out
 
     async def generate(self, msg: str) -> ImageResponse:
