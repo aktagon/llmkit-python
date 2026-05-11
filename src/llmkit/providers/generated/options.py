@@ -725,6 +725,12 @@ _SUPPORTED_OPTIONS: dict[ProviderName, tuple[SupportedOptionDef, ...]] = {
             json_key="top_p",
         ),
     ),
+    ProviderName.VERTEX: (
+        SupportedOptionDef(
+            key=OptionKey.MAX_TOKENS,
+            json_key="max_tokens",
+        ),
+    ),
     ProviderName.VLLM: (
         SupportedOptionDef(
             key=OptionKey.FREQUENCY_PENALTY,
@@ -858,6 +864,8 @@ _OPTION_OVERRIDES: dict[ProviderName, tuple[OptionOverrideDef, ...]] = {
     ProviderName.SAMBANOVA: (
     ),
     ProviderName.TOGETHER: (
+    ),
+    ProviderName.VERTEX: (
     ),
     ProviderName.VLLM: (
     ),

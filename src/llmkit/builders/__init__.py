@@ -474,6 +474,7 @@ def perplexity(api_key: str) -> Client: return Client("perplexity", api_key)
 def qwen(api_key: str) -> Client: return Client("qwen", api_key)
 def sambanova(api_key: str) -> Client: return Client("sambanova", api_key)
 def together(api_key: str) -> Client: return Client("together", api_key)
+def vertex(api_key: str) -> Client: return Client("vertex", api_key)
 def vllm(api_key: str) -> Client: return Client("vllm", api_key)
 def yi(api_key: str) -> Client: return Client("yi", api_key)
 def zhipu(api_key: str) -> Client: return Client("zhipu", api_key)
@@ -510,6 +511,7 @@ __all__ = [
     "qwen",
     "sambanova",
     "together",
+    "vertex",
     "vllm",
     "yi",
     "zhipu",
