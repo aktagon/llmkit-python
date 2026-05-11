@@ -182,6 +182,13 @@ def generate_image(
                 field="mask",
                 message="requires at least one image part (edits branch only)",
             )
+    elif img_cfg.input_mode == "JSONPredict":
+        if quality:
+            raise ValidationError(field="quality", message=f"not supported by {provider.name}")
+        if output_format:
+            raise ValidationError(field="output_format", message=f"not supported by {provider.name}")
+        if background:
+            raise ValidationError(field="background", message=f"not supported by {provider.name}")
 
     mws = list(middleware or [])
     base_event = Event(
@@ -241,6 +248,16 @@ def generate_image(
                         {**headers, "content-type": "application/json"},
                         timeout=request_timeout,
                     )
+            elif img_cfg.input_mode == "JSONPredict":
+                body = _build_vertex_body(parts, aspect_ratio, count, mask, extra_fields)
+                json_body = json.dumps(body).encode("utf-8")
+                endpoint = (cfg.endpoint or "").replace("{model}", request.model)
+                resp_body = do_post(
+                    base_url + endpoint,
+                    json_body,
+                    {**headers, "content-type": "application/json"},
+                    timeout=request_timeout,
+                )
             else:
                 body = _build_image_body(parts, aspect_ratio, image_size, include_text)
                 json_body = json.dumps(body).encode("utf-8")
@@ -495,6 +512,73 @@ def _build_image_body(
     }
 
 
+def _build_vertex_body(
+    parts: list[Part],
+    aspect_ratio: str,
+    count: int | None,
+    mask: Any,
+    extra_fields: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Assemble the Vertex AI Imagen :predict request body.
+
+    Vertex uses an instances/parameters envelope: instance carries the
+    per-call inputs (prompt, image ref for editing, mask for inpainting);
+    parameters carries config (sampleCount, aspectRatio). Extra fields like
+    negativePrompt and safetySetting spread into parameters so callers can
+    reach Imagen-specific knobs without typed chain methods.
+    """
+    instance: dict[str, Any] = {"prompt": _join_text_parts(parts)}
+    for p in parts:
+        if p.image is not None:
+            instance["image"] = {
+                "bytesBase64Encoded": base64.b64encode(p.image.bytes).decode(
+                    "ascii"
+                )
+            }
+            break  # Vertex Imagen takes a single edit-target image
+    if mask is not None:
+        instance["mask"] = {
+            "image": {
+                "bytesBase64Encoded": base64.b64encode(mask.bytes).decode("ascii")
+            }
+        }
+
+    parameters: dict[str, Any] = {"sampleCount": count if count is not None else 1}
+    if aspect_ratio:
+        parameters["aspectRatio"] = aspect_ratio
+    if extra_fields:
+        for k, v in extra_fields.items():
+            parameters[k] = v
+
+    return {"instances": [instance], "parameters": parameters}
+
+
+def _parse_vertex_image_response(raw: dict[str, Any]) -> ImageResponse:
+    """Decode Vertex AI Imagen :predict responses. Shape:
+    {predictions: [{bytesBase64Encoded, mimeType}]}. Vertex does not return
+    token counts in the predict response so Usage stays zero.
+    """
+    preds = raw.get("predictions") if isinstance(raw, dict) else None
+    images: list[ImageData] = []
+    if isinstance(preds, list):
+        for entry in preds:
+            if not isinstance(entry, dict):
+                continue
+            b64 = entry.get("bytesBase64Encoded")
+            if not isinstance(b64, str) or not b64:
+                continue
+            mime_val = entry.get("mimeType")
+            mime = (
+                mime_val if isinstance(mime_val, str) and mime_val else "image/png"
+            )
+            try:
+                decoded = base64.b64decode(b64)
+            except (ValueError, TypeError):
+                continue
+            images.append(ImageData(mime_type=mime, data=decoded))
+    return ImageResponse(images=images, text="", tokens=Usage())
+
+
 def _build_image_url(p: Provider, cfg: Any, model: str) -> str:
     base = p.base_url or cfg.base_url
     endpoint = cfg.endpoint
@@ -534,6 +618,8 @@ def _parse_image_response(provider_name: str, body: bytes, cfg: Any) -> ImageRes
         # passing empty field names yields zero tokens (correct, no
         # fabricated values).
         return _parse_image_response_data_array(raw, "", "")
+    if provider_name == "vertex":
+        return _parse_vertex_image_response(raw)
 
     images, text = _extract_google_image_parts(raw)
     tokens = Usage(
