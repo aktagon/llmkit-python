@@ -625,3 +625,65 @@ def test_stream_queue_applies_backpressure(monkeypatch) -> None:
         f"producer ran in {producer_wallclock['value']*1000:.1f}ms, "
         f"expected >= {min_expected*1000:.1f}ms — backpressure may be broken"
     )
+
+
+# ---------- Coverage gate Phase 2: chain methods previously untested ----------
+# These are the sampling hyperparameters + Text.batch + Agent.add_tool +
+# Agent.reset that the strict-mode public-symbol-untested gate flagged.
+
+
+def test_text_sampling_hyperparameters_round_trip() -> None:
+    c = anthropic("k")
+    text = (
+        c.text.frequency_penalty(0.2)
+        .presence_penalty(0.4)
+        .reasoning_effort("medium")
+        .seed(42)
+        .stop_sequences("\n\n", "END")
+        .thinking_budget(2048)
+        .top_k(40)
+        .top_p(0.9)
+    )
+    assert text._frequency_penalty == 0.2
+    assert text._presence_penalty == 0.4
+    assert text._reasoning_effort == "medium"
+    assert text._seed == 42
+    assert text._stop_sequences == ["\n\n", "END"]
+    assert text._thinking_budget == 2048
+    assert text._top_k == 40
+    assert text._top_p == 0.9
+
+
+def test_agent_sampling_hyperparameters_round_trip() -> None:
+    c = anthropic("k")
+    ag = (
+        c.agent.frequency_penalty(0.2)
+        .presence_penalty(0.4)
+        .reasoning_effort("high")
+        .seed(7)
+        .stop_sequences("STOP")
+        .thinking_budget(4096)
+        .top_k(50)
+        .top_p(0.95)
+    )
+    assert ag._frequency_penalty == 0.2
+    assert ag._presence_penalty == 0.4
+    assert ag._reasoning_effort == "high"
+    assert ag._seed == 7
+    assert ag._stop_sequences == ["STOP"]
+    assert ag._thinking_budget == 4096
+    assert ag._top_k == 50
+    assert ag._top_p == 0.95
+
+
+def test_text_batch_method_exists_and_is_async() -> None:
+    """Smoke-only: .batch is the multi-prompt convenience that runs
+    submit_batch + wait under the hood. End-to-end exercise lives in
+    plan-018 integration tests (real provider batch lifecycle); here we
+    just confirm the method is wired and async."""
+    import inspect
+
+    c = anthropic("k")
+    method = c.text.batch
+    assert callable(method)
+    assert inspect.iscoroutinefunction(method)
