@@ -171,6 +171,15 @@ def test_chain_returns_new_instance() -> None:
     assert configured._system == "hello"
 
 
+def test_client_with_base_url_sets_and_returns_self() -> None:
+    override = "https://example.test/v1"
+    c = new_client("vertex", "test-token").with_base_url(override)
+    assert c.provider.base_url == override
+    # Chainability: with_base_url must return the same Client so callers
+    # can write `c = vertex(token).with_base_url(url)` in one line.
+    assert isinstance(c, Client)
+
+
 # ---------- per-provider factories ----------
 
 
