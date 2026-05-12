@@ -200,8 +200,7 @@ base_url = (
     "/v1/projects/my-gcp-project/locations/us-central1/publishers/google/models"
 )
 
-c = vertex(os.environ["VERTEX_BEARER_TOKEN"])
-c.provider.base_url = base_url
+c = vertex(os.environ["VERTEX_BEARER_TOKEN"]).with_base_url(base_url)
 
 resp = await (
     c.image()
