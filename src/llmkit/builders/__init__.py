@@ -445,6 +445,14 @@ class Client:
         self.agent: Agent = Agent(self)
         self.upload: Upload = Upload(self)
 
+    def with_base_url(self, url: str) -> "Client":
+        """
+
+
+"""
+        self.provider.base_url = url
+        return self
+
 def new_client(name: str, api_key: str) -> Client:
     """"""
     return Client(name, api_key)
