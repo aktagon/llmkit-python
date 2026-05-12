@@ -445,6 +445,14 @@ class Client:
         self.agent: Agent = Agent(self)
         self.upload: Upload = Upload(self)
 
+    def with_base_url(self, url: str) -> "Client":
+        """Override the provider's default base URL. Required for
+        providers whose default base URL is a template that the
+        caller must substitute (e.g. Vertex AI Imagen). Returns
+        the same Client for chaining."""
+        self.provider.base_url = url
+        return self
+
 def new_client(name: str, api_key: str) -> Client:
     """Generic factory; per-provider helpers below are ergonomic shortcuts."""
     return Client(name, api_key)
