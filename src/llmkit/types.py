@@ -67,6 +67,18 @@ class Request:
 class Response:
     text: str = ""
     tokens: Usage = field(default_factory=Usage)
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    finish_reason: str = ""
+    #
+    #
+    #
+    finish_message: str = ""
 
 
 @dataclass
