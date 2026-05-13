@@ -28,12 +28,41 @@ def prompt_batch(
     provider: Provider,
     requests: list[Request],
     *,
+    temperature: float | None = None,
+    top_p: float | None = None,
+    top_k: int | None = None,
+    max_tokens: int | None = None,
+    stop_sequences: list[str] | None = None,
+    seed: int | None = None,
+    frequency_penalty: float | None = None,
+    presence_penalty: float | None = None,
+    thinking_budget: int | None = None,
+    reasoning_effort: str = "",
+    caching: bool = False,
+    cache_ttl: float = 0.0,
     middleware: list | None = None,
     request_timeout: float = 600.0,
     poll_interval: float = 2.0,
 ) -> list[Response]:
     """Submit a batch and block until all results are ready."""
-    handle = submit_batch(provider, requests, middleware=middleware, request_timeout=request_timeout)
+    handle = submit_batch(
+        provider,
+        requests,
+        temperature=temperature,
+        top_p=top_p,
+        top_k=top_k,
+        max_tokens=max_tokens,
+        stop_sequences=stop_sequences,
+        seed=seed,
+        frequency_penalty=frequency_penalty,
+        presence_penalty=presence_penalty,
+        thinking_budget=thinking_budget,
+        reasoning_effort=reasoning_effort,
+        caching=caching,
+        cache_ttl=cache_ttl,
+        middleware=middleware,
+        request_timeout=request_timeout,
+    )
     return wait_batch(handle, request_timeout=request_timeout, poll_interval=poll_interval)
 
 
@@ -41,6 +70,18 @@ def submit_batch(
     provider: Provider,
     requests: list[Request],
     *,
+    temperature: float | None = None,
+    top_p: float | None = None,
+    top_k: int | None = None,
+    max_tokens: int | None = None,
+    stop_sequences: list[str] | None = None,
+    seed: int | None = None,
+    frequency_penalty: float | None = None,
+    presence_penalty: float | None = None,
+    thinking_budget: int | None = None,
+    reasoning_effort: str = "",
+    caching: bool = False,
+    cache_ttl: float = 0.0,
     middleware: list | None = None,
     request_timeout: float = 600.0,
 ) -> BatchHandle:
@@ -59,7 +100,22 @@ def submit_batch(
         raise ValidationError(field="provider", message=f"async batching not supported: {provider.name}")
 
     mws = list(middleware or [])
-    opts = Options(middleware=mws, request_timeout=request_timeout)
+    opts = Options(
+        temperature=temperature,
+        top_p=top_p,
+        top_k=top_k,
+        max_tokens=max_tokens,
+        stop_sequences=list(stop_sequences or []),
+        seed=seed,
+        frequency_penalty=frequency_penalty,
+        presence_penalty=presence_penalty,
+        thinking_budget=thinking_budget,
+        reasoning_effort=reasoning_effort,
+        caching=caching,
+        cache_ttl=cache_ttl,
+        middleware=mws,
+        request_timeout=request_timeout,
+    )
     base_event = Event(
         op=MiddlewareOp.BATCH_SUBMIT,
         provider=provider.name,
@@ -149,11 +205,14 @@ def _build_batch_body(
     cfg: ProviderConfig,
     bc: BatchDef,
 ) -> dict[str, Any]:
+    from .caching import apply_caching
     from .client import _build_request
 
     items: list[dict[str, Any]] = []
     for i, req in enumerate(reqs):
         req_body, _ = _build_request(provider, req, opts, cfg)
+        if opts.caching:
+            apply_caching(req_body, provider, opts, cfg)
         if bc.item_body_field:
             item = {
                 "custom_id": f"req-{i}",
@@ -174,11 +233,14 @@ def _build_batch_jsonl(
     cfg: ProviderConfig,
     bc: BatchDef,
 ) -> bytes:
+    from .caching import apply_caching
     from .client import _build_request
 
     lines: list[str] = []
     for i, req in enumerate(reqs):
         req_body, _ = _build_request(provider, req, opts, cfg)
+        if opts.caching:
+            apply_caching(req_body, provider, opts, cfg)
         line = {
             "custom_id": f"req-{i}",
             "method": "POST",
