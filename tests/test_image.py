@@ -948,3 +948,51 @@ def test_image_vertex_rejects_quality_output_format_background() -> None:
         with pytest.raises(ValidationError) as excinfo:
             asyncio.run(chain(c.image.model(VERTEX_IMAGEN_3)).generate("x"))
         assert excinfo.value.field == expected_field
+
+
+def test_image_generate_google_surfaces_finish_reason_when_blocked() -> None:
+    """Gemini returns a candidate with finishReason + finishMessage but no
+    parts when it declines to generate. Verify both fields land on
+    ImageResponse so callers can show a useful message."""
+    response = {
+        "candidates": [
+            {
+                "finishReason": "IMAGE_OTHER",
+                "finishMessage": "Could not generate image. Try rephrasing the prompt.",
+            }
+        ],
+        "usageMetadata": {"promptTokenCount": 8, "candidatesTokenCount": 0},
+    }
+    with _MockServer(response) as server:
+        c = _client(server.url)
+        resp = asyncio.run(c.image.model(FLASH_MODEL).generate("blocked"))
+
+    assert resp.images == []
+    assert resp.finish_reason == "IMAGE_OTHER"
+    assert resp.finish_message == "Could not generate image. Try rephrasing the prompt."
+
+
+def test_image_generate_google_omits_finish_reason_on_success() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _MockServer(_flash_response(encoded)) as server:
+        c = _client(server.url)
+        resp = asyncio.run(c.image.model(FLASH_MODEL).generate("a cat"))
+    assert len(resp.images) == 1
+    assert resp.finish_reason == ""
+    assert resp.finish_message == ""
+
+
+def test_image_generate_vertex_surfaces_rai_filtered_reason() -> None:
+    response = {
+        "predictions": [{"raiFilteredReason": "Image filtered by safety system"}],
+    }
+    with _MockServer(response) as server:
+        c = new_client(
+            "vertex",
+            "Bearer fake-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+        c.provider.base_url = server.url
+        resp = asyncio.run(c.image.model(VERTEX_IMAGEN_3).generate("blocked"))
+    assert resp.images == []
+    assert resp.finish_reason == "Image filtered by safety system"
+    assert resp.finish_message == ""
