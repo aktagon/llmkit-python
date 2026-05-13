@@ -201,6 +201,16 @@ def do_multipart_post_multi(
         return exc.read(), exc.code
 
 
+def _parse_stream_finish_path(p: str) -> tuple[str, str]:
+    """"""
+    if not p:
+        return "", ""
+    idx = p.find(":")
+    if idx >= 0:
+        return p[:idx], p[idx + 1 :]
+    return "", p
+
+
 def do_stream_post(
     url: str,
     body: bytes,
@@ -208,8 +218,15 @@ def do_stream_post(
     stream_cfg: StreamDef,
     callback: Callable[[str], None],
     timeout: float = 600.0,
-) -> Usage:
-    """"""
+    finish_reason_path: str = "",
+) -> tuple[Usage, str]:
+    """
+
+
+
+
+
+"""
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     for key, value in headers.items():
@@ -225,6 +242,8 @@ def do_stream_post(
         ) from exc
 
     usage = Usage()
+    finish_event, finish_json_path = _parse_stream_finish_path(finish_reason_path)
+    finish_reason = ""
     current_event = ""
     with resp:
         for raw_line in resp:
@@ -239,21 +258,44 @@ def do_stream_post(
 
             data_str = line[len("data: "):]
 
+            #
+            #
             if stream_cfg.done_signal and data_str == stream_cfg.done_signal:
                 break
+
+            try:
+                parsed = json.loads(data_str)
+            except ValueError:
+                if (
+                    stream_cfg.uses_event_types
+                    and stream_cfg.done_event
+                    and current_event == stream_cfg.done_event
+                ):
+                    break
+                continue
+            if not isinstance(parsed, dict):
+                if (
+                    stream_cfg.uses_event_types
+                    and stream_cfg.done_event
+                    and current_event == stream_cfg.done_event
+                ):
+                    break
+                continue
+
+            #
+            #
+            #
+            if finish_json_path and (finish_event == "" or finish_event == current_event):
+                value = extract_path(parsed, finish_json_path)
+                if value and value != "FINISH_REASON_UNSPECIFIED":
+                    finish_reason = value
+
             if (
                 stream_cfg.uses_event_types
                 and stream_cfg.done_event
                 and current_event == stream_cfg.done_event
             ):
                 break
-
-            try:
-                parsed = json.loads(data_str)
-            except ValueError:
-                continue
-            if not isinstance(parsed, dict):
-                continue
 
             if stream_cfg.uses_event_types:
                 if current_event == stream_cfg.content_event:
@@ -276,4 +318,4 @@ def do_stream_post(
                         usage.output = value
 
             current_event = ""
-    return usage
+    return usage, finish_reason
