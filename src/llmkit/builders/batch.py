@@ -94,6 +94,39 @@ def _build_request_for(b: "Text", prompt: str) -> Request:
     return req
 
 
+def _option_kwargs(b: "Text") -> dict:
+    """Mirror of text.py's option-threading. Every chain-set field on the
+    Text builder is propagated into the underlying batch call so the wire
+    body carries the same knobs that the one-shot ``Text.prompt`` path
+    sends. ADR-012 REQ-PROP-003 forbids drift between helpers."""
+    kwargs: dict = {}
+    if b._max_tokens is not None:
+        kwargs["max_tokens"] = b._max_tokens
+    if b._temperature is not None:
+        kwargs["temperature"] = b._temperature
+    if b._top_p is not None:
+        kwargs["top_p"] = b._top_p
+    if b._top_k is not None:
+        kwargs["top_k"] = b._top_k
+    if b._frequency_penalty is not None:
+        kwargs["frequency_penalty"] = b._frequency_penalty
+    if b._presence_penalty is not None:
+        kwargs["presence_penalty"] = b._presence_penalty
+    if b._seed is not None:
+        kwargs["seed"] = b._seed
+    if b._stop_sequences:
+        kwargs["stop_sequences"] = list(b._stop_sequences)
+    if b._thinking_budget is not None:
+        kwargs["thinking_budget"] = b._thinking_budget
+    if b._reasoning_effort:
+        kwargs["reasoning_effort"] = b._reasoning_effort
+    if b._caching:
+        kwargs["caching"] = True
+    if b._middleware:
+        kwargs["middleware"] = list(b._middleware)
+    return kwargs
+
+
 async def text_batch(b: "Text", *prompts: str) -> list[Response]:
     provider = _provider_for(b)
     requests = [_build_request_for(b, p) for p in prompts]
@@ -101,7 +134,7 @@ async def text_batch(b: "Text", *prompts: str) -> list[Response]:
         legacy_prompt_batch,
         provider,
         requests,
-        middleware=list(b._middleware) if b._middleware else None,
+        **_option_kwargs(b),
     )
 
 
@@ -112,6 +145,6 @@ async def text_submit_batch(b: "Text", *prompts: str) -> BatchHandle:
         legacy_submit_batch,
         provider,
         requests,
-        middleware=list(b._middleware) if b._middleware else None,
+        **_option_kwargs(b),
     )
     return BatchHandle(id=legacy.id, provider=legacy.provider)
