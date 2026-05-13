@@ -67,6 +67,18 @@ class Request:
 class Response:
     text: str = ""
     tokens: Usage = field(default_factory=Usage)
+    # Provider stop signal, passed through verbatim. Empty when the
+    # provider response carries no signal or the parser does not yet
+    # read this provider's location. Examples:
+    #   Google:    "STOP", "MAX_TOKENS", "SAFETY", "RECITATION"
+    #   OpenAI:    "stop", "length", "content_filter", "tool_calls"
+    #   Anthropic: "end_turn", "max_tokens", "stop_sequence", "tool_use"
+    #   xAI:       "stop", "length", "content_filter"
+    finish_reason: str = ""
+    # Free-text provider explanation of the stop signal. Populated by
+    # Google when present; OpenAI / Anthropic / xAI do not carry an
+    # equivalent field, so this stays empty for them.
+    finish_message: str = ""
 
 
 @dataclass

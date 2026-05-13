@@ -601,6 +601,8 @@ def _parse_response(provider: str, body: bytes) -> Response:
     output_tokens = extract_int_path(raw, cfg.usage_output_path)
     cache_write, cache_read = _extract_cache_usage(raw, provider)
     reasoning = extract_int_path(raw, cfg.reasoning_tokens_path) if cfg.reasoning_tokens_path else 0
+    finish_reason = extract_path(raw, cfg.finish_reason_path) if cfg.finish_reason_path else ""
+    finish_message = extract_path(raw, cfg.finish_message_path) if cfg.finish_message_path else ""
 
     tokens = Usage(
         input=input_tokens,
@@ -609,7 +611,12 @@ def _parse_response(provider: str, body: bytes) -> Response:
         cache_read=cache_read,
         reasoning=reasoning,
     )
-    return Response(text=text, tokens=tokens)
+    return Response(
+        text=text,
+        tokens=tokens,
+        finish_reason=finish_reason,
+        finish_message=finish_message,
+    )
 
 
 def _extract_cache_usage(raw: dict[str, Any], provider: str) -> tuple[int, int]:
