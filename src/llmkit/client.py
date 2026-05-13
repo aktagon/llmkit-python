@@ -223,7 +223,15 @@ def prompt_stream(
         on_chunk(chunk)
 
     try:
-        usage = do_stream_post(url, json_body, headers, stream_cfg, wrapped, timeout=opts.request_timeout)
+        usage, finish_reason = do_stream_post(
+            url,
+            json_body,
+            headers,
+            stream_cfg,
+            wrapped,
+            timeout=opts.request_timeout,
+            finish_reason_path=cfg.stream_finish_reason_path,
+        )
     except Exception as exc:
         _fire_post_err(opts.middleware, base_event, exc, start)
         raise
@@ -236,7 +244,7 @@ def prompt_stream(
         duration=time.monotonic() - start,
     )
     fire_post(opts.middleware, post_event)
-    return Response(text="".join(chunks), tokens=usage)
+    return Response(text="".join(chunks), tokens=usage, finish_reason=finish_reason)
 
 
 def upload_file(
