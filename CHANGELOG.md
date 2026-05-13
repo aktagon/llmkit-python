@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Response.finish_reason` and `Response.finish_message` — provider stop signal + free-text explanation passed through verbatim on `c.text.prompt()`, `c.agent.prompt()`, and `c.text.batch()`. Examples: Anthropic `stop_reason`, OpenAI `choices[0].finish_reason`, Google `candidates[0].finishReason`. Default empty string; populated only when the provider response carries a signal. SSE streaming (`c.text.stream()`) does not yet populate them — deferred to a follow-up.
+- `ImageResponse.finish_reason` and `ImageResponse.finish_message` — same shape on `c.image.generate()`. Google populates both (including `IMAGE_OTHER` / `SAFETY` / `MAX_TOKENS` reasons that previously vanished into "no image returned"); Vertex Imagen surfaces `predictions[0].raiFilteredReason` as `finish_reason`; OpenAI Images API and xAI Grok have no equivalent fields and leave them empty. Callers can now render a useful message when `len(resp.images) == 0` instead of synthesizing one.
+
 ## [1.0.0] — 2026-05-09
 
 ### Breaking
