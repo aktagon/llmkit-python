@@ -330,6 +330,29 @@ def test_phase3_text_prompt_wires_against_legacy() -> None:
         assert body["max_tokens"] == 50
 
 
+def test_text_prompt_surfaces_finish_reason() -> None:
+    response = {
+        "content": [{"type": "text", "text": "truncated"}],
+        "usage": {"input_tokens": 4, "output_tokens": 10},
+        "stop_reason": "max_tokens",
+    }
+    with _MockServer(response) as server:
+        c = anthropic("k")
+        c.provider.base_url = server.url
+        resp = asyncio.run(c.text.max_tokens(10).prompt("ping"))
+        assert resp.finish_reason == "max_tokens"
+        assert resp.finish_message == ""
+
+
+def test_text_prompt_omits_finish_reason_when_absent() -> None:
+    with _MockServer(_ANTHROPIC_RESP) as server:
+        c = anthropic("k")
+        c.provider.base_url = server.url
+        resp = asyncio.run(c.text.prompt("ping"))
+        assert resp.finish_reason == ""
+        assert resp.finish_message == ""
+
+
 def test_phase3_text_batch_submits_and_returns_handle() -> None:
     submit_resp = {"id": "msgbatch_123"}
 

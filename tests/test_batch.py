@@ -220,15 +220,10 @@ def test_prompt_batch_end_to_end_submit_then_wait() -> None:
 
 def test_text_batch_through_typed_builder_round_trips_two_prompts() -> None:
     """Closes the Text.batch + text_batch coverage warnings. Builder's
-    system + per-prompt user content must flow through the wire body."""
+    system, sampling options, and per-prompt user content must all flow
+    through the wire body. ADR-012 REQ-PROP-003 forbids drift between
+    Text.prompt and Text.batch on which chain fields propagate."""
 
-    # Known gap: legacy ``prompt_batch`` doesn't accept Options, so the
-    # typed-builder's ``.max_tokens(...) / .temperature(...) / ...`` chain
-    # state is silently dropped on the batch path. (Different bug class from
-    # the ADR-011 silent-drops fixed in plan 018 D-stage — those were
-    # text/agent helpers forgetting to read fields; this one is the
-    # underlying free-function API missing the parameter altogether. Tracked
-    # as a v1.1.0 follow-up.) The test asserts what *is* propagated.
     results = [
         _anthropic_result_line("req-0", "alpha"),
         _anthropic_result_line("req-1", "beta"),
@@ -239,6 +234,10 @@ def test_text_batch_through_typed_builder_round_trips_two_prompts() -> None:
         responses = asyncio.run(
             c.text.model("claude-sonnet-4-6")
             .system("You are terse.")
+            .max_tokens(64)
+            .temperature(0.3)
+            .top_p(0.9)
+            .stop_sequences("END")
             .batch("first prompt", "second prompt")
         )
 
@@ -249,6 +248,11 @@ def test_text_batch_through_typed_builder_round_trips_two_prompts() -> None:
     items = server.create_body["requests"]
     inner_0 = items[0]["params"]
     assert inner_0["system"] == "You are terse."
+    # ADR-012: sampling options propagate through the batch path.
+    assert inner_0["max_tokens"] == 64
+    assert inner_0["temperature"] == 0.3
+    assert inner_0["top_p"] == 0.9
+    assert inner_0["stop_sequences"] == ["END"]
     # User content carries the prompt.
     msgs_0 = inner_0.get("messages", [])
     assert any("first prompt" in (m.get("content") or "") for m in msgs_0)
