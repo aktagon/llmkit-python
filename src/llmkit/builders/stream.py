@@ -71,11 +71,32 @@ class TextStream:
         b = self._b
         provider = _build_provider(b)
         request = _build_request(b, self._msg)
+        # ADR-012 REQ-PROP-003: every chain-set field must propagate
+        # through every helper. text.py and batch.py both read this same
+        # set; stream.py must too. _build_provider/_build_request
+        # (imported from text.py) cover _model/_history/_parts/_schema —
+        # tracked as delegated suppressions.
         kwargs: dict = {}
         if b._max_tokens is not None:
             kwargs["max_tokens"] = b._max_tokens
         if b._temperature is not None:
             kwargs["temperature"] = b._temperature
+        if b._top_p is not None:
+            kwargs["top_p"] = b._top_p
+        if b._top_k is not None:
+            kwargs["top_k"] = b._top_k
+        if b._frequency_penalty is not None:
+            kwargs["frequency_penalty"] = b._frequency_penalty
+        if b._presence_penalty is not None:
+            kwargs["presence_penalty"] = b._presence_penalty
+        if b._seed is not None:
+            kwargs["seed"] = b._seed
+        if b._stop_sequences:
+            kwargs["stop_sequences"] = list(b._stop_sequences)
+        if b._thinking_budget is not None:
+            kwargs["thinking_budget"] = b._thinking_budget
+        if b._reasoning_effort:
+            kwargs["reasoning_effort"] = b._reasoning_effort
         if b._caching:
             kwargs["caching"] = True
         if b._middleware:

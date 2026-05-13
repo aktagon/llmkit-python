@@ -85,6 +85,15 @@ class ImageResponse:
     images: list[ImageData] = field(default_factory=list)
     text: str = ""
     tokens: Usage = field(default_factory=Usage)
+    # Provider stop signal. Examples per provider:
+    #   Google:    "STOP" (ok), "IMAGE_OTHER", "SAFETY", "MAX_TOKENS"
+    #   OpenAI Images API: no equivalent field (always empty)
+    #   xAI Grok:          no equivalent field (always empty)
+    #   Vertex Imagen:     RAI filter reason when content is blocked
+    finish_reason: str = ""
+    # Free-text provider explanation. Gemini populates this for non-success
+    # finish_reason values. Use as user-facing message when len(images) == 0.
+    finish_message: str = ""
 
 
 def generate_image(
@@ -560,10 +569,15 @@ def _parse_vertex_image_response(raw: dict[str, Any]) -> ImageResponse:
     """
     preds = raw.get("predictions") if isinstance(raw, dict) else None
     images: list[ImageData] = []
+    finish_reason = ""
     if isinstance(preds, list):
         for entry in preds:
             if not isinstance(entry, dict):
                 continue
+            if not finish_reason:
+                rai = entry.get("raiFilteredReason")
+                if isinstance(rai, str) and rai:
+                    finish_reason = rai
             b64 = entry.get("bytesBase64Encoded")
             if not isinstance(b64, str) or not b64:
                 continue
@@ -576,7 +590,12 @@ def _parse_vertex_image_response(raw: dict[str, Any]) -> ImageResponse:
             except (ValueError, TypeError):
                 continue
             images.append(ImageData(mime_type=mime, data=decoded))
-    return ImageResponse(images=images, text="", tokens=Usage())
+    return ImageResponse(
+        images=images,
+        text="",
+        tokens=Usage(),
+        finish_reason=finish_reason,
+    )
 
 
 def _build_image_url(p: Provider, cfg: Any, model: str) -> str:
@@ -621,12 +640,18 @@ def _parse_image_response(provider_name: str, body: bytes, cfg: Any) -> ImageRes
     if provider_name == "vertex":
         return _parse_vertex_image_response(raw)
 
-    images, text = _extract_google_image_parts(raw)
+    images, text, finish_reason, finish_message = _extract_google_image_parts(raw)
     tokens = Usage(
         input=extract_int_path(raw, cfg.usage_input_path),
         output=extract_int_path(raw, cfg.usage_output_path),
     )
-    return ImageResponse(images=images, text=text, tokens=tokens)
+    return ImageResponse(
+        images=images,
+        text=text,
+        tokens=tokens,
+        finish_reason=finish_reason,
+        finish_message=finish_message,
+    )
 
 
 def _parse_image_response_data_array(
@@ -671,15 +696,24 @@ def _parse_image_response_data_array(
     return ImageResponse(images=images, text="\n".join(revised), tokens=tokens)
 
 
-def _extract_google_image_parts(raw: dict[str, Any]) -> tuple[list[ImageData], str]:
+def _extract_google_image_parts(
+    raw: dict[str, Any],
+) -> tuple[list[ImageData], str, str, str]:
+    """Return (images, text, finish_reason, finish_message). finish_reason/
+    finish_message are pulled from candidates[0]; both stay empty when the
+    response carries no such fields."""
     candidates = raw.get("candidates")
     if not isinstance(candidates, list) or not candidates:
-        return [], ""
+        return [], "", "", ""
     first = candidates[0] if isinstance(candidates[0], dict) else {}
+    finish_reason = first.get("finishReason") if isinstance(first, dict) else None
+    finish_message = first.get("finishMessage") if isinstance(first, dict) else None
+    fr_str = finish_reason if isinstance(finish_reason, str) else ""
+    fm_str = finish_message if isinstance(finish_message, str) else ""
     content = first.get("content") if isinstance(first, dict) else None
     parts = content.get("parts") if isinstance(content, dict) else None
     if not isinstance(parts, list):
-        return [], ""
+        return [], "", fr_str, fm_str
 
     images: list[ImageData] = []
     text_parts: list[str] = []
@@ -699,4 +733,4 @@ def _extract_google_image_parts(raw: dict[str, Any]) -> tuple[list[ImageData], s
         text = part.get("text")
         if isinstance(text, str) and text:
             text_parts.append(text)
-    return images, "".join(text_parts)
+    return images, "".join(text_parts), fr_str, fm_str

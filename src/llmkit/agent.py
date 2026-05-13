@@ -173,7 +173,14 @@ class Agent:
             if not calls:
                 text = extract_path(raw, cfg.response_text_path)
                 self.history.append(_InternalMessage(role="assistant", content=text))
-                return Response(text=text, tokens=total_usage)
+                finish_reason = extract_path(raw, cfg.finish_reason_path) if cfg.finish_reason_path else ""
+                finish_message = extract_path(raw, cfg.finish_message_path) if cfg.finish_message_path else ""
+                return Response(
+                    text=text,
+                    tokens=total_usage,
+                    finish_reason=finish_reason,
+                    finish_message=finish_message,
+                )
 
             self.history.append(_InternalMessage(role="assistant", tool_calls=list(calls)))
 

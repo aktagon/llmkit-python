@@ -255,6 +255,16 @@ CACHE_RESPONSE_FIELDS: tuple[APIResponseFieldDef, ...] = (
         source_path="cacheWriteTokensPath",
     ),
     APIResponseFieldDef(
+        py_field_name="finish_message",
+        py_field_type="str",
+        source_path="finishMessagePath",
+    ),
+    APIResponseFieldDef(
+        py_field_name="finish_reason",
+        py_field_type="str",
+        source_path="finishReasonPath",
+    ),
+    APIResponseFieldDef(
         py_field_name="images",
         py_field_type="list[ImageData]",
         source_path="candidates[0].content.parts[*].inlineData",
