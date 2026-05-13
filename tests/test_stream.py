@@ -1,0 +1,135 @@
+"""ADR-013 unit tests for stream-time finish-reason capture.
+
+Each provider's stream parser is exercised against a canned SSE event
+sequence; the assertion is that ``TextStream.response.finish_reason``
+carries the provider stop signal after iteration completes.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+from llmkit.builders import anthropic, google, grok, openai
+
+
+class _SSEServer:
+    """Single-shot SSE producer that emits a canned event sequence."""
+
+    def __init__(self, events: list[str]) -> None:
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a, **_k):  # silence noise
+                pass
+
+            def do_POST(self):
+                # Drain the request body so the client doesn't see a reset
+                # while we're emitting events.
+                length = int(self.headers.get("Content-Length", "0"))
+                if length:
+                    self.rfile.read(length)
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                for line in outer.events:
+                    self.wfile.write((line + "\n").encode("utf-8"))
+                    self.wfile.flush()
+
+        self.events = events
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+
+    def __enter__(self) -> "_SSEServer":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join(timeout=2)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_port}"
+
+
+async def _drain(stream) -> None:
+    async for _ in stream:
+        pass
+
+
+def test_openai_stream_finish_reason() -> None:
+    events = [
+        'data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":null}]}',
+        "",
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}',
+        "",
+        "data: [DONE]",
+        "",
+    ]
+    with _SSEServer(events) as server:
+        c = openai("k")
+        c.provider.base_url = server.url
+        stream = c.text.stream("hi")
+        asyncio.run(_drain(stream))
+        assert stream.response is not None
+        assert stream.response.finish_reason == "stop"
+
+
+def test_anthropic_stream_finish_reason() -> None:
+    events = [
+        "event: content_block_delta",
+        'data: {"delta":{"text":"Hi"}}',
+        "",
+        "event: message_delta",
+        'data: {"usage":{"output_tokens":1}}',
+        "",
+        "event: message_stop",
+        'data: {"type":"message_stop","stop_reason":"end_turn"}',
+        "",
+    ]
+    with _SSEServer(events) as server:
+        c = anthropic("k")
+        c.provider.base_url = server.url
+        stream = c.text.stream("hi")
+        asyncio.run(_drain(stream))
+        assert stream.response is not None
+        assert stream.response.finish_reason == "end_turn"
+
+
+def test_google_stream_finish_reason_filters_unspecified() -> None:
+    # First chunk carries the unspecified sentinel — must NOT clobber the
+    # real terminal value that arrives in the next chunk.
+    events = [
+        'data: {"candidates":[{"content":{"parts":[{"text":"Hi"}]},"finishReason":"FINISH_REASON_UNSPECIFIED"}]}',
+        "",
+        'data: {"candidates":[{"content":{"parts":[{"text":""}]},"finishReason":"STOP"}]}',
+        "",
+    ]
+    with _SSEServer(events) as server:
+        c = google("k")
+        c.provider.base_url = server.url
+        stream = c.text.stream("hi")
+        asyncio.run(_drain(stream))
+        assert stream.response is not None
+        assert stream.response.finish_reason == "STOP"
+
+
+def test_grok_stream_finish_reason() -> None:
+    events = [
+        'data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":null}]}',
+        "",
+        'data: {"choices":[{"delta":{},"finish_reason":"length"}]}',
+        "",
+        "data: [DONE]",
+        "",
+    ]
+    with _SSEServer(events) as server:
+        c = grok("k")
+        c.provider.base_url = server.url
+        stream = c.text.stream("hi")
+        asyncio.run(_drain(stream))
+        assert stream.response is not None
+        assert stream.response.finish_reason == "length"
