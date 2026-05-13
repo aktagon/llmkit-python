@@ -11,7 +11,7 @@ import asyncio
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from llmkit.builders import anthropic, google, grok, openai
+from llmkit.builders import anthropic, google, grok, groq, openai
 
 
 class _SSEServer:
@@ -115,6 +115,24 @@ def test_google_stream_finish_reason_filters_unspecified() -> None:
         asyncio.run(_drain(stream))
         assert stream.response is not None
         assert stream.response.finish_reason == "STOP"
+
+
+def test_pathless_provider_stream_finish_reason_stays_empty() -> None:
+    """Provider with no stream_finish_reason_path must leave finish_reason empty
+    even when the frame carries a value that would match other providers' paths."""
+    events = [
+        'data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":"stop"}]}',
+        "",
+        "data: [DONE]",
+        "",
+    ]
+    with _SSEServer(events) as server:
+        c = groq("k")
+        c.provider.base_url = server.url
+        stream = c.text.stream("hi")
+        asyncio.run(_drain(stream))
+        assert stream.response is not None
+        assert stream.response.finish_reason == ""
 
 
 def test_grok_stream_finish_reason() -> None:
