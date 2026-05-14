@@ -1017,3 +1017,30 @@ def test_image_safety_filter_rejected_on_non_vertex() -> None:
         asyncio.run(
             c.image.model(FLASH_MODEL).safety_filter("block_few").generate("x")
         )
+
+
+def test_image_google_safety_settings_wire_body() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode()
+    with _MockServer(_flash_response(encoded)) as server:
+        c = new_client("google", "key")
+        c.provider.base_url = server.url
+        from llmkit.types import SafetySetting
+        asyncio.run(
+            c.image.model(FLASH_MODEL)
+            .safety_settings([SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE")])
+            .generate("a cat")
+        )
+    ss = server.received_body.get("safetySettings")
+    assert ss == [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}]
+
+
+def test_image_safety_settings_rejected_on_openai() -> None:
+    c = new_client("openai", "key")
+    c.provider.base_url = "http://unused"
+    from llmkit.types import SafetySetting
+    with pytest.raises(ValidationError):
+        asyncio.run(
+            c.image.model("gpt-image-1")
+            .safety_settings([SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE")])
+            .generate("x")
+        )
