@@ -185,3 +185,42 @@ def test_reasoning_tokens_zero_for_unreported_provider() -> None:
     })
     resp = _parse_response("anthropic", body.encode())
     assert resp.tokens.reasoning == 0
+
+
+def test_google_safety_settings_written_as_top_level_field() -> None:
+    from llmkit.types import SafetySetting
+
+    cfg = PROVIDERS["google"]
+    opts = llmkit.Options(
+        safety_settings=[
+            SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+        ]
+    )
+    body, _ = _build_request(
+        llmkit.Provider(name="google", api_key="k"),
+        llmkit.Request(user="hi"),
+        opts,
+        cfg,
+    )
+    assert "safetySettings" in body
+    assert body["safetySettings"] == [
+        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}
+    ]
+
+
+def test_openai_safety_settings_silently_dropped() -> None:
+    from llmkit.types import SafetySetting
+
+    cfg = PROVIDERS["openai"]
+    opts = llmkit.Options(
+        safety_settings=[
+            SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+        ]
+    )
+    body, _ = _build_request(
+        llmkit.Provider(name="openai", api_key="k"),
+        llmkit.Request(user="hi"),
+        opts,
+        cfg,
+    )
+    assert "safetySettings" not in body

@@ -24,6 +24,7 @@ from llmkit.builders import (
     MiddlewareFn,
     Part,
     Response,
+    SafetySetting,
     Text,
     Tool,
     Upload,
@@ -100,6 +101,10 @@ def test_text_chain() -> None:
     assert text._parts[0].image == MediaRef(mime_type="image/png", bytes=b"\xff")
     assert text._parts[1].text == "hello"
 
+    ss = SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE")
+    text2 = c.text.safety_settings([ss])
+    assert text2._safety_settings == [ss]
+
 
 def test_image_chain() -> None:
     c = google("k")
@@ -141,6 +146,10 @@ def test_agent_chain() -> None:
     assert ag._system == "sys"
     assert ag._temperature == 0.5
     assert ag._tools == [tool]
+
+    ag_ss = SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_MEDIUM_AND_ABOVE")
+    ag2 = c.agent.safety_settings([ag_ss])
+    assert ag2._safety_settings == [ag_ss]
 
 
 def test_upload_chain() -> None:
