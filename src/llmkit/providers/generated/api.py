@@ -147,6 +147,16 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_safety_filter",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_safety_settings",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_schema",
         sub_options=(
         ),
