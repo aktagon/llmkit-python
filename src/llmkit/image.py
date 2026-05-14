@@ -109,6 +109,7 @@ def generate_image(
     count: int | None = None,
     mask: MediaRef | None = None,
     safety_filter: str = "",
+    safety_settings: list | None = None,
     extra_fields: dict[str, Any] | None = None,
     middleware: list[MiddlewareFn] | None = None,
     request_timeout: float = 600.0,
@@ -179,6 +180,7 @@ def generate_image(
             raise ValidationError(field="mask", message=f"not supported by {provider.name}")
         if safety_filter:
             raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
+        # safety_settings valid for InlineParts (Google); wired in _build_image_body
     elif img_cfg.input_mode == "JSONInlineRefs":
         if quality:
             raise ValidationError(field="quality", message=f"not supported by {provider.name}")
@@ -190,6 +192,8 @@ def generate_image(
             raise ValidationError(field="mask", message=f"not supported by {provider.name}")
         if safety_filter:
             raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
+        if safety_settings:
+            raise ValidationError(field="safety_settings", message=f"not supported by {provider.name}")
     elif img_cfg.input_mode == "MultipartForm":
         if mask is not None and image_count == 0:
             raise ValidationError(
@@ -198,6 +202,8 @@ def generate_image(
             )
         if safety_filter:
             raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
+        if safety_settings:
+            raise ValidationError(field="safety_settings", message=f"not supported by {provider.name}")
     elif img_cfg.input_mode == "JSONPredict":
         if quality:
             raise ValidationError(field="quality", message=f"not supported by {provider.name}")
@@ -205,6 +211,8 @@ def generate_image(
             raise ValidationError(field="output_format", message=f"not supported by {provider.name}")
         if background:
             raise ValidationError(field="background", message=f"not supported by {provider.name}")
+        if safety_settings:
+            raise ValidationError(field="safety_settings", message=f"not supported by {provider.name}; use safety_filter for Vertex Imagen")
 
     mws = list(middleware or [])
     base_event = Event(
@@ -275,7 +283,7 @@ def generate_image(
                     timeout=request_timeout,
                 )
             else:
-                body = _build_image_body(parts, aspect_ratio, image_size, include_text)
+                body = _build_image_body(parts, aspect_ratio, image_size, include_text, safety_settings or [])
                 json_body = json.dumps(body).encode("utf-8")
                 url = _build_image_url(provider, cfg, request.model)
                 resp_body = do_post(
@@ -497,6 +505,7 @@ def _build_image_body(
     aspect_ratio: str,
     image_size: str,
     include_text: bool,
+    safety_settings: list,
 ) -> dict[str, Any]:
     wire: list[dict[str, Any]] = []
     for p in parts:
@@ -522,10 +531,15 @@ def _build_image_body(
     if img_config:
         generation_config["imageConfig"] = img_config
 
-    return {
+    body: dict[str, Any] = {
         "contents": [{"parts": wire}],
         "generationConfig": generation_config,
     }
+    if safety_settings:
+        body["safetySettings"] = [
+            {"category": s.category, "threshold": s.threshold} for s in safety_settings
+        ]
+    return body
 
 
 def _build_vertex_body(
