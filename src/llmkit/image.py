@@ -108,6 +108,7 @@ def generate_image(
     background: str = "",
     count: int | None = None,
     mask: MediaRef | None = None,
+    safety_filter: str = "",
     extra_fields: dict[str, Any] | None = None,
     middleware: list[MiddlewareFn] | None = None,
     request_timeout: float = 600.0,
@@ -176,6 +177,8 @@ def generate_image(
             raise ValidationError(field="count", message=f"not supported by {provider.name}")
         if mask is not None:
             raise ValidationError(field="mask", message=f"not supported by {provider.name}")
+        if safety_filter:
+            raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
     elif img_cfg.input_mode == "JSONInlineRefs":
         if quality:
             raise ValidationError(field="quality", message=f"not supported by {provider.name}")
@@ -185,12 +188,16 @@ def generate_image(
             raise ValidationError(field="background", message=f"not supported by {provider.name}")
         if mask is not None:
             raise ValidationError(field="mask", message=f"not supported by {provider.name}")
+        if safety_filter:
+            raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
     elif img_cfg.input_mode == "MultipartForm":
         if mask is not None and image_count == 0:
             raise ValidationError(
                 field="mask",
                 message="requires at least one image part (edits branch only)",
             )
+        if safety_filter:
+            raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
     elif img_cfg.input_mode == "JSONPredict":
         if quality:
             raise ValidationError(field="quality", message=f"not supported by {provider.name}")
@@ -258,7 +265,7 @@ def generate_image(
                         timeout=request_timeout,
                     )
             elif img_cfg.input_mode == "JSONPredict":
-                body = _build_vertex_body(parts, aspect_ratio, count, mask, extra_fields)
+                body = _build_vertex_body(parts, aspect_ratio, count, mask, safety_filter, extra_fields)
                 json_body = json.dumps(body).encode("utf-8")
                 endpoint = (cfg.endpoint or "").replace("{model}", request.model)
                 resp_body = do_post(
@@ -526,6 +533,7 @@ def _build_vertex_body(
     aspect_ratio: str,
     count: int | None,
     mask: Any,
+    safety_filter: str,
     extra_fields: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Assemble the Vertex AI Imagen :predict request body.
@@ -555,6 +563,8 @@ def _build_vertex_body(
     parameters: dict[str, Any] = {"sampleCount": count if count is not None else 1}
     if aspect_ratio:
         parameters["aspectRatio"] = aspect_ratio
+    if safety_filter:
+        parameters["safetySetting"] = safety_filter
     if extra_fields:
         for k, v in extra_fields.items():
             parameters[k] = v

@@ -41,6 +41,7 @@ def prompt_batch(
     caching: bool = False,
     cache_ttl: float = 0.0,
     middleware: list | None = None,
+    safety_settings: list | None = None,
     request_timeout: float = 600.0,
     poll_interval: float = 2.0,
 ) -> list[Response]:
@@ -61,6 +62,7 @@ def prompt_batch(
         caching=caching,
         cache_ttl=cache_ttl,
         middleware=middleware,
+        safety_settings=safety_settings,
         request_timeout=request_timeout,
     )
     return wait_batch(handle, request_timeout=request_timeout, poll_interval=poll_interval)
@@ -83,6 +85,7 @@ def submit_batch(
     caching: bool = False,
     cache_ttl: float = 0.0,
     middleware: list | None = None,
+    safety_settings: list | None = None,
     request_timeout: float = 600.0,
 ) -> BatchHandle:
     """Submit a batch and return a handle for polling."""
@@ -114,6 +117,7 @@ def submit_batch(
         caching=caching,
         cache_ttl=cache_ttl,
         middleware=mws,
+        safety_settings=list(safety_settings or []),
         request_timeout=request_timeout,
     )
     base_event = Event(
