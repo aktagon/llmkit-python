@@ -996,3 +996,24 @@ def test_image_generate_vertex_surfaces_rai_filtered_reason() -> None:
     assert resp.images == []
     assert resp.finish_reason == "Image filtered by safety system"
     assert resp.finish_message == ""
+
+
+def test_image_vertex_safety_filter_maps_to_parameters() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode()
+    with _MockServer(_vertex_response(encoded, 1)) as server:
+        c = new_client("vertex", "test-token")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.image.model(VERTEX_IMAGEN_3).safety_filter("block_few").generate("x")
+        )
+    params = server.received_body["parameters"]
+    assert params["safetySetting"] == "block_few"
+
+
+def test_image_safety_filter_rejected_on_non_vertex() -> None:
+    c = new_client("google", "key")
+    c.provider.base_url = "http://unused"
+    with pytest.raises(ValidationError):
+        asyncio.run(
+            c.image.model(FLASH_MODEL).safety_filter("block_few").generate("x")
+        )
