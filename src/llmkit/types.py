@@ -54,6 +54,33 @@ class Tool:
 
 
 @dataclass
+class SafetySetting:
+    """Per-category content safety filter for Gemini providers."""
+    category: str
+    threshold: str
+
+
+# Harm category constants for SafetySetting.category
+HARM_CATEGORY_HARASSMENT = "HARM_CATEGORY_HARASSMENT"
+HARM_CATEGORY_HATE_SPEECH = "HARM_CATEGORY_HATE_SPEECH"
+HARM_CATEGORY_SEXUALLY_EXPLICIT = "HARM_CATEGORY_SEXUALLY_EXPLICIT"
+HARM_CATEGORY_DANGEROUS_CONTENT = "HARM_CATEGORY_DANGEROUS_CONTENT"
+HARM_CATEGORY_CIVIC_INTEGRITY = "HARM_CATEGORY_CIVIC_INTEGRITY"
+
+# Harm block threshold constants for SafetySetting.threshold
+HARM_BLOCK_THRESHOLD_NONE = "BLOCK_NONE"
+HARM_BLOCK_THRESHOLD_LOW_AND_ABOVE = "BLOCK_LOW_AND_ABOVE"
+HARM_BLOCK_THRESHOLD_MEDIUM_AND_ABOVE = "BLOCK_MEDIUM_AND_ABOVE"
+HARM_BLOCK_THRESHOLD_HIGH_ONLY = "BLOCK_ONLY_HIGH"
+
+# Vertex Imagen safety filter threshold constants
+IMAGE_SAFETY_FILTER_BLOCK_FEW = "block_few"
+IMAGE_SAFETY_FILTER_BLOCK_SOME = "block_some"
+IMAGE_SAFETY_FILTER_BLOCK_MOST = "block_most"
+IMAGE_SAFETY_FILTER_BLOCK_ONLY_HIGH = "block_only_high"
+
+
+@dataclass
 class Request:
     system: str = ""
     user: str = ""
@@ -98,3 +125,4 @@ class Options:
     cache_ttl: float = 0.0
     middleware: list[MiddlewareFn] = field(default_factory=list)
     request_timeout: float = 600.0
+    safety_settings: list["SafetySetting"] = field(default_factory=list)

@@ -490,6 +490,12 @@ def _build_request(p: Provider, req: Request, opts: Options, cfg):
     else:
         _add_options(body, opts, p.name)
 
+    if cfg.safety_settings_wire_path and opts.safety_settings:
+        body[cfg.safety_settings_wire_path] = [
+            {"category": s.category, "threshold": s.threshold}
+            for s in opts.safety_settings
+        ]
+
     if req.schema:
         _add_structured_output(body, headers, req.schema, p.name, cfg)
 
