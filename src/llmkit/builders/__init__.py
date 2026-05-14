@@ -197,6 +197,7 @@ class Image:
         self._output_format: str = ""
         self._quality: str = ""
         self._safety_filter: str = ""
+        self._safety_settings: list[SafetySetting] = []
         self._extra_fields: "dict[str, Any] | None" = None
 
     def aspect_ratio(self, r: str) -> "Image":
@@ -257,6 +258,11 @@ class Image:
     def safety_filter(self, s: str) -> "Image":
         out = copy.copy(self)
         out._safety_filter = s
+        return out
+
+    def safety_settings(self, s: list[SafetySetting]) -> "Image":
+        out = copy.copy(self)
+        out._safety_settings = list(s)
         return out
 
     def text(self, s: str) -> "Image":  # ordered

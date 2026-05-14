@@ -59,6 +59,8 @@ async def image_generate(b: "Image", msg: str) -> ImageResponse:
         kwargs["mask"] = b._mask
     if b._safety_filter:
         kwargs["safety_filter"] = b._safety_filter
+    if b._safety_settings:
+        kwargs["safety_settings"] = list(b._safety_settings)
     if b._middleware:
         kwargs["middleware"] = list(b._middleware)
     if b._extra_fields:
