@@ -54,6 +54,7 @@ class Agent:
         caching: bool = False,
         max_tool_iterations: int = 10,
         middleware: list | None = None,
+        safety_settings: list | None = None,
         request_timeout: float = 600.0,
     ) -> None:
         self.provider = provider
@@ -71,6 +72,7 @@ class Agent:
             caching=caching,
             max_tool_iterations=max_tool_iterations,
             middleware=list(middleware or []),
+            safety_settings=list(safety_settings or []),
             request_timeout=request_timeout,
         )
         self.tools: list[Tool] = []

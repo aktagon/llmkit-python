@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 from ..image import ImageData, ImageResponse, MediaRef, Part
 from ..providers.generated.middleware import MiddlewareFn
-from ..types import File, Message, Response, Tool
+from ..types import File, Message, Response, SafetySetting, Tool
 from .batch import BatchHandle
 
 if TYPE_CHECKING:
@@ -55,6 +55,7 @@ class Text:
         self._model: str = ""
         self._presence_penalty: float | None = None
         self._reasoning_effort: str = ""
+        self._safety_settings: list[SafetySetting] = []
         self._schema: str = ""
         self._seed: int | None = None
         self._stop_sequences: list[str] = []
@@ -112,6 +113,11 @@ class Text:
     def reasoning_effort(self, level: str) -> "Text":
         out = copy.copy(self)
         out._reasoning_effort = level
+        return out
+
+    def safety_settings(self, s: list[SafetySetting]) -> "Text":
+        out = copy.copy(self)
+        out._safety_settings = list(s)
         return out
 
     def schema(self, s: str) -> "Text":
@@ -190,6 +196,7 @@ class Image:
         self._model: str = ""
         self._output_format: str = ""
         self._quality: str = ""
+        self._safety_filter: str = ""
         self._extra_fields: "dict[str, Any] | None" = None
 
     def aspect_ratio(self, r: str) -> "Image":
@@ -247,6 +254,11 @@ class Image:
         out._quality = s
         return out
 
+    def safety_filter(self, s: str) -> "Image":
+        out = copy.copy(self)
+        out._safety_filter = s
+        return out
+
     def text(self, s: str) -> "Image":  # ordered
         out = copy.copy(self)
         out._parts = [*self._parts, Part(text=s)]
@@ -278,6 +290,7 @@ class Agent:
         self._model: str = ""
         self._presence_penalty: float | None = None
         self._reasoning_effort: str = ""
+        self._safety_settings: list[SafetySetting] = []
         self._seed: int | None = None
         self._stop_sequences: list[str] = []
         self._system: str = ""
@@ -333,6 +346,12 @@ class Agent:
     def reasoning_effort(self, level: str) -> "Agent":
         out = copy.copy(self)
         out._reasoning_effort = level
+        out._state = None
+        return out
+
+    def safety_settings(self, s: list[SafetySetting]) -> "Agent":
+        out = copy.copy(self)
+        out._safety_settings = list(s)
         out._state = None
         return out
 
@@ -527,6 +546,7 @@ __all__ = [
     "File",
     "Message",
     "Response",
+    "SafetySetting",
     "Tool",
     "ImageData",
     "ImageResponse",

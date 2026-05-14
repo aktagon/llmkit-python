@@ -124,6 +124,8 @@ def _option_kwargs(b: "Text") -> dict:
         kwargs["caching"] = True
     if b._middleware:
         kwargs["middleware"] = list(b._middleware)
+    if b._safety_settings:
+        kwargs["safety_settings"] = list(b._safety_settings)
     return kwargs
 
 
