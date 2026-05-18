@@ -57,6 +57,7 @@ def prompt(
     cache_ttl: float = 0.0,
     middleware: list | None = None,
     request_timeout: float = 600.0,
+    raw: bool = False,
 ) -> Response:
     """Send a one-shot request to an LLM provider."""
     opts = Options(
@@ -74,6 +75,7 @@ def prompt(
         cache_ttl=cache_ttl,
         middleware=list(middleware or []),
         request_timeout=request_timeout,
+        raw=raw,
     )
 
     _validate_provider(provider)
@@ -130,6 +132,11 @@ def prompt(
         raise
 
     resp = _parse_response(provider.name, resp_body)
+    if opts.raw:
+        try:
+            resp.raw = json.loads(resp_body)
+        except Exception:
+            resp.raw = None
     post_event = Event(
         op=MiddlewareOp.LLM_REQUEST,
         provider=provider.name,
