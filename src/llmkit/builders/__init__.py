@@ -54,6 +54,7 @@ class Text:
         self._middleware: list[MiddlewareFn] = []
         self._model: str = ""
         self._presence_penalty: float | None = None
+        self._raw: bool = False
         self._reasoning_effort: str = ""
         self._safety_settings: list[SafetySetting] = []
         self._schema: str = ""
@@ -108,6 +109,11 @@ class Text:
     def presence_penalty(self, v: float) -> "Text":
         out = copy.copy(self)
         out._presence_penalty = v
+        return out
+
+    def raw(self) -> "Text":
+        out = copy.copy(self)
+        out._raw = True
         return out
 
     def reasoning_effort(self, level: str) -> "Text":
@@ -196,6 +202,7 @@ class Image:
         self._model: str = ""
         self._output_format: str = ""
         self._quality: str = ""
+        self._raw: bool = False
         self._safety_filter: str = ""
         self._safety_settings: list[SafetySetting] = []
         self._extra_fields: "dict[str, Any] | None" = None
@@ -255,6 +262,11 @@ class Image:
         out._quality = s
         return out
 
+    def raw(self) -> "Image":
+        out = copy.copy(self)
+        out._raw = True
+        return out
+
     def safety_filter(self, s: str) -> "Image":
         out = copy.copy(self)
         out._safety_filter = s
@@ -295,6 +307,7 @@ class Agent:
         self._middleware: list[MiddlewareFn] = []
         self._model: str = ""
         self._presence_penalty: float | None = None
+        self._raw: bool = False
         self._reasoning_effort: str = ""
         self._safety_settings: list[SafetySetting] = []
         self._seed: int | None = None
@@ -346,6 +359,12 @@ class Agent:
     def presence_penalty(self, v: float) -> "Agent":
         out = copy.copy(self)
         out._presence_penalty = v
+        out._state = None
+        return out
+
+    def raw(self) -> "Agent":
+        out = copy.copy(self)
+        out._raw = True
         out._state = None
         return out
 

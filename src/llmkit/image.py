@@ -94,6 +94,9 @@ class ImageResponse:
     #
     #
     finish_message: str = ""
+    #
+    #
+    raw: Any | None = None
 
 
 def generate_image(
@@ -113,6 +116,7 @@ def generate_image(
     extra_fields: dict[str, Any] | None = None,
     middleware: list[MiddlewareFn] | None = None,
     request_timeout: float = 600.0,
+    raw: bool = False,
 ) -> ImageResponse:
     """
 
@@ -305,6 +309,11 @@ def generate_image(
             raise
 
         result = _parse_image_response(provider.name, resp_body, cfg)
+        if raw:
+            try:
+                result.raw = json.loads(resp_body)
+            except Exception:
+                result.raw = None
     except Exception as exc:
         post_event = dataclasses.replace(
             base_event,

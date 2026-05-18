@@ -106,6 +106,12 @@ class Response:
     #
     #
     finish_message: str = ""
+    #
+    #
+    #
+    #
+    #
+    raw: Any | None = None
 
 
 @dataclass
@@ -126,3 +132,6 @@ class Options:
     middleware: list[MiddlewareFn] = field(default_factory=list)
     request_timeout: float = 600.0
     safety_settings: list["SafetySetting"] = field(default_factory=list)
+    #
+    #
+    raw: bool = False
