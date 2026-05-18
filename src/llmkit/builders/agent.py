@@ -66,6 +66,8 @@ def _init_agent(b: "Agent") -> AgentState:
         kwargs["middleware"] = list(b._middleware)
     if b._safety_settings:
         kwargs["safety_settings"] = list(b._safety_settings)
+    if b._raw:
+        kwargs["raw"] = True
 
     agent = LegacyAgent(provider, **kwargs)
     if b._system:

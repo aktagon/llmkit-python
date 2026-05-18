@@ -39,6 +39,7 @@ class BatchHandle:
 
     id: str
     provider: Provider
+    raw: bool = False
 
     async def wait(
         self, *, poll_interval: float = 2.0, request_timeout: float = 600.0
@@ -49,6 +50,7 @@ class BatchHandle:
             legacy_handle,
             poll_interval=poll_interval,
             request_timeout=request_timeout,
+            raw=self.raw,
         )
 
 
@@ -126,6 +128,8 @@ def _option_kwargs(b: "Text") -> dict:
         kwargs["middleware"] = list(b._middleware)
     if b._safety_settings:
         kwargs["safety_settings"] = list(b._safety_settings)
+    if b._raw:
+        kwargs["raw"] = True
     return kwargs
 
 
@@ -149,4 +153,4 @@ async def text_submit_batch(b: "Text", *prompts: str) -> BatchHandle:
         requests,
         **_option_kwargs(b),
     )
-    return BatchHandle(id=legacy.id, provider=legacy.provider)
+    return BatchHandle(id=legacy.id, provider=legacy.provider, raw=b._raw)
