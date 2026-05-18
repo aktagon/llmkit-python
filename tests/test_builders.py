@@ -719,3 +719,43 @@ def test_text_batch_method_exists_and_is_async() -> None:
     method = c.text.batch
     assert callable(method)
     assert inspect.iscoroutinefunction(method)
+
+
+# === ADR-014 — Raw response escape hatch ===
+
+_ANTHROPIC_RAW_RESP = {
+    "id": "msg_01",
+    "content": [{"type": "text", "text": "ok"}],
+    "usage": {"input_tokens": 1, "output_tokens": 1},
+    # Provider-specific field that the universal Response does not carry.
+    "stop_reason": "end_turn",
+}
+
+
+def test_text_raw_populates_response_raw() -> None:
+    with _MockServer(_ANTHROPIC_RAW_RESP) as server:
+        c = anthropic("k")
+        c.provider.base_url = server.url
+        resp = asyncio.run(c.text.raw().prompt("hello"))
+        assert resp.raw is not None
+        assert resp.raw["stop_reason"] == "end_turn"
+
+
+def test_text_raw_absent_leaves_response_raw_none() -> None:
+    with _MockServer(_ANTHROPIC_RAW_RESP) as server:
+        c = anthropic("k")
+        c.provider.base_url = server.url
+        resp = asyncio.run(c.text.prompt("hello"))
+        assert resp.raw is None
+
+
+def test_image_and_agent_raw_chain_callable() -> None:
+    # Chain-method coverage. Image.generate and Agent.prompt route
+    # through the same b._raw -> options.raw -> result.raw plumbing
+    # exercised end-to-end in the Text.raw test; here we just confirm
+    # the chain hooks are wired and flip the private field.
+    c = google("k")
+    img = c.image.model("gemini-2.5-flash-image-preview").raw()
+    assert img._raw is True
+    ag = c.agent.system("x").raw()
+    assert ag._raw is True

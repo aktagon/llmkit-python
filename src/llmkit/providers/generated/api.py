@@ -142,6 +142,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_raw",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_reasoning_effort",
         sub_options=(
         ),
