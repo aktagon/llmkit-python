@@ -65,6 +65,8 @@ async def image_generate(b: "Image", msg: str) -> ImageResponse:
         kwargs["middleware"] = list(b._middleware)
     if b._extra_fields:
         kwargs["extra_fields"] = dict(b._extra_fields)
+    if b._raw:
+        kwargs["raw"] = True
 
     return await asyncio.to_thread(
         run_image_generation, provider, request, **kwargs

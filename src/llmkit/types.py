@@ -106,6 +106,12 @@ class Response:
     # Google when present; OpenAI / Anthropic / xAI do not carry an
     # equivalent field, so this stays empty for them.
     finish_message: str = ""
+    # Parsed provider response body, populated only when the caller opted
+    # in via the builder's .raw() chain method (ADR-014). Type-erased —
+    # provider-specific fields (Anthropic citations, OpenAI logprobs,
+    # ...) live here; consumers cast/index into the dict once they know
+    # which provider they're talking to.
+    raw: Any | None = None
 
 
 @dataclass
@@ -126,3 +132,6 @@ class Options:
     middleware: list[MiddlewareFn] = field(default_factory=list)
     request_timeout: float = 600.0
     safety_settings: list["SafetySetting"] = field(default_factory=list)
+    # Opt-in: populate Response.raw with the parsed provider response body
+    # (ADR-014). Plumbed by the typed-builder's .raw() chain method.
+    raw: bool = False
