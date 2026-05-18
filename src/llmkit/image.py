@@ -94,6 +94,9 @@ class ImageResponse:
     # Free-text provider explanation. Gemini populates this for non-success
     # finish_reason values. Use as user-facing message when len(images) == 0.
     finish_message: str = ""
+    # Parsed provider response body, populated only when the caller opted
+    # in via the typed builder's .raw() chain method (ADR-014).
+    raw: Any | None = None
 
 
 def generate_image(
@@ -113,6 +116,7 @@ def generate_image(
     extra_fields: dict[str, Any] | None = None,
     middleware: list[MiddlewareFn] | None = None,
     request_timeout: float = 600.0,
+    raw: bool = False,
 ) -> ImageResponse:
     """Produce one or more images from a text prompt, optionally conditioned
     on reference images for editing/composition.
@@ -305,6 +309,11 @@ def generate_image(
             raise
 
         result = _parse_image_response(provider.name, resp_body, cfg)
+        if raw:
+            try:
+                result.raw = json.loads(resp_body)
+            except Exception:
+                result.raw = None
     except Exception as exc:
         post_event = dataclasses.replace(
             base_event,
