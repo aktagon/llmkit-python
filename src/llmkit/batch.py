@@ -44,6 +44,7 @@ def prompt_batch(
     safety_settings: list | None = None,
     request_timeout: float = 600.0,
     poll_interval: float = 2.0,
+    raw: bool = False,
 ) -> list[Response]:
     """Submit a batch and block until all results are ready."""
     handle = submit_batch(
@@ -65,7 +66,7 @@ def prompt_batch(
         safety_settings=safety_settings,
         request_timeout=request_timeout,
     )
-    return wait_batch(handle, request_timeout=request_timeout, poll_interval=poll_interval)
+    return wait_batch(handle, request_timeout=request_timeout, poll_interval=poll_interval, raw=raw)
 
 
 def submit_batch(
@@ -87,6 +88,7 @@ def submit_batch(
     middleware: list | None = None,
     safety_settings: list | None = None,
     request_timeout: float = 600.0,
+    raw: bool = False,  # noqa: ARG001 — consumed at wait time, accepted here so callers can pass identical kwargs to submit_batch and prompt_batch
 ) -> BatchHandle:
     """Submit a batch and return a handle for polling."""
     from .client import _build_request, _validate_provider  # avoid circular at import time
@@ -175,6 +177,7 @@ def wait_batch(
     *,
     request_timeout: float = 600.0,
     poll_interval: float = 2.0,
+    raw: bool = False,
 ) -> list[Response]:
     """Block until the batch finishes and return parsed results."""
     p = handle.provider
@@ -195,10 +198,10 @@ def wait_batch(
 
     while True:
         resp_body = do_get(poll_url, headers, timeout=request_timeout)
-        raw = json.loads(resp_body)
-        status = extract_path(raw, bc.lifecycle.polling_status_path)
+        status_raw = json.loads(resp_body)
+        status = extract_path(status_raw, bc.lifecycle.polling_status_path)
         if status == bc.lifecycle.polling_done_value:
-            return _fetch_batch_results(handle, base, bc, headers, request_timeout)
+            return _fetch_batch_results(handle, base, bc, headers, request_timeout, raw)
         time.sleep(poll_interval)
 
 
@@ -286,6 +289,7 @@ def _fetch_batch_results(
     bc: BatchDef,
     headers: dict[str, str],
     timeout: float,
+    raw: bool = False,
 ) -> list[Response]:
     from .client import _parse_response
 
@@ -311,10 +315,10 @@ def _fetch_batch_results(
             status_code=0,
         )
 
-    return _parse_batch_results(handle.provider.name, resp_body, bc)
+    return _parse_batch_results(handle.provider.name, resp_body, bc, raw)
 
 
-def _parse_batch_results(provider: str, data: bytes, bc: BatchDef) -> list[Response]:
+def _parse_batch_results(provider: str, data: bytes, bc: BatchDef, raw: bool = False) -> list[Response]:
     from .client import _parse_response
 
     out: list[Response] = []
@@ -323,6 +327,7 @@ def _parse_batch_results(provider: str, data: bytes, bc: BatchDef) -> list[Respo
         if not line:
             continue
         response_bytes = line.encode("utf-8")
+        inner_for_raw: Any = None
         if bc.result_body_path:
             try:
                 wrapper = json.loads(line)
@@ -331,11 +336,21 @@ def _parse_batch_results(provider: str, data: bytes, bc: BatchDef) -> list[Respo
             inner = _navigate_map_path(wrapper, bc.result_body_path)
             if inner is None:
                 continue
+            inner_for_raw = inner
             response_bytes = json.dumps(inner).encode("utf-8")
         try:
-            out.append(_parse_response(provider, response_bytes))
+            parsed = _parse_response(provider, response_bytes)
         except Exception:
             continue
+        if raw:
+            if inner_for_raw is not None:
+                parsed.raw = inner_for_raw
+            else:
+                try:
+                    parsed.raw = json.loads(line)
+                except Exception:
+                    parsed.raw = None
+        out.append(parsed)
     return out
 
 

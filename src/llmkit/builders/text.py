@@ -89,4 +89,6 @@ async def text_prompt(b: "Text", msg: str) -> Response:
         kwargs["middleware"] = list(b._middleware)
     if b._safety_settings:
         kwargs["safety_settings"] = list(b._safety_settings)
+    if b._raw:
+        kwargs["raw"] = True
     return await asyncio.to_thread(legacy_prompt, provider, request, **kwargs)

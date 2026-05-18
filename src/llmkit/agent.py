@@ -56,6 +56,7 @@ class Agent:
         middleware: list | None = None,
         safety_settings: list | None = None,
         request_timeout: float = 600.0,
+        raw: bool = False,
     ) -> None:
         self.provider = provider
         self.opts = Options(
@@ -74,6 +75,7 @@ class Agent:
             middleware=list(middleware or []),
             safety_settings=list(safety_settings or []),
             request_timeout=request_timeout,
+            raw=raw,
         )
         self.tools: list[Tool] = []
         self.history: list[_InternalMessage] = []
@@ -182,6 +184,7 @@ class Agent:
                     tokens=total_usage,
                     finish_reason=finish_reason,
                     finish_message=finish_message,
+                    raw=raw if self.opts.raw else None,
                 )
 
             self.history.append(_InternalMessage(role="assistant", tool_calls=list(calls)))
