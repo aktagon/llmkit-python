@@ -64,6 +64,16 @@ class ImageResponse:
 
 
 @dataclass
+class Message:
+    """"""
+    #
+    role: str = ""
+
+    #
+    content: str = ""
+
+
+@dataclass
 class Response:
     """"""
     #
