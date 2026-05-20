@@ -8,7 +8,6 @@ from typing import Any, TYPE_CHECKING
 from .providers.generated.middleware import Usage
 
 if TYPE_CHECKING:
-    from .image import ImageData
     from .types import Provider
 
 
@@ -39,6 +38,16 @@ class File:
 
     #
     name: str = ""
+
+
+@dataclass
+class ImageData:
+    """"""
+    #
+    mime_type: str = ""
+
+    #
+    bytes: bytes = b''
 
 
 @dataclass
