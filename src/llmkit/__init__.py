@@ -58,10 +58,10 @@ from .errors import APIError, MiddlewareVetoError, ValidationError
 from .image import (
     ImageData,
     ImageRequest,
-    ImageResponse,
     MediaRef,
     Part,
 )
+from .structs import ImageResponse
 from .providers.generated.middleware import (
     Event,
     MiddlewareFn,

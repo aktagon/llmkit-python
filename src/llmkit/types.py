@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from .providers.generated.middleware import MiddlewareFn, Usage
+from .providers.generated.middleware import MiddlewareFn
 
 
 @dataclass
@@ -90,28 +90,10 @@ class Request:
     images: list[InputImage] = field(default_factory=list)
 
 
-@dataclass
-class Response:
-    text: str = ""
-    tokens: Usage = field(default_factory=Usage)
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    finish_reason: str = ""
-    #
-    #
-    #
-    finish_message: str = ""
-    #
-    #
-    #
-    #
-    #
-    raw: Any | None = None
+#
+#
+#
+from .structs import Response  # noqa: E402,F401
 
 
 @dataclass

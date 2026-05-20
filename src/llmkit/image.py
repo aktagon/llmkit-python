@@ -80,23 +80,15 @@ class ImageRequest:
     parts: list[Part] = field(default_factory=list)
 
 
-@dataclass
-class ImageResponse:
-    images: list[ImageData] = field(default_factory=list)
-    text: str = ""
-    tokens: Usage = field(default_factory=Usage)
-    #
-    #
-    #
-    #
-    #
-    finish_reason: str = ""
-    #
-    #
-    finish_message: str = ""
-    #
-    #
-    raw: Any | None = None
+#
+#
+#
+#
+#
+#
+#
+#
+#
 
 
 def generate_image(
@@ -325,7 +317,7 @@ def generate_image(
 
     post_event = dataclasses.replace(
         base_event,
-        usage=result.tokens,
+        usage=result.usage,
         duration=time.monotonic() - start,
     )
     fire_post(mws, post_event)
@@ -600,6 +592,7 @@ def _parse_vertex_image_response(raw: dict[str, Any]) -> ImageResponse:
 
 
 """
+    from .structs import ImageResponse  # deferred to break import cycle
     preds = raw.get("predictions") if isinstance(raw, dict) else None
     images: list[ImageData] = []
     finish_reason = ""
@@ -626,7 +619,7 @@ def _parse_vertex_image_response(raw: dict[str, Any]) -> ImageResponse:
     return ImageResponse(
         images=images,
         text="",
-        tokens=Usage(),
+        usage=Usage(),
         finish_reason=finish_reason,
     )
 
@@ -654,6 +647,7 @@ def _image_auth_headers(p: Provider, cfg: Any, pname: ProviderName) -> dict[str,
 
 
 def _parse_image_response(provider_name: str, body: bytes, cfg: Any) -> ImageResponse:
+    from .structs import ImageResponse  # deferred to break import cycle
     try:
         raw = json.loads(body)
     except ValueError as exc:
@@ -681,7 +675,7 @@ def _parse_image_response(provider_name: str, body: bytes, cfg: Any) -> ImageRes
     return ImageResponse(
         images=images,
         text=text,
-        tokens=tokens,
+        usage=tokens,
         finish_reason=finish_reason,
         finish_message=finish_message,
     )
@@ -699,6 +693,7 @@ def _parse_image_response_data_array(
 
 
 """
+    from .structs import ImageResponse  # deferred to break import cycle
     data = raw.get("data") if isinstance(raw, dict) else None
     images: list[ImageData] = []
     revised: list[str] = []
@@ -726,7 +721,7 @@ def _parse_image_response_data_array(
     else:
         in_tokens = out_tokens = 0
     tokens = Usage(input=in_tokens, output=out_tokens)
-    return ImageResponse(images=images, text="\n".join(revised), tokens=tokens)
+    return ImageResponse(images=images, text="\n".join(revised), usage=tokens)
 
 
 def _extract_google_image_parts(

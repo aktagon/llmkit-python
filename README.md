@@ -26,18 +26,20 @@ from llmkit.builders import anthropic
 async def main():
     c = anthropic(os.environ["ANTHROPIC_API_KEY"])
     resp = await (
-        c.text()
+        c.text
         .system("Be concise.")
         .temperature(0.3)
         .prompt("Say hi")
     )
     print(resp.text)
-    print(resp.usage.input, "input tokens")
+    print(resp.tokens.input, "input tokens")
 
 asyncio.run(main())
 ```
 
-The typed builder is the only public surface as of v1.0.0. One mental model — `client.<capability>().<chain>.<terminal>` — across every capability.
+The typed builder is the only public surface as of v1.0.0. One mental model — `client.<capability>.<chain>.<terminal>` — across every capability.
+
+Runnable counterparts to every code block below live in [`examples/`](./examples/) and are exercised by `tests/test_examples.py` against a mock HTTP server, so the call shapes shown here are guaranteed to execute against the real builder surface.
 
 ## Providers
 
@@ -58,19 +60,19 @@ Or use the generic `new_client(name, api_key)`. 27 providers, 4 API shapes (Open
 
 ```python
 resp = await (
-    c.text()
+    c.text
     .system("You are helpful")
     .temperature(0.7)
     .max_tokens(200)
     .prompt("What is 2+2?")
 )
 
-print(resp.text)              # "4"
-print(resp.usage.input)       # prompt tokens
-print(resp.usage.output)      # completion tokens
-print(resp.usage.cache_read)  # tokens served from cache
-print(resp.usage.cache_write) # tokens written to cache (Anthropic explicit)
-print(resp.usage.reasoning)   # internal reasoning tokens (OpenAI o-series, Gemini 2.5+)
+print(resp.text)               # "4"
+print(resp.tokens.input)       # prompt tokens
+print(resp.tokens.output)      # completion tokens
+print(resp.tokens.cache_read)  # tokens served from cache
+print(resp.tokens.cache_write) # tokens written to cache (Anthropic explicit)
+print(resp.tokens.reasoning)   # internal reasoning tokens (OpenAI o-series, Gemini 2.5+)
 ```
 
 Capability-scoped fields (`cache_read`, `cache_write`, `reasoning`) are zero when the provider doesn't report them separately.
@@ -78,13 +80,13 @@ Capability-scoped fields (`cache_read`, `cache_write`, `reasoning`) are zero whe
 ### Stream — async iteration with trailing handle
 
 ```python
-stream = c.text().system("Be brief").stream("Tell me a joke")
+stream = c.text.system("Be brief").stream("Tell me a joke")
 async for chunk in stream:
     print(chunk, end="", flush=True)
-print("\nUsage:", stream.response().usage)
+print("\nUsage:", stream.response.tokens)
 ```
 
-`TextStream` implements `__aiter__`. After iteration completes, `stream.response()` returns the final `Response` (with token counts) and `stream.error()` returns any terminal error. Handles both Anthropic-style typed events and OpenAI-style data-only frames internally.
+`TextStream` implements `__aiter__`. After iteration completes, the `stream.response` property carries the final `Response` (with token counts) and `stream.error` carries any terminal error. Handles both Anthropic-style typed events and OpenAI-style data-only frames internally.
 
 ### Agent — tool loop
 
@@ -105,7 +107,7 @@ add_tool = Tool(
 )
 
 bot = (
-    c.agent()
+    c.agent
     .system("You are a calculator.")
     .tool(add_tool)
     .max_tool_iterations(5)
@@ -127,7 +129,7 @@ from llmkit.builders import google
 
 c = google(os.environ["GOOGLE_API_KEY"])
 img = await (
-    c.image()
+    c.image
     .model("gemini-3.1-flash-image-preview")
     .aspect_ratio("16:9")
     .image_size("2K")
@@ -142,7 +144,7 @@ For compositional editing, chain `.text(...)` and `.image(mime, bytes)` to inter
 
 ```python
 await (
-    c.image()
+    c.image
     .model("gemini-3.1-flash-image-preview")
     .text("Person:")
     .image("image/png", person_bytes)
@@ -173,7 +175,7 @@ from llmkit.builders import openai
 
 c = openai(os.environ["OPENAI_API_KEY"])
 resp = await (
-    c.image()
+    c.image
     .model("gpt-image-2")
     .image_size("1024x1024")
     .quality("high")
@@ -203,7 +205,7 @@ base_url = (
 c = vertex(os.environ["VERTEX_BEARER_TOKEN"]).with_base_url(base_url)
 
 resp = await (
-    c.image()
+    c.image
     .model("imagen-3.0-generate-002")
     .aspect_ratio("16:9")
     .count(2)
@@ -233,7 +235,7 @@ from llmkit.types import (
 # Gemini text or agent
 c = google(os.environ["GOOGLE_API_KEY"])
 resp = await (
-    c.text()
+    c.text
     .safety_settings([
         SafetySetting(category=HARM_CATEGORY_DANGEROUS_CONTENT, threshold=HARM_BLOCK_THRESHOLD_NONE),
         SafetySetting(category=HARM_CATEGORY_HARASSMENT, threshold=HARM_BLOCK_THRESHOLD_HIGH_ONLY),
@@ -244,7 +246,7 @@ resp = await (
 # Vertex Imagen
 vc = vertex(os.environ["VERTEX_BEARER_TOKEN"])
 img = await (
-    vc.image()
+    vc.image
     .model("imagen-3.0-generate-002")
     .safety_filter(IMAGE_SAFETY_FILTER_BLOCK_FEW)
     .generate("A landscape")
@@ -263,11 +265,11 @@ from llmkit.builders import openai
 c = openai(os.environ["OPENAI_API_KEY"])
 
 # from a path
-file = await c.upload().path("./data.pdf").run()
+file = await c.upload.path("./data.pdf").run()
 
 # from bytes (filename required)
 file2 = await (
-    c.upload()
+    c.upload
     .bytes(buf)
     .filename("report.pdf")
     .mime_type("application/pdf")
@@ -279,7 +281,7 @@ file2 = await (
 
 ```python
 results = await (
-    c.text()
+    c.text
     .system("Be brief")
     .batch(["Translate hello to French", "Translate hello to Spanish"])
 )
@@ -293,15 +295,15 @@ for r in results:
 
 ```python
 # Anthropic — explicit cache_control wrap of the system prompt:
-await c.text().system(long_sys_prompt).caching().prompt("...")
+await c.text.system(long_sys_prompt).caching().prompt("...")
 
 # OpenAI — automatic server-side caching (caching() is a hint; reads
-# surface in resp.usage.cache_read regardless):
-await c.text().system(long_sys_prompt).caching().prompt("...")
+# surface in resp.tokens.cache_read regardless):
+await c.text.system(long_sys_prompt).caching().prompt("...")
 
 # Google — pre-flight POST creates a cachedContents resource, then the
 # main call references it. Google requires ~1k+ tokens of system prompt:
-await c.text().system(big_sys_prompt).caching().prompt("...")
+await c.text.system(big_sys_prompt).caching().prompt("...")
 ```
 
 The mode is provider-specific and inferred from the provider config. The default TTL comes from `src/llmkit/providers/generated/caching.py` (Google: 3600s).
@@ -317,11 +319,12 @@ Across every `*Text` / `*Agent` builder:
 | Sampling          | `.temperature(t)`      |
 | Token cap         | `.max_tokens(n)`       |
 | Caching           | `.caching()`           |
-| Conversation hist | `.history(msgs)`       |
 | Structured output | `.schema(json)`        |
 | Middleware hooks  | `.middleware(fns)`     |
 | Reasoning effort  | `.reasoning_effort(l)` |
 | Thinking budget   | `.thinking_budget(n)`  |
+
+`*Text` additionally exposes `.history(*msgs)` for stateless multi-turn replay. `*Agent` is stateful instead — history accumulates across `.prompt(...)` calls on the same builder instance and resets when a chain method clones the builder or `.reset()` is called. Cross-process resume of an `*Agent` is not supported via a builder method today.
 
 Sampling hyperparameters (`.top_p`, `.top_k`, `.seed`, `.frequency_penalty`, `.presence_penalty`, `.stop_sequences`) are validated per provider; unsupported options raise `ValidationError` rather than silently dropping.
 
@@ -337,7 +340,7 @@ def log_usage(e):
         print(f"{e.provider}/{e.model}: {e.usage.input} in, {e.usage.output} out")
     return None
 
-await c.text().middleware([log_usage]).prompt("...")
+await c.text.middleware([log_usage]).prompt("...")
 ```
 
 Pre-phase middleware can veto by returning a non-None error message; post-phase runs for observation only. Wired at six sites: text prompt, text stream, agent LLM call, agent tool execution, upload, batch submit, Google resource caching pre-flight.
