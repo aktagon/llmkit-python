@@ -28,7 +28,7 @@ def test_integration_image_google_gemini_3_pro_image_preview() -> None:
     )
     assert len(resp.images) > 0
     assert len(resp.images[0].data) > 0
-    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+    assert resp.usage.output > 0, "image-output tokens should land in candidatesTokenCount"
 
 
 def test_integration_image_google_gemini_3_1_flash_image_preview() -> None:
@@ -45,7 +45,7 @@ def test_integration_image_google_gemini_3_1_flash_image_preview() -> None:
     )
     assert len(resp.images) > 0
     assert len(resp.images[0].data) > 0
-    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+    assert resp.usage.output > 0, "image-output tokens should land in candidatesTokenCount"
 
 
 def test_integration_image_grok_grok_imagine_image_quality() -> None:
@@ -77,7 +77,7 @@ def test_integration_image_openai_gpt_image_1() -> None:
     )
     assert len(resp.images) > 0
     assert len(resp.images[0].data) > 0
-    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+    assert resp.usage.output > 0, "image-output tokens should land in candidatesTokenCount"
 
 
 def test_integration_image_openai_gpt_image_1_mini() -> None:
@@ -94,7 +94,7 @@ def test_integration_image_openai_gpt_image_1_mini() -> None:
     )
     assert len(resp.images) > 0
     assert len(resp.images[0].data) > 0
-    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+    assert resp.usage.output > 0, "image-output tokens should land in candidatesTokenCount"
 
 
 def test_integration_image_openai_gpt_image_1_5() -> None:
@@ -111,7 +111,7 @@ def test_integration_image_openai_gpt_image_1_5() -> None:
     )
     assert len(resp.images) > 0
     assert len(resp.images[0].data) > 0
-    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+    assert resp.usage.output > 0, "image-output tokens should land in candidatesTokenCount"
 
 
 def test_integration_image_openai_gpt_image_2() -> None:
@@ -126,7 +126,7 @@ def test_integration_image_openai_gpt_image_2() -> None:
     )
     assert len(resp.images) > 0
     assert len(resp.images[0].data) > 0
-    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+    assert resp.usage.output > 0, "image-output tokens should land in candidatesTokenCount"
 
 
 def test_integration_image_vertex_imagen_3_0_fast_generate_001() -> None:
@@ -142,7 +142,7 @@ def test_integration_image_vertex_imagen_3_0_fast_generate_001() -> None:
     )
     assert len(resp.images) > 0
     assert len(resp.images[0].data) > 0
-    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+    assert resp.usage.output > 0, "image-output tokens should land in candidatesTokenCount"
 
 
 def test_integration_image_vertex_imagen_3_0_generate_002() -> None:
@@ -158,7 +158,7 @@ def test_integration_image_vertex_imagen_3_0_generate_002() -> None:
     )
     assert len(resp.images) > 0
     assert len(resp.images[0].data) > 0
-    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+    assert resp.usage.output > 0, "image-output tokens should land in candidatesTokenCount"
 
 
 def test_integration_image_vertex_imagen_4_0_generate_preview_06_06() -> None:
@@ -174,5 +174,5 @@ def test_integration_image_vertex_imagen_4_0_generate_preview_06_06() -> None:
     )
     assert len(resp.images) > 0
     assert len(resp.images[0].data) > 0
-    assert resp.tokens.output > 0, "image-output tokens should land in candidatesTokenCount"
+    assert resp.usage.output > 0, "image-output tokens should land in candidatesTokenCount"
 

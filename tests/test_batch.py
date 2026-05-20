@@ -192,9 +192,9 @@ def test_wait_batch_polls_then_fetches_results_and_parses_via_result_body_path()
     assert responses[0].text == "four"
     assert responses[1].text == "six"
     # Usage extracted from the unwrapped message body, not the wrapper.
-    assert responses[0].tokens.input == 5
-    assert responses[0].tokens.output == 7
-    assert responses[1].tokens.input == 8
+    assert responses[0].usage.input == 5
+    assert responses[0].usage.output == 7
+    assert responses[1].usage.input == 8
 
 
 def test_prompt_batch_end_to_end_submit_then_wait() -> None:

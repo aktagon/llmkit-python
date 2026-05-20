@@ -170,9 +170,9 @@ def test_reasoning_tokens_extracted_for_openai() -> None:
         },
     })
     resp = _parse_response("openai", body.encode())
-    assert resp.tokens.input == 40
-    assert resp.tokens.output == 25
-    assert resp.tokens.reasoning == 17
+    assert resp.usage.input == 40
+    assert resp.usage.output == 25
+    assert resp.usage.reasoning == 17
 
 
 def test_reasoning_tokens_zero_for_unreported_provider() -> None:
@@ -184,7 +184,7 @@ def test_reasoning_tokens_zero_for_unreported_provider() -> None:
         "usage": {"input_tokens": 5, "output_tokens": 3},
     })
     resp = _parse_response("anthropic", body.encode())
-    assert resp.tokens.reasoning == 0
+    assert resp.usage.reasoning == 0
 
 
 def test_google_safety_settings_written_as_top_level_field() -> None:
