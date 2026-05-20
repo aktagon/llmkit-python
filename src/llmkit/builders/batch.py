@@ -14,40 +14,33 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ..batch import (
-    BatchHandle as LegacyBatchHandle,
     prompt_batch as legacy_prompt_batch,
     submit_batch as legacy_submit_batch,
     wait_batch as legacy_wait_batch,
 )
 from ..providers.generated.providers import ProviderName
+from ..structs import BatchHandle as _BatchHandleData
 from ..types import Provider, Request, Response
 
 if TYPE_CHECKING:
     from . import Text
 
 
-@dataclass
-class BatchHandle:
+class BatchHandle(_BatchHandleData):
     """
 
 
 """
 
-    id: str
-    provider: Provider
-    raw: bool = False
-
     async def wait(
         self, *, poll_interval: float = 2.0, request_timeout: float = 600.0
     ) -> list[Response]:
-        legacy_handle = LegacyBatchHandle(id=self.id, provider=self.provider)
         return await asyncio.to_thread(
             legacy_wait_batch,
-            legacy_handle,
+            self,
             poll_interval=poll_interval,
             request_timeout=request_timeout,
             raw=self.raw,

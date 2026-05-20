@@ -16,9 +16,10 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ..image import ImageData, ImageResponse, MediaRef, Part
+from ..image import ImageData, MediaRef, Part
 from ..providers.generated.middleware import MiddlewareFn
-from ..types import File, Message, Response, SafetySetting, Tool
+from ..structs import ImageResponse, Response
+from ..types import File, Message, SafetySetting, Tool
 from .batch import BatchHandle
 
 if TYPE_CHECKING:

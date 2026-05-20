@@ -141,7 +141,7 @@ def prompt(
         op=MiddlewareOp.LLM_REQUEST,
         provider=provider.name,
         model=resolve_model(provider.model, cfg),
-        usage=resp.tokens,
+        usage=resp.usage,
         duration=time.monotonic() - start,
     )
     fire_post(opts.middleware, post_event)
@@ -251,7 +251,7 @@ def prompt_stream(
         duration=time.monotonic() - start,
     )
     fire_post(opts.middleware, post_event)
-    return Response(text="".join(chunks), tokens=usage, finish_reason=finish_reason)
+    return Response(text="".join(chunks), usage=usage, finish_reason=finish_reason)
 
 
 def upload_file(
@@ -634,7 +634,7 @@ def _parse_response(provider: str, body: bytes) -> Response:
     )
     return Response(
         text=text,
-        tokens=tokens,
+        usage=tokens,
         finish_reason=finish_reason,
         finish_message=finish_message,
     )
