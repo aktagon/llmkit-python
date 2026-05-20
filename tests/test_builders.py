@@ -587,7 +587,7 @@ def test_type_aliases_constructible() -> None:
     tool = Tool(name="t", description="d", schema={}, run=lambda _i: "")
     resp = Response()
     img_resp = ImageResponse()
-    img_data = ImageData(mime_type="image/png", data=b"")
+    img_data = ImageData(mime_type="image/png", bytes=b"")
     f = File(id="id")
     part = Part(text="hello")
     from llmkit import Provider as ProviderType
