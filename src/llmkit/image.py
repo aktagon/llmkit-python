@@ -31,14 +31,7 @@ from .providers.generated.request import AuthScheme, auth_scheme
 from .types import Provider
 
 
-@dataclass
-class MediaRef:
-    """
-
-"""
-
-    mime_type: str = ""
-    bytes: bytes = b""
+from .structs import MediaRef  # noqa: E402,F401
 
 
 @dataclass
