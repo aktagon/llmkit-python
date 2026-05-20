@@ -181,7 +181,7 @@ class Agent:
                 finish_message = extract_path(raw, cfg.finish_message_path) if cfg.finish_message_path else ""
                 return Response(
                     text=text,
-                    tokens=total_usage,
+                    usage=total_usage,
                     finish_reason=finish_reason,
                     finish_message=finish_message,
                     raw=raw if self.opts.raw else None,

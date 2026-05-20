@@ -19,7 +19,7 @@ def test_integration_ai21() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_ai21_stream() -> None:
@@ -48,7 +48,7 @@ def test_integration_anthropic() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_anthropic_stream() -> None:
@@ -77,7 +77,7 @@ def test_integration_cerebras() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_cerebras_stream() -> None:
@@ -106,7 +106,7 @@ def test_integration_cohere() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_cohere_stream() -> None:
@@ -135,7 +135,7 @@ def test_integration_deepseek() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_deepseek_stream() -> None:
@@ -164,7 +164,7 @@ def test_integration_doubao() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_doubao_stream() -> None:
@@ -193,7 +193,7 @@ def test_integration_ernie() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_ernie_stream() -> None:
@@ -222,7 +222,7 @@ def test_integration_fireworks() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_fireworks_stream() -> None:
@@ -251,7 +251,7 @@ def test_integration_google() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_google_stream() -> None:
@@ -280,7 +280,7 @@ def test_integration_grok() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_grok_stream() -> None:
@@ -309,7 +309,7 @@ def test_integration_groq() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_groq_stream() -> None:
@@ -338,7 +338,7 @@ def test_integration_minimax() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_minimax_stream() -> None:
@@ -367,7 +367,7 @@ def test_integration_mistral() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_mistral_stream() -> None:
@@ -396,7 +396,7 @@ def test_integration_moonshot() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_moonshot_stream() -> None:
@@ -425,7 +425,7 @@ def test_integration_openai() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_openai_stream() -> None:
@@ -454,7 +454,7 @@ def test_integration_openrouter() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_openrouter_stream() -> None:
@@ -483,7 +483,7 @@ def test_integration_perplexity() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_perplexity_stream() -> None:
@@ -512,7 +512,7 @@ def test_integration_qwen() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_qwen_stream() -> None:
@@ -541,7 +541,7 @@ def test_integration_sambanova() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_sambanova_stream() -> None:
@@ -570,7 +570,7 @@ def test_integration_together() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_together_stream() -> None:
@@ -599,7 +599,7 @@ def test_integration_vertex() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_yi() -> None:
@@ -611,7 +611,7 @@ def test_integration_yi() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_yi_stream() -> None:
@@ -640,7 +640,7 @@ def test_integration_zhipu() -> None:
         c.text.system("Reply with only the word pong").prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    assert resp.tokens.input > 0, "no input tokens reported"
+    assert resp.usage.input > 0, "no input tokens reported"
 
 
 def test_integration_zhipu_stream() -> None:
@@ -669,7 +669,7 @@ def test_integration_anthropic_caching() -> None:
         c.text.system("Reply with only the word pong").caching().prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    print(f"cache_read={resp.tokens.cache_read} cache_write={resp.tokens.cache_write}")
+    print(f"cache_read={resp.usage.cache_read} cache_write={resp.usage.cache_write}")
 
 
 def test_integration_openai_caching() -> None:
@@ -681,5 +681,5 @@ def test_integration_openai_caching() -> None:
         c.text.system("Reply with only the word pong").caching().prompt("ping")
     )
     assert resp.text != "", "empty response text"
-    print(f"cache_read={resp.tokens.cache_read} cache_write={resp.tokens.cache_write}")
+    print(f"cache_read={resp.usage.cache_read} cache_write={resp.usage.cache_write}")
 
