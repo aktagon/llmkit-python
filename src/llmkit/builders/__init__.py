@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING
 
 from ..image import ImageData, MediaRef, Part
 from ..providers.generated.middleware import MiddlewareFn
-from ..structs import File, ImageResponse, Response
-from ..types import Message, SafetySetting, Tool
+from ..structs import File, ImageResponse, Message, Response
+from ..types import SafetySetting, Tool
 from .batch import BatchHandle
 
 if TYPE_CHECKING:
