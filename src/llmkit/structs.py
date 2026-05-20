@@ -26,6 +26,22 @@ class BatchHandle:
 
 
 @dataclass
+class File:
+    """File is a reference to an uploaded file. Returned by UploadFile and attached to subsequent text-generation requests via Request.Files."""
+    # id is the provider-assigned file identifier returned by the upload endpoint. Empty when the provider returns only a URI.
+    id: str = ""
+
+    # uri is the provider-hosted URI of the uploaded file. Used in subsequent prompts to refer back to the file without re-uploading.
+    uri: str = ""
+
+    # mime_type is the IANA media type of the uploaded file as recorded by the provider (e.g., application/pdf, image/png). Carried so downstream prompts can route the file to the correct vision / document / audio path.
+    mime_type: str = ""
+
+    # name is the original filename supplied at upload time. Round-tripped through the provider so the caller can correlate the handle with the source artifact.
+    name: str = ""
+
+
+@dataclass
 class ImageResponse:
     """ImageResponse is the universal image-generation response container returned by Image.Generate. Carries the decoded images, optional text captions/refusals, usage, and the same finish-reason / finish-message / raw fields the text-gen Response carries."""
     # images are the decoded image payloads (mime type + raw bytes) returned by the provider. Empty when the provider blocks or refuses the request — inspect FinishReason / FinishMessage for the cause.
