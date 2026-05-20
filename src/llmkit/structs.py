@@ -8,7 +8,6 @@ from typing import Any, TYPE_CHECKING
 from .providers.generated.middleware import Usage
 
 if TYPE_CHECKING:
-    from .image import ImageData
     from .types import Provider
 
 
@@ -39,6 +38,16 @@ class File:
 
     # name is the original filename supplied at upload time. Round-tripped through the provider so the caller can correlate the handle with the source artifact.
     name: str = ""
+
+
+@dataclass
+class ImageData:
+    """ImageData is one decoded image payload returned in an ImageResponse. Same shape as MediaRef (mime type + raw bytes) but a distinct type so capability-specific return semantics stay typed: ImageResponse.images carries decoded outputs; MediaRef appears in input payloads and edit masks."""
+    # mime_type is the IANA media type of the returned image (image/png, image/jpeg, image/webp). Drives the file extension or data URI scheme the caller picks for storage.
+    mime_type: str = ""
+
+    # bytes is the raw (not base64-encoded) decoded image payload. The SDK decodes provider wire format (base64, URL fetch) before returning so callers always see raw bytes.
+    bytes: bytes = b''
 
 
 @dataclass

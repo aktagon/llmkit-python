@@ -18,8 +18,8 @@ async def main() -> None:
         .generate("A nano banana dish, studio lighting")
     )
     with open("out.png", "wb") as f:
-        f.write(img.images[0].data)
-    print(f"wrote out.png ({len(img.images[0].data)} bytes)")
+        f.write(img.images[0].bytes)
+    print(f"wrote out.png ({len(img.images[0].bytes)} bytes)")
 
 
 if __name__ == "__main__":
