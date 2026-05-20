@@ -17,6 +17,23 @@ class Provider:
     base_url: str = ""
 
 
+class Capability(str):
+    """Capability identifier mirroring llm:Capability instances.
+
+    Ontology-derived per ADR-019. ModelInfo.capabilities is ``list[Capability]``;
+    subclasses ``str`` so existing string-comparison sites keep working.
+    """
+
+    CHAT_COMPLETION = "chat_completion"
+    IMAGE_GENERATION = "image_generation"
+    TOOL_CALLING = "tool_calling"
+    FILE_UPLOAD = "file_upload"
+    BATCHING = "batching"
+    CACHING = "caching"
+    REASONING = "reasoning"
+    CATALOGUE = "catalogue"
+
+
 @dataclass
 class InputImage:
     """Image attached to a text-generation request (vision input).

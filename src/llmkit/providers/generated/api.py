@@ -137,6 +137,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_provider",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_quality",
         sub_options=(
         ),
@@ -208,6 +213,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
     ),
     APIOptionDef(
         py_func="with_top_p",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_with_capability",
         sub_options=(
         ),
     ),
