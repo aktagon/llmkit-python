@@ -451,6 +451,58 @@ _SUPPORTED_OPTIONS: dict[ProviderName, tuple[SupportedOptionDef, ...]] = {
             json_key="top_p",
         ),
     ),
+    ProviderName.JAN: (
+        SupportedOptionDef(
+            key=OptionKey.MAX_TOKENS,
+            json_key="max_tokens",
+        ),
+        SupportedOptionDef(
+            key=OptionKey.SEED,
+            json_key="seed",
+        ),
+        SupportedOptionDef(
+            key=OptionKey.STOP_SEQUENCES,
+            json_key="stop",
+        ),
+        SupportedOptionDef(
+            key=OptionKey.TEMPERATURE,
+            json_key="temperature",
+        ),
+        SupportedOptionDef(
+            key=OptionKey.TOP_K,
+            json_key="top_k",
+        ),
+        SupportedOptionDef(
+            key=OptionKey.TOP_P,
+            json_key="top_p",
+        ),
+    ),
+    ProviderName.LLAMACPP: (
+        SupportedOptionDef(
+            key=OptionKey.MAX_TOKENS,
+            json_key="max_tokens",
+        ),
+        SupportedOptionDef(
+            key=OptionKey.SEED,
+            json_key="seed",
+        ),
+        SupportedOptionDef(
+            key=OptionKey.STOP_SEQUENCES,
+            json_key="stop",
+        ),
+        SupportedOptionDef(
+            key=OptionKey.TEMPERATURE,
+            json_key="temperature",
+        ),
+        SupportedOptionDef(
+            key=OptionKey.TOP_K,
+            json_key="top_k",
+        ),
+        SupportedOptionDef(
+            key=OptionKey.TOP_P,
+            json_key="top_p",
+        ),
+    ),
     ProviderName.LMSTUDIO: (
         SupportedOptionDef(
             key=OptionKey.MAX_TOKENS,
@@ -836,6 +888,10 @@ _OPTION_OVERRIDES: dict[ProviderName, tuple[OptionOverrideDef, ...]] = {
     ProviderName.GROK: (
     ),
     ProviderName.GROQ: (
+    ),
+    ProviderName.JAN: (
+    ),
+    ProviderName.LLAMACPP: (
     ),
     ProviderName.LMSTUDIO: (
     ),
