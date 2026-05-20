@@ -26,6 +26,22 @@ class BatchHandle:
 
 
 @dataclass
+class File:
+    """"""
+    #
+    id: str = ""
+
+    #
+    uri: str = ""
+
+    #
+    mime_type: str = ""
+
+    #
+    name: str = ""
+
+
+@dataclass
 class ImageResponse:
     """"""
     #

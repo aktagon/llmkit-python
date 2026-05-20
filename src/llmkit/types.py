@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from .providers.generated.middleware import MiddlewareFn
+from .structs import File, Response
 
 
 @dataclass
@@ -20,14 +21,6 @@ class Provider:
 class Message:
     role: str
     content: str
-
-
-@dataclass
-class File:
-    id: str = ""
-    uri: str = ""
-    mime_type: str = ""
-    name: str = ""
 
 
 @dataclass
@@ -93,7 +86,6 @@ class Request:
 #
 #
 #
-from .structs import Response  # noqa: E402,F401
 
 
 @dataclass
