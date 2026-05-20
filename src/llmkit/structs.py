@@ -64,6 +64,16 @@ class ImageResponse:
 
 
 @dataclass
+class MediaRef:
+    """"""
+    #
+    mime_type: str = ""
+
+    #
+    bytes: bytes = b''
+
+
+@dataclass
 class Message:
     """"""
     #
