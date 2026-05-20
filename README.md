@@ -137,7 +137,7 @@ img = await (
 )
 
 with open("out.png", "wb") as f:
-    f.write(img.images[0].data)
+    f.write(img.images[0].bytes)
 ```
 
 For compositional editing, chain `.text(...)` and `.image(mime, bytes)` to interleave references with descriptions:
