@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING
 
 from ..image import (
     ImageRequest,
-    ImageResponse,
     Part,
     generate_image as run_image_generation,
 )
+from ..structs import ImageResponse
 from ..types import Provider
 
 if TYPE_CHECKING:
