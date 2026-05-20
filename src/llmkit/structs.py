@@ -64,6 +64,16 @@ class ImageResponse:
 
 
 @dataclass
+class Message:
+    """Message is a single turn in a multi-turn conversation. Role identifies the speaker; content carries the turn's text. Multimodal content (a Part list) is deferred to a later slice; today content is the raw string."""
+    # role is the speaker identifier. Conventionally "user" or "assistant"; provider transforms may map to other roles (Bedrock's "USER"/"ASSISTANT", Google's "user"/"model").
+    role: str = ""
+
+    # content is the turn's text. Multimodal content (a list of Parts) is deferred to a follow-up slice; today this is the concatenated text of the turn.
+    content: str = ""
+
+
+@dataclass
 class Response:
     """Response is the universal response container returned by text-generation terminals (Text.Prompt, Agent.Prompt). Five fields; all five are core (no per-capability augmentation)."""
     # text is the assistant's response text, extracted from the provider response body at the path declared by llm:hasResponseTextPath.
