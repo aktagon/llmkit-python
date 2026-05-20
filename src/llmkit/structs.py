@@ -64,6 +64,16 @@ class ImageResponse:
 
 
 @dataclass
+class MediaRef:
+    """MediaRef is an inline media payload (mime type + raw bytes). Reused by every Part variant that carries non-text content, and by image-generation knobs like Mask that pass through a single binary blob."""
+    # mime_type is the IANA media type of the bytes payload (image/png, image/jpeg, audio/wav, ...). Drives both the wire encoding (base64 mime prefix on data URIs) and provider routing on multimodal endpoints.
+    mime_type: str = ""
+
+    # bytes is the raw (not base64-encoded) media payload. The transform layer base64-encodes at wire time per provider; callers always pass raw bytes.
+    bytes: bytes = b''
+
+
+@dataclass
 class Message:
     """Message is a single turn in a multi-turn conversation. Role identifies the speaker; content carries the turn's text. Multimodal content (a Part list) is deferred to a later slice; today content is the raw string."""
     # role is the speaker identifier. Conventionally "user" or "assistant"; provider transforms may map to other roles (Bedrock's "USER"/"ASSISTANT", Google's "user"/"model").
