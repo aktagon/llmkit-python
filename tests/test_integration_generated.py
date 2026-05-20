@@ -329,6 +329,64 @@ def test_integration_groq_stream() -> None:
     assert "".join(chunks) != "", "empty stream output"
 
 
+def test_integration_jan() -> None:
+    key = os.getenv("JAN_API_KEY")
+    if not key:
+        pytest.skip("JAN_API_KEY not set")
+    c = new_client("jan", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
+    )
+    assert resp.text != "", "empty response text"
+    assert resp.usage.input > 0, "no input tokens reported"
+
+
+def test_integration_jan_stream() -> None:
+    key = os.getenv("JAN_API_KEY")
+    if not key:
+        pytest.skip("JAN_API_KEY not set")
+    c = new_client("jan", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
+    assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
+
+
+def test_integration_llamacpp() -> None:
+    key = os.getenv("LLAMACPP_API_KEY")
+    if not key:
+        pytest.skip("LLAMACPP_API_KEY not set")
+    c = new_client("llamacpp", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
+    )
+    assert resp.text != "", "empty response text"
+    assert resp.usage.input > 0, "no input tokens reported"
+
+
+def test_integration_llamacpp_stream() -> None:
+    key = os.getenv("LLAMACPP_API_KEY")
+    if not key:
+        pytest.skip("LLAMACPP_API_KEY not set")
+    c = new_client("llamacpp", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
+    assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
+
+
 def test_integration_minimax() -> None:
     key = os.getenv("MINIMAX_API_KEY")
     if not key:
