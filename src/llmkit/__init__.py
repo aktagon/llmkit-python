@@ -4,7 +4,7 @@ Quick start::
 
     import llmkit
     c = llmkit.anthropic(api_key)
-    resp = await c.text().system("...").temperature(0.7).prompt("hello")
+    resp = await c.text.system("...").temperature(0.7).prompt("hello")
 
 Or via the explicit subpackage::
 
@@ -58,10 +58,10 @@ from .errors import APIError, MiddlewareVetoError, ValidationError
 from .image import (
     ImageData,
     ImageRequest,
-    ImageResponse,
     MediaRef,
     Part,
 )
+from .structs import ImageResponse
 from .providers.generated.middleware import (
     Event,
     MiddlewareFn,
