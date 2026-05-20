@@ -17,6 +17,23 @@ class Provider:
     base_url: str = ""
 
 
+class Capability(str):
+    """
+
+
+
+"""
+
+    CHAT_COMPLETION = "chat_completion"
+    IMAGE_GENERATION = "image_generation"
+    TOOL_CALLING = "tool_calling"
+    FILE_UPLOAD = "file_upload"
+    BATCHING = "batching"
+    CACHING = "caching"
+    REASONING = "reasoning"
+    CATALOGUE = "catalogue"
+
+
 @dataclass
 class InputImage:
     """

@@ -8,7 +8,7 @@ from typing import Any, TYPE_CHECKING
 from .providers.generated.middleware import Usage
 
 if TYPE_CHECKING:
-    from .types import Provider
+    from .types import Capability, Provider
 
 
 @dataclass(kw_only=True)
@@ -73,6 +73,16 @@ class ImageResponse:
 
 
 @dataclass
+class LiveResult:
+    """"""
+    #
+    models: list[ModelInfo] = field(default_factory=list)
+
+    #
+    errors: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class MediaRef:
     """"""
     #
@@ -90,6 +100,37 @@ class Message:
 
     #
     content: str = ""
+
+
+@dataclass(kw_only=True)
+class ModelInfo:
+    """"""
+    #
+    id: str = ""
+
+    #
+    provider: Provider
+
+    #
+    capabilities: list[Capability] = field(default_factory=list)
+
+    #
+    display_name: str = ""
+
+    #
+    description: str = ""
+
+    #
+    context_window: int = 0
+
+    #
+    max_output: int = 0
+
+    #
+    created: int = 0
+
+    #
+    raw: Any | None = None
 
 
 @dataclass
