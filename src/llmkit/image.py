@@ -46,12 +46,7 @@ class Part:
     image: MediaRef | None = None
 
 
-@dataclass
-class ImageData:
-    """One decoded image returned by the provider."""
-
-    mime_type: str = ""
-    data: bytes = b""
+from .structs import ImageData  # noqa: E402,F401
 
 
 @dataclass
@@ -608,7 +603,7 @@ def _parse_vertex_image_response(raw: dict[str, Any]) -> ImageResponse:
                 decoded = base64.b64decode(b64)
             except (ValueError, TypeError):
                 continue
-            images.append(ImageData(mime_type=mime, data=decoded))
+            images.append(ImageData(mime_type=mime, bytes=decoded))
     return ImageResponse(
         images=images,
         text="",
@@ -703,7 +698,7 @@ def _parse_image_response_data_array(
                 if decoded:
                     echoed = entry.get("mime_type")
                     mime = echoed if isinstance(echoed, str) and echoed else "image/png"
-                    images.append(ImageData(mime_type=mime, data=decoded))
+                    images.append(ImageData(mime_type=mime, bytes=decoded))
             rp = entry.get("revised_prompt")
             if isinstance(rp, str) and rp:
                 revised.append(rp)
@@ -750,7 +745,7 @@ def _extract_google_image_parts(
                     decoded = base64.b64decode(data)
                 except (ValueError, TypeError):
                     continue
-                images.append(ImageData(mime_type=mime, data=decoded))
+                images.append(ImageData(mime_type=mime, bytes=decoded))
         text = part.get("text")
         if isinstance(text, str) and text:
             text_parts.append(text)
