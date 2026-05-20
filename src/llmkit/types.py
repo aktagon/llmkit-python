@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from .providers.generated.middleware import MiddlewareFn
-from .structs import File, Response
+from .structs import File, Message, Response
 
 
 @dataclass
@@ -15,12 +15,6 @@ class Provider:
     api_key: str
     model: str = ""
     base_url: str = ""
-
-
-@dataclass
-class Message:
-    role: str
-    content: str
 
 
 @dataclass
