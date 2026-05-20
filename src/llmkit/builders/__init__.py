@@ -516,6 +516,8 @@ def fireworks(api_key: str) -> Client: return Client("fireworks", api_key)
 def google(api_key: str) -> Client: return Client("google", api_key)
 def grok(api_key: str) -> Client: return Client("grok", api_key)
 def groq(api_key: str) -> Client: return Client("groq", api_key)
+def jan(api_key: str) -> Client: return Client("jan", api_key)
+def llamacpp(api_key: str) -> Client: return Client("llamacpp", api_key)
 def lmstudio(api_key: str) -> Client: return Client("lmstudio", api_key)
 def minimax(api_key: str) -> Client: return Client("minimax", api_key)
 def mistral(api_key: str) -> Client: return Client("mistral", api_key)
@@ -553,6 +555,8 @@ __all__ = [
     "google",
     "grok",
     "groq",
+    "jan",
+    "llamacpp",
     "lmstudio",
     "minimax",
     "mistral",
