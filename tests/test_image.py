@@ -116,7 +116,7 @@ def test_image_generate_google_flash_round_trips_png() -> None:
 
     assert len(resp.images) == 1
     assert resp.images[0].mime_type == "image/png"
-    assert resp.images[0].data == FAKE_PNG
+    assert resp.images[0].bytes == FAKE_PNG
     assert resp.usage.input == 12
     assert resp.usage.output == 1290
     assert resp.text == ""
@@ -372,7 +372,7 @@ def test_image_generate_openai_generations_omits_response_format() -> None:
     assert "size" not in body
 
     assert len(resp.images) == 1
-    assert resp.images[0].data == FAKE_PNG
+    assert resp.images[0].bytes == FAKE_PNG
     assert resp.usage.input == 7
     assert resp.usage.output == 1500
 
@@ -536,7 +536,7 @@ def test_image_generate_grok_generations_forces_b64_json() -> None:
     assert "image" not in body
     assert "images" not in body
     assert len(resp.images) == 1
-    assert resp.images[0].data == FAKE_PNG
+    assert resp.images[0].bytes == FAKE_PNG
     assert resp.images[0].mime_type == "image/png"
     # xAI reports cost_in_usd_ticks, not tokens. Both should remain zero.
     assert resp.usage.input == 0
@@ -854,7 +854,7 @@ def test_image_vertex_generations_happy_path() -> None:
         assert body["parameters"]["sampleCount"] == 1
         # Response decode
         assert len(resp.images) == 1
-        assert resp.images[0].data == FAKE_PNG
+        assert resp.images[0].bytes == FAKE_PNG
         assert resp.images[0].mime_type == "image/png"
         # Vertex predict does not return token counts
         assert resp.usage.input == 0
