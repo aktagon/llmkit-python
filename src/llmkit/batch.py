@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass
 from typing import Any
 
 from .errors import APIError, ValidationError
@@ -15,13 +14,8 @@ from .providers.generated.batch import BatchDef, BatchInputMode, batch_config
 from .providers.generated.middleware import Event, MiddlewareOp
 from .providers.generated.providers import PROVIDERS, ProviderConfig, ProviderName
 from .providers.generated.request import AuthScheme, auth_scheme
+from .structs import BatchHandle
 from .types import Options, Provider, Request, Response
-
-
-@dataclass
-class BatchHandle:
-    id: str
-    provider: Provider
 
 
 def prompt_batch(
@@ -88,7 +82,7 @@ def submit_batch(
     middleware: list | None = None,
     safety_settings: list | None = None,
     request_timeout: float = 600.0,
-    raw: bool = False,  # noqa: ARG001 — consumed at wait time, accepted here so callers can pass identical kwargs to submit_batch and prompt_batch
+    raw: bool = False,
 ) -> BatchHandle:
     """Submit a batch and return a handle for polling."""
     from .client import _build_request, _validate_provider  # avoid circular at import time
@@ -169,7 +163,7 @@ def submit_batch(
         raise
 
     post_with(None)
-    return BatchHandle(id=batch_id, provider=provider)
+    return BatchHandle(id=batch_id, provider=provider, raw=raw)
 
 
 def wait_batch(
@@ -196,6 +190,10 @@ def wait_batch(
     else:
         poll_url = base + bc.lifecycle.create_endpoint + "/" + handle.id
 
+    # ADR-014 cross-process resume: a handle that remembers raw (set
+    # either by submit_batch or by a caller reconstructing the dataclass)
+    # takes effect at wait time even if raw kwarg was not passed.
+    raw = raw or handle.raw
     while True:
         resp_body = do_get(poll_url, headers, timeout=request_timeout)
         status_raw = json.loads(resp_body)
