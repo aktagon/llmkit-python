@@ -31,14 +31,7 @@ from .providers.generated.request import AuthScheme, auth_scheme
 from .types import Provider
 
 
-@dataclass
-class MediaRef:
-    """Inline media payload (mime type + raw bytes). Reused by every Part
-    variant that carries non-text content (image today; audio/video/document
-    as those land)."""
-
-    mime_type: str = ""
-    bytes: bytes = b""
+from .structs import MediaRef  # noqa: E402,F401
 
 
 @dataclass
