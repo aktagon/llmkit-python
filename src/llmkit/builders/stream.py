@@ -14,7 +14,7 @@ Usage::
     stream = c.text.system("...").stream("hi")
     async for chunk in stream:
         print(chunk, end="")
-    print(stream.response.tokens)  # populated after iteration ends
+    print(stream.response.usage)  # populated after iteration ends
 """
 
 from __future__ import annotations
