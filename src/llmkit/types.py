@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from .providers.generated.middleware import MiddlewareFn, Usage
+from .providers.generated.middleware import MiddlewareFn
 
 
 @dataclass
@@ -90,28 +90,10 @@ class Request:
     images: list[InputImage] = field(default_factory=list)
 
 
-@dataclass
-class Response:
-    text: str = ""
-    tokens: Usage = field(default_factory=Usage)
-    # Provider stop signal, passed through verbatim. Empty when the
-    # provider response carries no signal or the parser does not yet
-    # read this provider's location. Examples:
-    #   Google:    "STOP", "MAX_TOKENS", "SAFETY", "RECITATION"
-    #   OpenAI:    "stop", "length", "content_filter", "tool_calls"
-    #   Anthropic: "end_turn", "max_tokens", "stop_sequence", "tool_use"
-    #   xAI:       "stop", "length", "content_filter"
-    finish_reason: str = ""
-    # Free-text provider explanation of the stop signal. Populated by
-    # Google when present; OpenAI / Anthropic / xAI do not carry an
-    # equivalent field, so this stays empty for them.
-    finish_message: str = ""
-    # Parsed provider response body, populated only when the caller opted
-    # in via the builder's .raw() chain method (ADR-014). Type-erased —
-    # provider-specific fields (Anthropic citations, OpenAI logprobs,
-    # ...) live here; consumers cast/index into the dict once they know
-    # which provider they're talking to.
-    raw: Any | None = None
+# Response is generated from the ontology (ADR-018, API-PDS-002) and
+# re-exported here so existing `from llmkit.types import Response`
+# imports keep working without touching every call site.
+from .structs import Response  # noqa: E402,F401
 
 
 @dataclass
