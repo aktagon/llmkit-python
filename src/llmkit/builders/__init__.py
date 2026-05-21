@@ -489,6 +489,12 @@ class Client:
         self.image: Image = Image(self)
         self.agent: Agent = Agent(self)
         self.upload: Upload = Upload(self)
+        #
+        #
+        #
+        from .catalogue import Models as _Models, Providers as _Providers
+        self.models: _Models = _Models(self)
+        self.providers: _Providers = _Providers(self)
 
     def with_base_url(self, url: str) -> "Client":
         """
