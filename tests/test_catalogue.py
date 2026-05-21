@@ -114,9 +114,13 @@ def test_error_sentinels_default_messages() -> None:
     assert "scope" in str(ErrModelsScope())
 
 
-def test_models_live_captures_unavailable_into_errors_map() -> None:
+def test_models_live_captures_unavailable_as_typed_provider_error() -> None:
+    # ADR-019 Amendment 1: errors carry ProviderError(kind, message),
+    # not raw strings.
     c = anthropic("test-key")
     res = asyncio.run(c.models.live())
     assert res.models == []
-    assert "anthropic" in res.errors
-    assert "unavailable" in res.errors["anthropic"]
+    err = res.errors.get("anthropic")
+    assert err is not None
+    assert err.kind == "unavailable"
+    assert "unavailable" in err.message
