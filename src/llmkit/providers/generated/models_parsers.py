@@ -78,9 +78,14 @@ def parse_anthropic_models_response(body: bytes | str) -> ParsedModelsPage:
 
 def parse_openai_cohort_models_response(body: bytes | str) -> ParsedModelsPage:
     """Decode the non-paginated OpenAI-cohort /v1/models response (also xAI,
-    Cerebras, Groq, Together — every provider on the canonical OpenAI shape)."""
-    envelope = json.loads(body)
-    data = envelope.get("data") or []
+    Cerebras, Groq, Together — every provider on the canonical OpenAI shape).
+    Accepts either the OpenAI envelope ({"data": [...]}) or a bare top-level
+    array ([...]); Together returns the latter."""
+    parsed = json.loads(body)
+    if isinstance(parsed, list):
+        data = parsed
+    else:
+        data = parsed.get("data") or []
     records = [
         ParsedModelRecord(
             id=str(wire.get("id") or ""),
