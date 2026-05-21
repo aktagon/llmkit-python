@@ -489,6 +489,12 @@ class Client:
         self.image: Image = Image(self)
         self.agent: Agent = Agent(self)
         self.upload: Upload = Upload(self)
+        # ADR-019: catalogue namespaces. Lazy import to avoid a
+        # circular import at module load (catalogue.py needs Client)
+        # — by the time __init__ runs, all modules are loaded.
+        from .catalogue import Models as _Models, Providers as _Providers
+        self.models: _Models = _Models(self)
+        self.providers: _Providers = _Providers(self)
 
     def with_base_url(self, url: str) -> "Client":
         """Override the provider's default base URL. Required for
