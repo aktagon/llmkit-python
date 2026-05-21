@@ -28,6 +28,7 @@ class MiddlewareOp(str, Enum):
     UPLOAD = "upload"
     BATCH_SUBMIT = "batch_submit"
     IMAGE_GENERATION = "image_generation"
+    MODELS_LIST = "models_list"
 
 
 @dataclass
