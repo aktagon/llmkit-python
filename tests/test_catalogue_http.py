@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from llmkit.builders import anthropic, cerebras, google, openai
+from llmkit.builders import anthropic, cohere, google, openai
 from llmkit.models import (
     ErrModelsNotSupported,
     ErrModelsScope,
@@ -186,9 +186,9 @@ def test_scoped_list_503_maps_to_err_models_unavailable() -> None:
 
 def test_scoped_list_endpointless_provider_keeps_not_supported() -> None:
     # No server needed — runtime short-circuits before any HTTP call.
-    c = cerebras("test-key")
+    c = cohere("test-key")
     with pytest.raises(ErrModelsNotSupported):
-        asyncio.run(c.models.provider(Provider(name="cerebras", api_key="k")).list())
+        asyncio.run(c.models.provider(Provider(name="cohere", api_key="k")).list())
 
 
 def test_scoped_get_anthropic_single_record() -> None:
