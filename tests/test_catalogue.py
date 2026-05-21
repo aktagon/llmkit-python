@@ -85,20 +85,6 @@ def test_scoped_list_raises_not_supported_for_endpointless_provider() -> None:
         asyncio.run(c.models.provider(Provider(name="cerebras", api_key="k")).list())
 
 
-def test_scoped_list_raises_unavailable_for_phase3_stub() -> None:
-    c = anthropic("test-key")
-    with pytest.raises(ErrModelsUnavailable):
-        asyncio.run(c.models.provider(Provider(name="anthropic", api_key="k")).list())
-
-
-def test_scoped_get_raises_unavailable_for_phase3_stub() -> None:
-    c = anthropic("test-key")
-    with pytest.raises(ErrModelsUnavailable):
-        asyncio.run(
-            c.models.provider(Provider(name="anthropic", api_key="k")).get("claude-opus-4-7")
-        )
-
-
 def test_scoped_raw_chain_is_immutable() -> None:
     c = anthropic("test-key")
     scoped = c.models.provider(Provider(name="anthropic", api_key="k"))
@@ -114,13 +100,3 @@ def test_error_sentinels_default_messages() -> None:
     assert "scope" in str(ErrModelsScope())
 
 
-def test_models_live_captures_unavailable_as_typed_provider_error() -> None:
-    # ADR-019 Amendment 1: errors carry ProviderError(kind, message),
-    # not raw strings.
-    c = anthropic("test-key")
-    res = asyncio.run(c.models.live())
-    assert res.models == []
-    err = res.errors.get("anthropic")
-    assert err is not None
-    assert err.kind == "unavailable"
-    assert "unavailable" in err.message
