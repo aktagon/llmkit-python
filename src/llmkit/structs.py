@@ -79,7 +79,7 @@ class LiveResult:
     models: list[ModelInfo] = field(default_factory=list)
 
     #
-    errors: dict[str, str] = field(default_factory=dict)
+    errors: dict[str, ProviderError] = field(default_factory=dict)
 
 
 @dataclass
@@ -131,6 +131,16 @@ class ModelInfo:
 
     #
     raw: Any | None = None
+
+
+@dataclass
+class ProviderError:
+    """"""
+    #
+    kind: str = ""
+
+    #
+    message: str = ""
 
 
 @dataclass
