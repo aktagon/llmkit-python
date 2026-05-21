@@ -75,11 +75,12 @@ ontology_capabilities: dict[str, dict[str, list[Capability]]] = {
 class CatalogueConfig:
     endpoint: str
     pagination: str
+    parser_kind: str = ""
     spec_url: str = ""
     spec_format: str = ""
 
 catalogue_by_provider: dict[str, CatalogueConfig] = {
-    "anthropic": CatalogueConfig(endpoint="/v1/models", pagination="CursorByLastID", spec_url="https://github.com/anthropics/anthropic-sdk-typescript/blob/main/api.md", spec_format="OpenAPI3"),
-    "google": CatalogueConfig(endpoint="/v1beta/models", pagination="CursorOpaqueToken", spec_url="https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta", spec_format="GoogleDiscovery"),
-    "openai": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", spec_url="https://github.com/openai/openai-openapi/blob/master/openapi.yaml", spec_format="OpenAPI3"),
+    "anthropic": CatalogueConfig(endpoint="/v1/models", pagination="CursorByLastID", parser_kind="ParseAnthropicModels", spec_url="https://github.com/anthropics/anthropic-sdk-typescript/blob/main/api.md", spec_format="OpenAPI3"),
+    "google": CatalogueConfig(endpoint="/v1beta/models", pagination="CursorOpaqueToken", parser_kind="ParseGoogleModels", spec_url="https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta", spec_format="GoogleDiscovery"),
+    "openai": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels", spec_url="https://github.com/openai/openai-openapi/blob/master/openapi.yaml", spec_format="OpenAPI3"),
 }
