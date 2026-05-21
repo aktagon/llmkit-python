@@ -7,7 +7,7 @@ import asyncio
 
 import pytest
 
-from llmkit.builders import anthropic, cerebras, openai
+from llmkit.builders import anthropic, cohere, openai
 from llmkit.models import (
     ErrModelsNotSupported,
     ErrModelsScope,
@@ -63,7 +63,7 @@ def test_providers_list_returns_configured_provider_with_endpoint() -> None:
 
 
 def test_providers_list_empty_for_endpointless_provider() -> None:
-    c = cerebras("test-key")
+    c = cohere("test-key")
     assert c.providers.list() == []
 
 
@@ -80,9 +80,9 @@ def test_providers_supported_returns_full_sdk_roster() -> None:
 
 
 def test_scoped_list_raises_not_supported_for_endpointless_provider() -> None:
-    c = cerebras("test-key")
+    c = cohere("test-key")
     with pytest.raises(ErrModelsNotSupported):
-        asyncio.run(c.models.provider(Provider(name="cerebras", api_key="k")).list())
+        asyncio.run(c.models.provider(Provider(name="cohere", api_key="k")).list())
 
 
 def test_scoped_raw_chain_is_immutable() -> None:
