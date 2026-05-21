@@ -79,7 +79,7 @@ class LiveResult:
     models: list[ModelInfo] = field(default_factory=list)
 
     # errors is the per-provider failure map. Empty when every configured provider succeeded. Keyed by Provider; each value carries the per-provider error sentinel (ErrModelsScope / ErrModelsUnavailable / ErrModelsNotSupported).
-    errors: dict[str, str] = field(default_factory=dict)
+    errors: dict[str, ProviderError] = field(default_factory=dict)
 
 
 @dataclass
@@ -131,6 +131,16 @@ class ModelInfo:
 
     # raw is the parsed provider-native record for this model, populated only when the caller opted in via the builder's .Raw() chain method (ADR-014). Type-erased — consumers cast to a provider-shape type for fields the universal ModelInfo does not carry (Anthropic capability matrix, Google supportedGenerationMethods, etc.).
     raw: Any | None = None
+
+
+@dataclass
+class ProviderError:
+    """ProviderError is the per-provider failure carried in LiveResult.errors (ADR-019 Amendment 1). Discriminated by Kind so consumers can branch typed in any SDK; Message is the human-readable form for display."""
+    # kind is the sentinel discriminant: "not_supported", "unavailable", or "scope". Mirrors the three Err* sentinels declared in ADR-019 § Error story. String (not enum) keeps the codegen-table footprint at zero and dodges the Python str(Enum) trap that Phase 2.5's review surfaced.
+    kind: str = ""
+
+    # message is the human-readable explanation. Free-form; not part of the contract beyond display.
+    message: str = ""
 
 
 @dataclass
