@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from .catalogue import catalogue_by_provider, compiled_in_models
 from .providers.generated.providers import ALL_PROVIDER_NAMES
-from .structs import LiveResult, ModelInfo
+from .structs import LiveResult, ModelInfo, ProviderError
 from .types import Capability, Provider
 
 if TYPE_CHECKING:
@@ -41,6 +41,18 @@ class ErrModelsUnavailable(Exception):
 class ErrModelsScope(Exception):
     def __init__(self, message: str = "llmkit: api key lacks scope for models endpoint") -> None:
         super().__init__(message)
+
+
+def classify_catalogue_error(exc: BaseException) -> str:
+    """Map a caught exception to the wire-format discriminant carried in
+    ProviderError.kind (ADR-019 Amendment 1). Unknown errors fall back
+    to "unavailable" — safer than "scope" since scope implies a documented
+    retry path."""
+    if isinstance(exc, ErrModelsNotSupported):
+        return "not_supported"
+    if isinstance(exc, ErrModelsScope):
+        return "scope"
+    return "unavailable"
 
 
 def catalogue_filter(cap_filter: Capability | None) -> list[ModelInfo]:
@@ -78,10 +90,11 @@ async def catalogue_run_live(models: "Models") -> LiveResult:
     )
 
     all_models: list[ModelInfo] = []
-    errors: dict[str, str] = {}
+    errors: dict[str, ProviderError] = {}
     for p, r in zip(configured, results):
         if isinstance(r, BaseException):
-            errors[p.name] = str(r)
+            # ADR-019 Amendment 1: structured discriminant + message.
+            errors[p.name] = ProviderError(kind=classify_catalogue_error(r), message=str(r))
         else:
             all_models.extend(r)
 
