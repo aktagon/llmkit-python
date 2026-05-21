@@ -78,9 +78,14 @@ def parse_anthropic_models_response(body: bytes | str) -> ParsedModelsPage:
 
 def parse_openai_cohort_models_response(body: bytes | str) -> ParsedModelsPage:
     """
+
+
 """
-    envelope = json.loads(body)
-    data = envelope.get("data") or []
+    parsed = json.loads(body)
+    if isinstance(parsed, list):
+        data = parsed
+    else:
+        data = parsed.get("data") or []
     records = [
         ParsedModelRecord(
             id=str(wire.get("id") or ""),
