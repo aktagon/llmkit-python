@@ -148,6 +148,22 @@ _ANTHROPIC_OK = {
 _OPENAI_FILE_OK = {"id": "file-zzz", "object": "file"}
 
 
+_ANTHROPIC_MODELS = {
+    "data": [
+        {
+            "type": "model",
+            "id": "claude-opus-4-7",
+            "display_name": "Claude Opus 4.7",
+            "created_at": "2026-04-14T00:00:00Z",
+            "max_input_tokens": 1000000,
+            "max_tokens": 128000,
+        }
+    ],
+    "has_more": False,
+    "last_id": "claude-opus-4-7",
+}
+
+
 def _google_image_response() -> dict[str, Any]:
     encoded = base64.b64encode(b"\x89PNG\r\n\x1a\n<fake>").decode("ascii")
     return {
@@ -249,5 +265,12 @@ def test_upload_runs(tmp_path, monkeypatch) -> None:
 def test_middleware_runs() -> None:
     ex = _load("middleware")
     with _JSONServer(_ANTHROPIC_OK) as server:
+        _redirect(ex, "anthropic", server.url)
+        asyncio.run(ex.main())
+
+
+def test_catalogue_runs() -> None:
+    ex = _load("catalogue")
+    with _JSONServer(_ANTHROPIC_MODELS) as server:
         _redirect(ex, "anthropic", server.url)
         asyncio.run(ex.main())
