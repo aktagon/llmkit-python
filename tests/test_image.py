@@ -234,7 +234,7 @@ def test_image_generate_middleware_fires_pre_then_post() -> None:
     with _MockServer(_flash_response(encoded, prompt_tokens=1, output_tokens=2)) as server:
         c = _client(server.url)
         asyncio.run(
-            c.image.model(FLASH_MODEL).middleware(mw).generate("x")
+            c.image.model(FLASH_MODEL).add_middleware(mw).generate("x")
         )
     assert ops == ["image_generation", "image_generation"]
     assert phases == ["pre", "post"]
@@ -249,7 +249,7 @@ def test_image_generate_middleware_pre_phase_can_veto() -> None:
     with pytest.raises(MiddlewareVetoError):
         c = _client()
         asyncio.run(
-            c.image.model(FLASH_MODEL).middleware(mw).generate("x")
+            c.image.model(FLASH_MODEL).add_middleware(mw).generate("x")
         )
 
 
@@ -471,7 +471,7 @@ def test_image_generate_openai_middleware_fires_both_branches() -> None:
 
         with _OpenAIMockServer(_openai_image_response(encoded)) as server:
             c = _openai_client(server.url)
-            b = c.image.model(OPENAI_IMAGE_2).middleware(mw)
+            b = c.image.model(OPENAI_IMAGE_2).add_middleware(mw)
             if branch == "edits":
                 b = b.image("image/png", bytes([0x89, 0x50, 0x4E]))
             asyncio.run(b.generate("x"))
@@ -489,7 +489,7 @@ def test_image_generate_openai_middleware_veto_skips_http() -> None:
         c = _openai_client(server.url)
         with pytest.raises(MiddlewareVetoError):
             asyncio.run(
-                c.image.model(OPENAI_IMAGE_2).middleware(mw).generate("x")
+                c.image.model(OPENAI_IMAGE_2).add_middleware(mw).generate("x")
             )
         assert server.hit is False
 
@@ -658,7 +658,7 @@ def test_image_generate_grok_middleware_fires_both_branches() -> None:
 
         with _OpenAIMockServer(_grok_image_response(encoded)) as server:
             c = _grok_client(server.url)
-            b = c.image.model(GROK_IMAGINE_QUALITY).middleware(mw)
+            b = c.image.model(GROK_IMAGINE_QUALITY).add_middleware(mw)
             if branch == "edits":
                 b = b.image("image/png", bytes([0x89, 0x50, 0x4E]))
             asyncio.run(b.generate("x"))

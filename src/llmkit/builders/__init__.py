@@ -46,13 +46,13 @@ class Text:
 
     def __init__(self, client: "Client") -> None:
         self.client = client
+        self._middleware: list[MiddlewareFn] = []
         self._caching: bool = False
         self._files: list[File] = []
         self._frequency_penalty: float | None = None
         self._history: list[Message] = []
         self._parts: list[Part] = []
         self._max_tokens: int | None = None
-        self._middleware: list[MiddlewareFn] = []
         self._model: str = ""
         self._presence_penalty: float | None = None
         self._raw: bool = False
@@ -66,6 +66,11 @@ class Text:
         self._thinking_budget: int | None = None
         self._top_k: int | None = None
         self._top_p: float | None = None
+
+    def add_middleware(self, *fns: MiddlewareFn) -> "Text":
+        out = copy.copy(self)
+        out._middleware = [*self._middleware, *fns]
+        return out
 
     def caching(self) -> "Text":
         out = copy.copy(self)
@@ -95,11 +100,6 @@ class Text:
     def max_tokens(self, n: int) -> "Text":
         out = copy.copy(self)
         out._max_tokens = n
-        return out
-
-    def middleware(self, *fns: MiddlewareFn) -> "Text":
-        out = copy.copy(self)
-        out._middleware = [*self._middleware, *fns]
         return out
 
     def model(self, name: str) -> "Text":
@@ -192,6 +192,7 @@ class Image:
 
     def __init__(self, client: "Client") -> None:
         self.client = client
+        self._middleware: list[MiddlewareFn] = []
         self._aspect_ratio: str = ""
         self._background: str = ""
         self._count: int | None = None
@@ -199,7 +200,6 @@ class Image:
         self._image_size: str = ""
         self._include_text: bool = False
         self._mask: MediaRef | None = None
-        self._middleware: list[MiddlewareFn] = []
         self._model: str = ""
         self._output_format: str = ""
         self._quality: str = ""
@@ -207,6 +207,11 @@ class Image:
         self._safety_filter: str = ""
         self._safety_settings: list[SafetySetting] = []
         self._extra_fields: "dict[str, Any] | None" = None
+
+    def add_middleware(self, *fns: MiddlewareFn) -> "Image":
+        out = copy.copy(self)
+        out._middleware = [*self._middleware, *fns]
+        return out
 
     def aspect_ratio(self, r: str) -> "Image":
         out = copy.copy(self)
@@ -241,11 +246,6 @@ class Image:
     def mask(self, mime: str, data: bytes) -> "Image":
         out = copy.copy(self)
         out._mask = MediaRef(mime_type=mime, bytes=data)
-        return out
-
-    def middleware(self, *fns: MiddlewareFn) -> "Image":
-        out = copy.copy(self)
-        out._middleware = [*self._middleware, *fns]
         return out
 
     def model(self, name: str) -> "Image":
@@ -301,11 +301,12 @@ class Agent:
 
     def __init__(self, client: "Client") -> None:
         self.client = client
+        self._middleware: list[MiddlewareFn] = []
+        self._tools: list[Tool] = []
         self._caching: bool = False
         self._frequency_penalty: float | None = None
         self._max_tokens: int | None = None
         self._max_tool_iterations: int | None = None
-        self._middleware: list[MiddlewareFn] = []
         self._model: str = ""
         self._presence_penalty: float | None = None
         self._raw: bool = False
@@ -316,10 +317,21 @@ class Agent:
         self._system: str = ""
         self._temperature: float | None = None
         self._thinking_budget: int | None = None
-        self._tools: list[Tool] = []
         self._top_k: int | None = None
         self._top_p: float | None = None
         self._state: "AgentState | None" = None
+
+    def add_middleware(self, *fns: MiddlewareFn) -> "Agent":
+        out = copy.copy(self)
+        out._middleware = [*self._middleware, *fns]
+        out._state = None
+        return out
+
+    def add_tool(self, t: Tool) -> "Agent":
+        out = copy.copy(self)
+        out._tools = [*self._tools, t]
+        out._state = None
+        return out
 
     def caching(self) -> "Agent":
         out = copy.copy(self)
@@ -342,12 +354,6 @@ class Agent:
     def max_tool_iterations(self, n: int) -> "Agent":
         out = copy.copy(self)
         out._max_tool_iterations = n
-        out._state = None
-        return out
-
-    def middleware(self, *fns: MiddlewareFn) -> "Agent":
-        out = copy.copy(self)
-        out._middleware = [*self._middleware, *fns]
         out._state = None
         return out
 
@@ -411,12 +417,6 @@ class Agent:
         out._state = None
         return out
 
-    def tool(self, t: Tool) -> "Agent":
-        out = copy.copy(self)
-        out._tools = [*self._tools, t]
-        out._state = None
-        return out
-
     def top_k(self, n: int) -> "Agent":
         out = copy.copy(self)
         out._top_k = n
@@ -443,11 +443,16 @@ class Upload:
 
     def __init__(self, client: "Client") -> None:
         self.client = client
+        self._middleware: list[MiddlewareFn] = []
         self._bytes: bytes = b""
         self._filename: str = ""
-        self._middleware: list[MiddlewareFn] = []
         self._mime_type: str = ""
         self._path: str = ""
+
+    def add_middleware(self, *fns: MiddlewareFn) -> "Upload":
+        out = copy.copy(self)
+        out._middleware = [*self._middleware, *fns]
+        return out
 
     def bytes(self, data: bytes) -> "Upload":
         out = copy.copy(self)
@@ -457,11 +462,6 @@ class Upload:
     def filename(self, name: str) -> "Upload":
         out = copy.copy(self)
         out._filename = name
-        return out
-
-    def middleware(self, *fns: MiddlewareFn) -> "Upload":
-        out = copy.copy(self)
-        out._middleware = [*self._middleware, *fns]
         return out
 
     def mime_type(self, mime: str) -> "Upload":
