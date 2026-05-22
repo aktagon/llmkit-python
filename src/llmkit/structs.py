@@ -101,6 +101,12 @@ class Message:
     #
     content: str = ""
 
+    #
+    tool_calls: list[ToolCall] = field(default_factory=list)
+
+    #
+    tool_result: ToolResult | None = None
+
 
 @dataclass(kw_only=True)
 class ModelInfo:
@@ -160,3 +166,26 @@ class Response:
 
     #
     raw: Any | None = None
+
+
+@dataclass
+class ToolCall:
+    """"""
+    #
+    id: str = ""
+
+    #
+    name: str = ""
+
+    #
+    input: Any | None = None
+
+
+@dataclass
+class ToolResult:
+    """"""
+    #
+    tool_use_id: str = ""
+
+    #
+    content: str = ""
