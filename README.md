@@ -109,14 +109,14 @@ add_tool = Tool(
 bot = (
     c.agent
     .system("You are a calculator.")
-    .tool(add_tool)
+    .add_tool(add_tool)
     .max_tool_iterations(5)
 )
 resp = await bot.prompt("What is 2+3?")
 print(resp.text)
 ```
 
-`*Agent` is **stateful** — repeated `bot.prompt(...)` calls accumulate history. Chain methods (`.system(...)`, `.tool(...)`) clone and reset state, so a forked builder gets a fresh conversation. `bot.reset()` clears state without dropping chained config.
+`*Agent` is **stateful** — repeated `bot.prompt(...)` calls accumulate history. Chain methods (`.system(...)`, `.add_tool(...)`) clone and reset state, so a forked builder gets a fresh conversation. `bot.reset()` clears state without dropping chained config.
 
 Tool dispatch covers Anthropic `tool_use`, OpenAI `tool_calls`, Google `functionCall`, and Bedrock Converse `toolUse`.
 
@@ -320,7 +320,7 @@ Across every `*Text` / `*Agent` builder:
 | Token cap         | `.max_tokens(n)`       |
 | Caching           | `.caching()`           |
 | Structured output | `.schema(json)`        |
-| Middleware hooks  | `.middleware(fns)`     |
+| Middleware hooks  | `.add_middleware(fns)`     |
 | Reasoning effort  | `.reasoning_effort(l)` |
 | Thinking budget   | `.thinking_budget(n)`  |
 
@@ -340,7 +340,7 @@ def log_usage(e):
         print(f"{e.provider}/{e.model}: {e.usage.input} in, {e.usage.output} out")
     return None
 
-await c.text.middleware([log_usage]).prompt("...")
+await c.text.add_middleware([log_usage]).prompt("...")
 ```
 
 Pre-phase middleware can veto by returning a non-None error message; post-phase runs for observation only. Wired at six sites: text prompt, text stream, agent LLM call, agent tool execution, upload, batch submit, Google resource caching pre-flight.
