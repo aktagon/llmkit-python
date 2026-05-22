@@ -450,6 +450,25 @@ class Agent:
             return ()
         return _agent_messages(self._state.agent)
 
+    def save(self) -> bytes:
+        """
+
+"""
+        from ..wire import save_history
+        return save_history(list(self.messages))
+
+    def load(self, data: "bytes | str") -> "Agent":
+        """
+
+
+
+"""
+        from ..wire import load_history
+        out = copy.copy(self)
+        out._history = load_history(data)
+        out._state = None
+        return out
+
     async def prompt(self, msg: str) -> Response:
         return await agent_prompt(self, msg)
 
