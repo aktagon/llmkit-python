@@ -62,6 +62,14 @@ from .image import (
     Part,
 )
 from .structs import ImageResponse, ToolCall, ToolResult
+from .wire import (
+    MissingWireVersionError,
+    UnknownWireKeyError,
+    UnsupportedWireVersionError,
+    load_history,
+    save_history,
+)
+from .wire_version import WIRE_SCHEMA_VERSION
 from .providers.generated.middleware import (
     Event,
     MiddlewareFn,
@@ -125,6 +133,13 @@ __all__ = [
     "Tool",
     "ToolCall",
     "ToolResult",
+    # Wire format (ADR-023).
+    "save_history",
+    "load_history",
+    "WIRE_SCHEMA_VERSION",
+    "MissingWireVersionError",
+    "UnknownWireKeyError",
+    "UnsupportedWireVersionError",
     "ImageData",
     "ImageRequest",
     "ImageResponse",
