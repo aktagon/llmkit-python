@@ -97,8 +97,7 @@ class Agent:
         return self._run_tool_loop()
 
     def _run_tool_loop(self) -> Response:
-        from .client import _build_url
-        from .transforms import ToolCall
+        from .client import _build_url  # noqa: F401
 
         cfg = PROVIDERS.get(self.provider.name)
         if cfg is None:
@@ -189,9 +188,13 @@ class Agent:
 
             self.history.append(_InternalMessage(role="assistant", tool_calls=list(calls)))
 
-            from .transforms import ToolResult
+            from .structs import ToolResult
 
             for tc in calls:
+                # ADR-020 widened ToolCall.input to Any | None. Tool authors'
+                # run() callback still receives the dict shape they registered,
+                # so coerce non-dicts (None, primitives, lists) to {} here.
+                tc_args = tc.input if isinstance(tc.input, dict) else {}
                 tool = self._find_tool(tc.name)
                 if tool is None:
                     result = f"error: unknown tool {tc.name!r}"
@@ -208,14 +211,14 @@ class Agent:
                     provider=self.provider.name,
                     model=resolve_model(self.provider.model, cfg),
                     tool=tc.name,
-                    args=dict(tc.input),
+                    args=dict(tc_args),
                 )
                 tool_start = time.monotonic()
                 fire_pre(self.opts.middleware, tool_ev)
 
                 run_err: BaseException | None = None
                 try:
-                    output = tool.run(tc.input)
+                    output = tool.run(tc_args)
                 except BaseException as exc:
                     run_err = exc
                     output = f"error: {exc}"
@@ -225,7 +228,7 @@ class Agent:
                     provider=self.provider.name,
                     model=resolve_model(self.provider.model, cfg),
                     tool=tc.name,
-                    args=dict(tc.input),
+                    args=dict(tc_args),
                     result=output,
                     err=(str(run_err) if run_err else ""),
                     duration=time.monotonic() - tool_start,

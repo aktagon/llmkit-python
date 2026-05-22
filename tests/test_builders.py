@@ -596,6 +596,94 @@ def test_phase3_agent_state_forking_load_bearing() -> None:
     assert forked._state is None  # fork starts fresh
 
 
+def test_phase_a_agent_history_writer_replaces_chain_state() -> None:
+    """ADR-020 HIST-003: bot.history(*msgs) replaces the chain history."""
+    c = anthropic("k")
+    msg_a = Message(role="user", content="first")
+    msg_b = Message(role="assistant", content="ok")
+    bot = c.agent.system("you are helpful").history(msg_a, msg_b)
+    assert bot._history == [msg_a, msg_b]
+    # second call replaces, doesn't append.
+    msg_c = Message(role="user", content="reset")
+    rebot = bot.history(msg_c)
+    assert rebot._history == [msg_c]
+
+
+def test_phase_a_agent_messages_reader_empty_before_prompt() -> None:
+    """ADR-020 HIST-004: bot.messages is an empty tuple before .prompt()."""
+    c = anthropic("k")
+    bot = c.agent.system("seeded").history(Message(role="user", content="hi"))
+    # Builder has chain history but no runtime state yet.
+    assert bot.messages == ()
+
+
+def test_phase_a_agent_messages_reader_after_init() -> None:
+    """ADR-020 HIST-004: bot.messages projects internal history through the
+    runtime-state adapter once the legacy agent is constructed.
+
+    Tests the tool-turn projection: assistant-with-tools turn has
+    non-empty tool_calls; tool-result turn has non-None tool_result
+    and the public 'tool' role discriminator (mapped from internal
+    'tool_result').
+    """
+    from llmkit import Provider as ProviderType
+    from llmkit import ToolCall as PubToolCall
+    from llmkit import ToolResult as PubToolResult
+    from llmkit.agent import Agent as LegacyAgent, _InternalMessage
+    from llmkit.builders.agent import AgentState
+
+    c = anthropic("k")
+    bot = c.agent
+    legacy = LegacyAgent(ProviderType(name="anthropic", api_key="k"))
+    legacy.history = [
+        _InternalMessage(role="user", content="list py files"),
+        _InternalMessage(
+            role="assistant",
+            tool_calls=[
+                PubToolCall(id="call_1", name="list_files", input={"path": "src"})
+            ],
+        ),
+        _InternalMessage(
+            role="tool_result",
+            tool_result=PubToolResult(tool_use_id="call_1", content="a.py b.py"),
+        ),
+    ]
+    bot._state = AgentState(legacy)
+
+    msgs = bot.messages
+    assert len(msgs) == 3
+    assert msgs[0].role == "user"
+    assert msgs[0].content == "list py files"
+    assert msgs[1].role == "assistant"
+    assert len(msgs[1].tool_calls) == 1
+    assert msgs[1].tool_calls[0].name == "list_files"
+    # Internal 'tool_result' role flattens to public 'tool'.
+    assert msgs[2].role == "tool"
+    assert msgs[2].tool_result is not None
+    assert msgs[2].tool_result.tool_use_id == "call_1"
+    assert msgs[2].tool_result.content == "a.py b.py"
+
+
+def test_phase_a_agent_history_init_seeds_runtime() -> None:
+    """ADR-020 HIST-007: chain history populates the legacy agent on init."""
+    from llmkit.builders.agent import _init_agent
+
+    c = anthropic("k")
+    bot = (
+        c.agent.system("seed")
+        .history(
+            Message(role="user", content="hi"),
+            Message(role="assistant", content="hi back"),
+        )
+    )
+    state = _init_agent(bot)
+    assert len(state.agent.history) == 2
+    assert state.agent.history[0].role == "user"
+    assert state.agent.history[0].content == "hi"
+    assert state.agent.history[1].role == "assistant"
+    assert state.agent.history[1].content == "hi back"
+
+
 # ---------- re-exported types are usable ----------
 
 
