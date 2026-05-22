@@ -20,6 +20,7 @@ from ..image import ImageData, MediaRef, Part
 from ..providers.generated.middleware import MiddlewareFn
 from ..structs import File, ImageResponse, Message, Response
 from ..types import SafetySetting, Tool
+from .agent import _agent_messages
 from .batch import BatchHandle
 
 if TYPE_CHECKING:
@@ -305,6 +306,7 @@ class Agent:
         self._tools: list[Tool] = []
         self._caching: bool = False
         self._frequency_penalty: float | None = None
+        self._history: list[Message] = []
         self._max_tokens: int | None = None
         self._max_tool_iterations: int | None = None
         self._model: str = ""
@@ -342,6 +344,12 @@ class Agent:
     def frequency_penalty(self, v: float) -> "Agent":
         out = copy.copy(self)
         out._frequency_penalty = v
+        out._state = None
+        return out
+
+    def history(self, *msgs: Message) -> "Agent":
+        out = copy.copy(self)
+        out._history = list(msgs)
         out._state = None
         return out
 
@@ -428,6 +436,19 @@ class Agent:
         out._top_p = v
         out._state = None
         return out
+
+    @property
+    def messages(self) -> "tuple[Message, ...]":
+        """Public view of the agent's accumulated history (ADR-020 HIST-004).
+
+        Returns an empty tuple before the first ``.prompt()`` call. The
+        outer container is immutable; each ``Message.tool_calls`` list
+        is shared with the agent's runtime state — treat the messages
+        as read-only (mutating ``tool_calls`` corrupts the agent).
+        """
+        if self._state is None:
+            return ()
+        return _agent_messages(self._state.agent)
 
     async def prompt(self, msg: str) -> Response:
         return await agent_prompt(self, msg)

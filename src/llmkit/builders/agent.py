@@ -16,6 +16,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from ..agent import Agent as LegacyAgent
+from ..structs import Message, ToolCall, ToolResult
 from ..types import Provider, Response
 
 if TYPE_CHECKING:
@@ -74,6 +75,24 @@ def _init_agent(b: "Agent") -> AgentState:
         agent.set_system(b._system)
     for t in b._tools:
         agent.add_tool(t)
+    # ADR-020 HIST-007: seed the legacy agent's internal history from
+    # the chain's typed Message list. Mechanical field copy; the
+    # internal `tool_result` role discriminator is restored from the
+    # public `tool` role.
+    if b._history:
+        from ..agent import _InternalMessage
+        seeded: list[_InternalMessage] = []
+        for m in b._history:
+            internal_role = "tool_result" if m.role == "tool" else m.role
+            seeded.append(
+                _InternalMessage(
+                    role=internal_role,
+                    content=m.content or "",
+                    tool_calls=list(m.tool_calls),
+                    tool_result=m.tool_result,
+                )
+            )
+        agent.history = seeded
     return AgentState(agent)
 
 
@@ -89,3 +108,41 @@ def agent_reset(b: "Agent") -> None:
     ``LegacyAgent.reset()``, which clears tools too — the typed
     builder's own ``_tools`` slice re-supplies them on re-init."""
     b._state = None
+
+
+def _agent_messages(legacy_agent: LegacyAgent) -> tuple[Message, ...]:
+    """Project the legacy agent's _InternalMessage history into the
+    public Message tuple (ADR-020 HIST-004).
+
+    The internal ``tool_result`` role is flattened to ``tool`` so the
+    public wire shape matches the ontology's union-by-role
+    discriminator. Each Message.tool_calls list is a fresh copy so
+    the agent's runtime state stays isolated from the returned tuple's
+    outer container; the inner ToolCall instances themselves are
+    shared with internal state by ADR-020's shallow-immutability rule.
+    """
+    out: list[Message] = []
+    for m in legacy_agent.history:
+        role = m.role
+        if role == "tool_result":
+            role = "tool"
+        public_tool_calls: list[ToolCall] = []
+        for tc in m.tool_calls:
+            public_tool_calls.append(
+                ToolCall(id=tc.id, name=tc.name, input=tc.input)
+            )
+        tool_result: ToolResult | None = None
+        if m.tool_result is not None:
+            tool_result = ToolResult(
+                tool_use_id=m.tool_result.tool_use_id,
+                content=m.tool_result.content,
+            )
+        out.append(
+            Message(
+                role=role,
+                content=m.content or "",
+                tool_calls=public_tool_calls,
+                tool_result=tool_result,
+            )
+        )
+    return tuple(out)
