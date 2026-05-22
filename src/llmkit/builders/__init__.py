@@ -450,6 +450,25 @@ class Agent:
             return ()
         return _agent_messages(self._state.agent)
 
+    def save(self) -> bytes:
+        """Serialize the agent's accumulated history into the canonical
+        wire format (ADR-023 STAB-012). Sugar over
+        ``save_history(bot.messages)``."""
+        from ..wire import save_history
+        return save_history(list(self.messages))
+
+    def load(self, data: "bytes | str") -> "Agent":
+        """Decode a wire document and replace the chain's history
+        list, returning a fresh fork with cleared runtime state
+        (ADR-023 STAB-012). Raises UnsupportedWireVersionError,
+        MissingWireVersionError, or UnknownWireKeyError on a
+        non-conforming document."""
+        from ..wire import load_history
+        out = copy.copy(self)
+        out._history = load_history(data)
+        out._state = None
+        return out
+
     async def prompt(self, msg: str) -> Response:
         return await agent_prompt(self, msg)
 
