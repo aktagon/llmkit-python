@@ -244,3 +244,10 @@ def test_upload_runs(tmp_path, monkeypatch) -> None:
     with _JSONServer(_OPENAI_FILE_OK) as server:
         _redirect(ex, "openai", server.url)
         asyncio.run(ex.main())
+
+
+def test_middleware_runs() -> None:
+    ex = _load("middleware")
+    with _JSONServer(_ANTHROPIC_OK) as server:
+        _redirect(ex, "anthropic", server.url)
+        asyncio.run(ex.main())
