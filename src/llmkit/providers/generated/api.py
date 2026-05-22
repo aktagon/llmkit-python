@@ -33,6 +33,11 @@ class APIResponseFieldDef:
 
 API_OPTIONS: tuple[APIOptionDef, ...] = (
     APIOptionDef(
+        py_func="with_add_tool",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_aspect_ratio",
         sub_options=(
         ),
@@ -198,11 +203,6 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
     ),
     APIOptionDef(
         py_func="with_thinking_budget",
-        sub_options=(
-        ),
-    ),
-    APIOptionDef(
-        py_func="with_tool",
         sub_options=(
         ),
     ),
