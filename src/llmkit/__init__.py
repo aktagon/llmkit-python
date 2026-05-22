@@ -61,7 +61,7 @@ from .image import (
     MediaRef,
     Part,
 )
-from .structs import ImageResponse
+from .structs import ImageResponse, ToolCall, ToolResult
 from .providers.generated.middleware import (
     Event,
     MiddlewareFn,
@@ -123,6 +123,8 @@ __all__ = [
     "Message",
     "Response",
     "Tool",
+    "ToolCall",
+    "ToolResult",
     "ImageData",
     "ImageRequest",
     "ImageResponse",

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from typing import Any, Callable
 
 from .paths import parse_data_uri
@@ -15,19 +14,7 @@ from .providers.generated.request import (
     system_placement,
     tool_call_config,
 )
-
-
-@dataclass
-class ToolCall:
-    id: str
-    name: str
-    input: dict[str, Any]
-
-
-@dataclass
-class ToolResult:
-    tool_use_id: str
-    content: str
+from .structs import ToolCall, ToolResult
 
 
 MessageTransform = Callable[[dict[str, Any], "Request", ProviderConfig], None]
@@ -366,7 +353,7 @@ def transform_openai_tool_call_msg(calls: list[ToolCall], role_mappings: dict[st
                 "type": "function",
                 "function": {
                     "name": tc.name,
-                    "arguments": json.dumps(tc.input),
+                    "arguments": json.dumps(tc.input if tc.input is not None else {}),
                 },
             }
             for tc in calls
@@ -382,7 +369,7 @@ def transform_anthropic_tool_call_msg(calls: list[ToolCall], role_mappings: dict
                 "type": "tool_use",
                 "id": tc.id,
                 "name": tc.name,
-                "input": tc.input,
+                "input": tc.input if tc.input is not None else {},
             }
             for tc in calls
         ],
@@ -396,7 +383,7 @@ def transform_google_tool_call_msg(calls: list[ToolCall], role_mappings: dict[st
             {
                 "functionCall": {
                     "name": tc.name,
-                    "args": tc.input,
+                    "args": tc.input if tc.input is not None else {},
                 }
             }
             for tc in calls
@@ -412,7 +399,7 @@ def transform_bedrock_tool_call_msg(calls: list[ToolCall], role_mappings: dict[s
                 "toolUse": {
                     "toolUseId": tc.id,
                     "name": tc.name,
-                    "input": tc.input,
+                    "input": tc.input if tc.input is not None else {},
                 }
             }
             for tc in calls
