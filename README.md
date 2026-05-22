@@ -308,6 +308,32 @@ await c.text.system(big_sys_prompt).caching().prompt("...")
 
 The mode is provider-specific and inferred from the provider config. The default TTL comes from `src/llmkit/providers/generated/caching.py` (Google: 3600s).
 
+### Model catalogue
+
+`c.models` and `c.providers` (ADR-019) cover model discovery in three modes. Runnable counterpart at [`examples/catalogue.py`](./examples/catalogue.py).
+
+```python
+from llmkit import Provider
+from llmkit.types import Capability
+
+# 1. Compiled-in catalogue — synchronous, no HTTP.
+all_models = c.models.list()
+info = c.models.get("claude-opus-4-7")            # ModelInfo | None
+chat = c.models.with_capability(Capability.CHAT_COMPLETION).list()
+
+# 2. Providers namespace.
+c.providers.list()        # configured (credentials + /v1/models endpoint)
+c.providers.supported()   # every provider the SDK was built with
+
+# 3. Live + scoped HTTP.
+live = await c.models.live()                       # LiveResult — fan-out
+p = Provider(name="anthropic", api_key="sk-...")
+scoped = await c.models.provider(p).list()         # single-provider list
+raw = await c.models.provider(p).raw().list()      # ModelInfo.raw populated
+```
+
+`live()` calls every configured provider's `/v1/models` in parallel and aggregates results into `LiveResult.models` + a per-provider `LiveResult.errors` map (partial success is the normal case). `provider(p).raw().list()` opts into populating `ModelInfo.raw` with the provider-native record — useful when you need fields the universal `ModelInfo` does not carry (Anthropic's capability matrix, Google's `supportedGenerationMethods`, etc.).
+
 ## Options
 
 Across every `*Text` / `*Agent` builder:
@@ -320,7 +346,7 @@ Across every `*Text` / `*Agent` builder:
 | Token cap         | `.max_tokens(n)`       |
 | Caching           | `.caching()`           |
 | Structured output | `.schema(json)`        |
-| Middleware hooks  | `.add_middleware(fns)`     |
+| Middleware hooks  | `.add_middleware(fns)` |
 | Reasoning effort  | `.reasoning_effort(l)` |
 | Thinking budget   | `.thinking_budget(n)`  |
 
