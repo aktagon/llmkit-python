@@ -4,7 +4,7 @@ Run: ANTHROPIC_API_KEY=sk-... python examples/agent.py
 
 Note `c.agent` is a stateful field — repeated `bot.prompt(...)` calls
 on the same builder accumulate conversation history. Chain methods
-(`.system(...)`, `.tool(...)`) clone and reset state, so a forked
+(`.system(...)`, `.add_tool(...)`) clone and reset state, so a forked
 builder gets a fresh conversation. `bot.reset()` clears history
 without dropping chained config.
 """
@@ -36,7 +36,7 @@ async def main() -> None:
     bot = (
         c.agent
         .system("You are a calculator. Use the add tool.")
-        .tool(add_tool)
+        .add_tool(add_tool)
         .max_tool_iterations(5)
     )
     resp = await bot.prompt("What is 2 + 3?")
