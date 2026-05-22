@@ -381,6 +381,41 @@ c = openai("anything").with_base_url("http://localhost:8080/v1")
 
 Works for any OpenAI-compatible server (vLLM, LM Studio, Ollama, corporate gateways).
 
+## Wire-format stability
+
+`*Agent` history persists across process boundaries through two paired
+functions:
+
+```python
+data = bot.save()                             # bytes
+# ...later, fresh process...
+bot = c.agent.system("...").tool(t).load(data)
+# raises UnsupportedWireVersionError on mismatch
+```
+
+Or the free-function form for admin tooling:
+
+```python
+from llmkit import save_history, load_history
+
+data = save_history(msgs)
+msgs = load_history(data)
+```
+
+The output is a JSON document with a `_v` integer envelope plus a
+`messages` array. The version is tracked through
+`WIRE_SCHEMA_VERSION`; the in-memory `Message` schema may evolve
+additively under one version (new optional fields work on older
+readers), but a renamed, removed, or retyped field requires a `_v`
+bump and a migrator.
+
+`save_history` / `load_history` are the ONLY guaranteed-stable
+serialization path. Direct `json.dumps` / `dataclasses.asdict` on a
+`Message` produces valid JSON but lacks the `_v` envelope, and
+`load_history` rejects it with `MissingWireVersionError`. Use the
+contract path for anything that crosses a process boundary or a
+release.
+
 ## Architecture
 
 - **Generated** (`src/llmkit/providers/generated/*.py`, `src/llmkit/builders/__init__.py`) — per-provider config + the typed-builder API surface. Pure data and class skeletons, no business logic.
