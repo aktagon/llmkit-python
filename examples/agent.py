@@ -36,7 +36,7 @@ async def main() -> None:
     bot = (
         c.agent
         .system("You are a calculator. Use the add tool.")
-        .tool(add_tool)
+        .add_tool(add_tool)
         .max_tool_iterations(5)
     )
     resp = await bot.prompt("What is 2 + 3?")
