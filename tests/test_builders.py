@@ -80,7 +80,7 @@ def test_text_chain() -> None:
         .history(Message(role="user", content="earlier"))
         .image("image/png", b"\xff")
         .max_tokens(42)
-        .middleware(noop_middleware)
+        .add_middleware(noop_middleware)
         .model("text-model")
         .schema('{"type":"object"}')
         .system("you are a tutor")
@@ -113,7 +113,7 @@ def test_image_chain() -> None:
         .image("image/png", b"\xff")
         .image_size("2K")
         .include_text()
-        .middleware(noop_middleware)
+        .add_middleware(noop_middleware)
         .model("img-model")
         .text("compose")
     )
@@ -132,11 +132,11 @@ def test_agent_chain() -> None:
         c.agent.caching()
         .max_tokens(1)
         .max_tool_iterations(3)
-        .middleware(noop_middleware)
+        .add_middleware(noop_middleware)
         .model("a")
         .system("sys")
         .temperature(0.5)
-        .tool(tool)
+        .add_tool(tool)
     )
     assert ag._caching is True
     assert ag._max_tokens == 1
@@ -157,7 +157,7 @@ def test_upload_chain() -> None:
     up = (
         c.upload.bytes(b"hi")
         .filename("f")
-        .middleware(noop_middleware)
+        .add_middleware(noop_middleware)
         .mime_type("text/plain")
         .path("/tmp/x")
     )
@@ -166,6 +166,23 @@ def test_upload_chain() -> None:
     assert len(up._middleware) == 1
     assert up._mime_type == "text/plain"
     assert up._path == "/tmp/x"
+
+
+# ---------- appender semantics (ADR-021) ----------
+
+
+def test_agent_add_tool_appends() -> None:
+    c = google("k")
+    t1 = Tool(name="first", description="d", schema={}, run=lambda _i: "")
+    t2 = Tool(name="second", description="d", schema={}, run=lambda _i: "")
+    ag = c.agent.system("S").add_tool(t1).add_tool(t2)
+    assert ag._tools == [t1, t2]
+
+
+def test_text_add_middleware_appends() -> None:
+    c = google("k")
+    bot = c.text.add_middleware(noop_middleware).add_middleware(noop_middleware)
+    assert len(bot._middleware) == 2
 
 
 # ---------- chain methods clone ----------
