@@ -441,10 +441,14 @@ class Agent:
     def messages(self) -> "tuple[Message, ...]":
         """Public view of the agent's accumulated history (ADR-020 HIST-004).
 
-        Returns an empty tuple before the first ``.prompt()`` call. The
-        outer container is immutable; each ``Message.tool_calls`` list
-        is shared with the agent's runtime state — treat the messages
-        as read-only (mutating ``tool_calls`` corrupts the agent).
+        Returns an empty tuple before the first ``.prompt()`` call.
+        The outer tuple is immutable; each ``Message.tool_calls`` list
+        and ``ToolCall`` instance is a fresh copy, so mutating them does
+        NOT affect the agent. The narrow aliasing risk is the
+        ``ToolCall.input`` dict reference, which is shared with the
+        agent's internal state — replacing it on a returned ``Message``
+        is safe, but in-place dict mutation corrupts the agent. Treat
+        the inner ``input`` mapping as read-only.
         """
         if self._state is None:
             return ()
