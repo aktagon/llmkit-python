@@ -116,10 +116,13 @@ def _agent_messages(legacy_agent: LegacyAgent) -> tuple[Message, ...]:
 
     The internal ``tool_result`` role is flattened to ``tool`` so the
     public wire shape matches the ontology's union-by-role
-    discriminator. Each Message.tool_calls list is a fresh copy so
-    the agent's runtime state stays isolated from the returned tuple's
-    outer container; the inner ToolCall instances themselves are
-    shared with internal state by ADR-020's shallow-immutability rule.
+    discriminator. Each ``Message.tool_calls`` list and each
+    ``ToolCall``/``ToolResult`` instance is constructed fresh per
+    call, so the returned tuple is fully decoupled from the agent's
+    runtime state — except for the inner ``ToolCall.input`` dict
+    reference, which is aliased with the internal entry. In-place
+    mutation of an ``input`` mapping on a returned ``Message`` would
+    corrupt the agent; replacing the ``.input`` attribute is safe.
     """
     out: list[Message] = []
     for m in legacy_agent.history:
