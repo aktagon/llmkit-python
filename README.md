@@ -1,10 +1,10 @@
 # llmkit (Python)
 
-Unified async LLM client library. One API, multiple providers, zero external dependencies (stdlib only — no `httpx`, no `pydantic`).
+One Python API for Anthropic, OpenAI, Google, and 20+ other providers — including local models through Ollama and vLLM. Switch providers without rewriting your request.
 
-The code is generated + hand-coded with the help of AI: a typed provider matrix and the typed-builder API surface are generated from a single source of truth, while request building, transport, streaming, caching, batching, and tool-loop behavior are hand-coded on top.
+Async. Zero external dependencies — stdlib only, no `httpx`, no `pydantic`. Python 3.10+.
 
-Shares a code-generation pipeline with the [Go](https://github.com/aktagon/llmkit-go), [TypeScript](https://github.com/aktagon/llmkit-ts), and [Rust](https://github.com/aktagon/llmkit-rust) SDKs.
+Also available for Go, TypeScript, and Rust.
 
 ## Install
 
