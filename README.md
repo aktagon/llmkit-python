@@ -46,13 +46,14 @@ Runnable counterparts to every code block below live in [`examples/`](./examples
 Per-provider factory functions:
 
 ```
-ai21      anthropic  azure     bedrock   cerebras  cohere    deepseek
-doubao    ernie      fireworks google    grok      groq      lmstudio
-minimax   mistral    moonshot  ollama    openai    openrouter
-perplexity qwen      sambanova together  vllm      yi        zhipu
+ai21       anthropic  azure      bedrock    cerebras   cohere
+deepseek   doubao     ernie      fireworks  google     grok
+groq       jan        llamacpp   lmstudio   minimax    mistral
+moonshot   ollama     openai     openrouter perplexity qwen
+sambanova  together   vertex     vllm       yi         zhipu
 ```
 
-Or use the generic `new_client(name, api_key)`. 27 providers, 4 API shapes (OpenAI-compatible, Anthropic Messages, Google Generative AI, AWS Bedrock Converse). Bedrock auth uses SigV4; other providers use API-key auth.
+Or use the generic `new_client(name, api_key)`. 30 providers, 4 API shapes (OpenAI-compatible, Anthropic Messages, Google Generative AI, AWS Bedrock Converse). Bedrock auth uses SigV4; other providers use API-key auth.
 
 ## API
 
@@ -306,11 +307,11 @@ await c.text.system(long_sys_prompt).caching().prompt("...")
 await c.text.system(big_sys_prompt).caching().prompt("...")
 ```
 
-The mode is provider-specific and inferred from the provider config. The default TTL comes from `src/llmkit/providers/generated/caching.py` (Google: 3600s).
+The mode is provider-specific and inferred from the provider config. The default TTL for Google is 3600s.
 
 ### Model catalogue
 
-`c.models` and `c.providers` (ADR-019) cover model discovery in three modes. Runnable counterpart at [`examples/catalogue.py`](./examples/catalogue.py).
+`c.models` and `c.providers` cover model discovery in three modes. Runnable counterpart at [`examples/catalogue.py`](./examples/catalogue.py).
 
 ```python
 from llmkit import Provider
@@ -415,13 +416,6 @@ serialization path. Direct `json.dumps` / `dataclasses.asdict` on a
 `load_history` rejects it with `MissingWireVersionError`. Use the
 contract path for anything that crosses a process boundary or a
 release.
-
-## Architecture
-
-- **Generated** (`src/llmkit/providers/generated/*.py`, `src/llmkit/builders/__init__.py`) — per-provider config + the typed-builder API surface. Pure data and class skeletons, no business logic.
-- **Hand-coded** (`src/llmkit/{client,types,errors,http,transforms,middleware,caching,batch,agent,sigv4,paths}.py`, plus `builders/{text,agent,image,stream,batch,upload}.py`) — HTTP, request shaping, SSE consumer, agent tool loop, SigV4 signing, caching, batch lifecycle, multipart upload, middleware fanout, builder terminals.
-
-Transforms dispatch on config fields (`system_placement`, `wraps_options_in`, `auth_scheme`), not provider names.
 
 ## Mirror
 
