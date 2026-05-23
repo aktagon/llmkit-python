@@ -1,4 +1,4 @@
-"""AWS Signature Version 4 signing. stdlib only (hashlib, hmac, urllib)."""
+""""""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def sign_sigv4(
     region: str,
     service: str,
 ) -> dict[str, str]:
-    """Return the SigV4 headers for a POST request, matching Go sigv4.go output."""
+    """"""
     now = _dt.datetime.now(_dt.timezone.utc)
     datestamp = now.strftime("%Y%m%d")
     amzdate = now.strftime("%Y%m%dT%H%M%SZ")

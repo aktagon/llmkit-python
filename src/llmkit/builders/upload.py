@@ -1,8 +1,8 @@
-"""Wires Upload.run against the internal upload_file helper.
+"""
 
-Both Path and Bytes branches dispatch through ``upload_file(provider,
-source, ...)``: ``str`` source is read from disk; ``bytes`` source is
-uploaded directly with the chained ``filename()`` value.
+
+
+
 """
 
 from __future__ import annotations

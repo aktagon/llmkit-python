@@ -1,4 +1,4 @@
-"""Public error types and provider error parsing."""
+""""""
 
 from __future__ import annotations
 

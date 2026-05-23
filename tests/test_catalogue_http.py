@@ -1,9 +1,9 @@
-"""HTTP runtime tests for the catalogue (ADR-019 Phase 3).
+"""
 
-Each test spins up an ``http.server`` thread, points the Client at its
-URL via ``with_base_url``, and asserts pagination / parser / error
-classification behaviour. Mirror of go/models_test.go and
-ts/tests/catalogue_http.test.ts.
+
+
+
+
 """
 
 from __future__ import annotations
@@ -126,7 +126,7 @@ def test_scoped_list_google_opaque_token_pagination() -> None:
         models = asyncio.run(c.models.provider(Provider(name="google", api_key="test-key")).list())
         assert len(models) == 2
         assert len(calls) == 2
-        # Google parser strips "models/" prefix.
+        #
         assert models[0].id == "gemini-2.5-flash"
     finally:
         srv.shutdown()
@@ -185,7 +185,7 @@ def test_scoped_list_503_maps_to_err_models_unavailable() -> None:
 
 
 def test_scoped_list_endpointless_provider_keeps_not_supported() -> None:
-    # No server needed — runtime short-circuits before any HTTP call.
+    #
     c = cohere("test-key")
     with pytest.raises(ErrModelsNotSupported):
         asyncio.run(c.models.provider(Provider(name="cohere", api_key="k")).list())

@@ -1,4 +1,4 @@
-"""Caching lifecycle: explicit (inline mutations) and resource (pre-flight request)."""
+""""""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def apply_caching(
     opts: Options,
     cfg: ProviderConfig,
 ) -> None:
-    """Mutate body to enable caching. Dispatches on the provider's CachingMode."""
+    """"""
     cc = caching_config(ProviderName(provider.name))
     if cc is None:
         raise ValidationError(field="caching", message=f"not supported by {provider.name}")

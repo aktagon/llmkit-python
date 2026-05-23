@@ -1,4 +1,4 @@
-"""Public entry points: prompt, prompt_stream, upload_file. Mirrors go/llmkit.go."""
+""""""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ def prompt(
     request_timeout: float = 600.0,
     raw: bool = False,
 ) -> Response:
-    """Send a one-shot request to an LLM provider."""
+    """"""
     opts = Options(
         temperature=temperature,
         top_p=top_p,
@@ -168,7 +168,7 @@ def prompt_stream(
     middleware: list | None = None,
     request_timeout: float = 600.0,
 ) -> Response:
-    """Streaming variant of `prompt`. Calls on_chunk(text) for each delta; returns accumulated response."""
+    """"""
     opts = Options(
         temperature=temperature,
         top_p=top_p,
@@ -263,19 +263,19 @@ def upload_file(
     middleware: list | None = None,
     request_timeout: float = 600.0,
 ) -> File:
-    """Upload a file to a provider and return a File reference.
-
-    ``source`` may be:
-
-    - ``str`` or ``os.PathLike`` — read the file from disk. The
-      multipart filename defaults to ``os.path.basename(source)``;
-      pass ``filename=`` to override.
-    - ``bytes`` (or ``bytearray``) — upload the buffer directly.
-      ``filename=`` is required.
-
-    ``mime_type`` overrides the filename-extension–based detection
-    used for the multipart Content-Type header.
     """
+
+
+
+
+
+
+
+
+
+
+
+"""
     if isinstance(source, (bytes, bytearray)):
         if not filename:
             raise ValidationError(field="filename", message="required when source is bytes")
@@ -376,9 +376,9 @@ def upload_file(
     return file
 
 
-# =============================================================================
-# Validation
-# =============================================================================
+#
+#
+#
 
 def _validate_provider(p: Provider) -> None:
     if not p.api_key:
@@ -423,9 +423,9 @@ def _validate_options(p: Provider, opts: Options) -> None:
             )
 
 
-# =============================================================================
-# URL and request builders
-# =============================================================================
+#
+#
+#
 
 def _build_url(p: Provider, cfg) -> str:
     base = p.base_url or cfg.base_url
@@ -519,13 +519,13 @@ def _build_request(p: Provider, req: Request, opts: Options, cfg):
 
 
 def _add_options(body: dict[str, Any], opts: Options, provider_name: str) -> None:
-    """Apply generation parameters to body, honouring dotted JSON keys + extra_fields.
-
-    JSON keys may be dotted (e.g. "thinking.budget_tokens") for providers that
-    require nested objects. Each option's per-provider OptionOverrideDef may
-    also carry extra_fields_json — sibling JSON merged into the same parent
-    path (e.g. {"type":"enabled"} alongside Anthropic's thinking.budget_tokens).
     """
+
+
+
+
+
+"""
     pname = ProviderName(provider_name)
     supported = {o.key: o for o in supported_options(pname)}
     overrides = {ov.key: ov for ov in option_overrides(pname)}
@@ -602,9 +602,9 @@ def _add_structured_output(body: dict[str, Any], headers: dict[str, str], schema
         set_nested_field(body, so.format_field, format_obj)
 
 
-# =============================================================================
-# Response parsing
-# =============================================================================
+#
+#
+#
 
 def _parse_response(provider: str, body: bytes) -> Response:
     try:

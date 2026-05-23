@@ -1,11 +1,11 @@
-"""Spend-cap middleware.
+"""
 
-Vetoes LLM requests once cumulative cost exceeds a daily budget, and
-accumulates actual cost on post-phase using a caller-supplied price
-table. Price tables drift monthly and belong in user code, not the
-library.
 
-Run: ANTHROPIC_API_KEY=sk-... python examples/middleware.py
+
+
+
+
+
 """
 import asyncio
 import os

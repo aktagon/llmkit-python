@@ -1,6 +1,6 @@
-"""Unit tests for llmkit.errors — provider error parsing and
-retry-after header extraction. Uses real provider error envelopes
-(OpenAI, Anthropic, Google) rather than placeholder shapes."""
+"""
+
+"""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from llmkit.errors import (
 )
 
 
-# ---------- parse_error ----------
+#
 
 
 def test_parse_error_openai_envelope() -> None:
@@ -95,7 +95,7 @@ def test_parse_error_picks_up_retry_after_from_headers() -> None:
     assert err.retry_after == 30.0
 
 
-# ---------- extract_retry_after ----------
+#
 
 
 def test_extract_retry_after_canonical_case() -> None:
@@ -103,7 +103,7 @@ def test_extract_retry_after_canonical_case() -> None:
 
 
 def test_extract_retry_after_lowercase_fallback() -> None:
-    # HTTP/2 lowercases headers; the fallback path matters.
+    #
     assert extract_retry_after({"retry-after": "45"}) == 45.0
 
 
@@ -116,12 +116,12 @@ def test_extract_retry_after_returns_zero_when_none() -> None:
 
 
 def test_extract_retry_after_returns_zero_on_non_numeric() -> None:
-    # HTTP allows a date form ("Wed, 21 Oct 2026 07:28:00 GMT") which
-    # this implementation doesn't parse — returns 0 rather than raising.
+    #
+    #
     assert extract_retry_after({"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"}) == 0.0
 
 
-# ---------- error class str() forms (used by middleware fanout, logging) ----------
+#
 
 
 def test_api_error_str() -> None:

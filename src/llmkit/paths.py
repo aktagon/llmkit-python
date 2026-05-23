@@ -1,4 +1,4 @@
-"""Dot-notation path helpers for JSON-shaped dicts, plus MIME sniffing and data URIs."""
+""""""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ _INDEX_RE = re.compile(r"^(?P<field>.+)\[(?P<idx>\d+)\]$")
 
 
 def extract_path(data: Any, path: str) -> str:
-    """Navigate dot-notation path with array index support. Returns stringified leaf.
-
-    Examples: "content[0].text", "choices[0].message.content", "usage.input_tokens".
     """
+
+
+"""
     if not path:
         return ""
     current: Any = data
@@ -43,7 +43,7 @@ def extract_path(data: Any, path: str) -> str:
 
 
 def extract_int_path(data: Any, path: str) -> int:
-    """Like extract_path but returns an int (0 on miss)."""
+    """"""
     if not path:
         return 0
     current: Any = data
@@ -73,7 +73,7 @@ def extract_int_path(data: Any, path: str) -> int:
 
 
 def detect_mime_type(path: str) -> str:
-    """Map file extension to MIME type (subset matching the Go handwritten table)."""
+    """"""
     ext = os.path.splitext(path)[1].lower()
     mapping = {
         ".pdf": "application/pdf",
@@ -91,7 +91,7 @@ def detect_mime_type(path: str) -> str:
 
 
 def parse_data_uri(uri: str) -> tuple[str, str]:
-    """Split a `data:<mime>;base64,<payload>` URI. Returns ("", uri) on non-data URIs."""
+    """"""
     if not uri.startswith("data:"):
         return "", uri
     rest = uri[len("data:"):]
@@ -104,7 +104,7 @@ def parse_data_uri(uri: str) -> tuple[str, str]:
 
 
 def set_nested_field(body: dict[str, Any], path: str, value: Any) -> None:
-    """Set a value at a dot-notation path in a nested dict, creating maps as needed."""
+    """"""
     parts = path.split(".")
     if len(parts) == 1:
         body[parts[0]] = value
@@ -122,12 +122,12 @@ def set_nested_field(body: dict[str, Any], path: str, value: Any) -> None:
 
 
 def merge_into_parent(body: dict[str, Any], path: str, extras: dict[str, Any]) -> None:
-    """Merge extras into the dict that contains the leaf of path.
-
-    For "a.b.c" extras land in body["a"]["b"]; for "x" they land in body itself.
-    Used to attach static sibling fields (OptionOverrideDef.extra_fields_json)
-    next to a provider-specific dotted JSON key.
     """
+
+
+
+
+"""
     parts = path.split(".")
     if len(parts) == 1:
         body.update(extras)
@@ -142,7 +142,7 @@ def merge_into_parent(body: dict[str, Any], path: str, extras: dict[str, Any]) -
 
 
 def set_additional_properties_false(schema: Any) -> None:
-    """Recursively set additionalProperties=false and auto-fill required on object schemas."""
+    """"""
     if not isinstance(schema, dict):
         return
     if schema.get("type") == "object":
@@ -159,7 +159,7 @@ def set_additional_properties_false(schema: Any) -> None:
 
 
 def remove_additional_properties(schema: Any) -> None:
-    """Recursively delete additionalProperties from JSON schema."""
+    """"""
     if not isinstance(schema, dict):
         return
     schema.pop("additionalProperties", None)
@@ -173,5 +173,5 @@ def remove_additional_properties(schema: Any) -> None:
 
 
 def contains_value(csv: str, value: str) -> bool:
-    """Return True if the comma-separated `csv` contains `value` (whitespace-trimmed)."""
+    """"""
     return value in {token.strip() for token in csv.split(",")}

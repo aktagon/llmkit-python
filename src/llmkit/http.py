@@ -1,4 +1,4 @@
-"""HTTP transport: JSON POST, multipart upload, SSE streaming. stdlib only."""
+""""""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def do_get(
     headers: dict[str, str],
     timeout: float = 600.0,
 ) -> bytes:
-    """GET and return the response bytes. Raises APIError on 4xx/5xx."""
+    """"""
     req = urllib.request.Request(url, method="GET")
     for key, value in headers.items():
         req.add_header(key, value)
@@ -50,7 +50,7 @@ def do_post(
     headers: dict[str, str],
     timeout: float = 600.0,
 ) -> bytes:
-    """POST JSON and return the response bytes. Raises APIError on 4xx/5xx."""
+    """"""
     data, status_code, resp_headers = _do_post_raw(url, body, headers, timeout)
     if status_code >= 400:
         err = APIError(
@@ -58,7 +58,7 @@ def do_post(
             message=data.decode("utf-8", errors="replace"),
             retryable=status_code == 429 or status_code >= 500,
         )
-        # Attach the raw body for callers that want to parse provider error shape.
+        #
         err.type = ""  # keep dataclass shape consistent
         raise err
     return data
@@ -70,7 +70,7 @@ def _do_post_raw(
     headers: dict[str, str],
     timeout: float,
 ) -> tuple[bytes, int, dict[str, str]]:
-    """Raw POST: returns (body, status_code, headers) without raising on HTTP errors."""
+    """"""
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     for key, value in headers.items():
@@ -92,7 +92,7 @@ def do_sigv4_post(
     service: str,
     timeout: float = 600.0,
 ) -> bytes:
-    """POST signed with AWS SigV4. Raises APIError on 4xx/5xx."""
+    """"""
     from .sigv4 import sign_sigv4
 
     req = urllib.request.Request(url, data=body, method="POST")
@@ -122,11 +122,11 @@ def do_multipart_post(
     timeout: float = 600.0,
     mime_type: str = "",
 ) -> tuple[bytes, int]:
-    """POST multipart/form-data. Returns (body, status_code); does NOT raise on 4xx/5xx.
-
-    If ``mime_type`` is empty, Content-Type for the file part is derived
-    from the filename extension via :func:`detect_mime_type`.
     """
+
+
+
+"""
     boundary = "----llmkit-python-" + os.urandom(16).hex()
     buf = io.BytesIO()
     for key, value in fields.items():
@@ -165,11 +165,11 @@ def do_multipart_post_multi(
     headers: dict[str, str],
     timeout: float = 600.0,
 ) -> tuple[bytes, int]:
-    """POST multipart/form-data with one or more file parts plus zero-or-more
-    plain string fields. ``files`` items are ``(field_name, filename, mime_type, data)``;
-    field_name may end in "[]" when the API expects an array (e.g. OpenAI's "image[]").
-    Returns ``(body, status_code)``; does NOT raise on 4xx/5xx.
     """
+
+
+
+"""
     boundary = "----llmkit-python-" + os.urandom(16).hex()
     buf = io.BytesIO()
     for key, value in fields.items():
@@ -202,7 +202,7 @@ def do_multipart_post_multi(
 
 
 def _parse_stream_finish_path(p: str) -> tuple[str, str]:
-    """Split ADR-013 stream-finish locator into (event_name, json_path)."""
+    """"""
     if not p:
         return "", ""
     idx = p.find(":")
@@ -220,13 +220,13 @@ def do_stream_post(
     timeout: float = 600.0,
     finish_reason_path: str = "",
 ) -> tuple[Usage, str]:
-    """POST a streaming request and dispatch SSE events to `callback`.
-
-    Returns ``(usage, finish_reason)``. ``finish_reason`` follows ADR-013:
-    captured from the parsed event/data body via ``finish_reason_path``
-    (``event_name:json.path`` form or bare ``json.path``); empty when the
-    provider declares no stream-time path or no signal arrived.
     """
+
+
+
+
+
+"""
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     for key, value in headers.items():
@@ -258,8 +258,8 @@ def do_stream_post(
 
             data_str = line[len("data: "):]
 
-            # Data-level done sentinel (e.g., OpenAI "[DONE]") is literal,
-            # not JSON — bail before parsing.
+            #
+            #
             if stream_cfg.done_signal and data_str == stream_cfg.done_signal:
                 break
 
@@ -282,9 +282,9 @@ def do_stream_post(
                     break
                 continue
 
-            # ADR-013: capture finish-reason BEFORE the event-level done
-            # break — Anthropic carries stop_reason on the message_stop
-            # event body and dropping the parse would discard it.
+            #
+            #
+            #
             if finish_json_path and (finish_event == "" or finish_event == current_event):
                 value = extract_path(parsed, finish_json_path)
                 if value and value != "FINISH_REASON_UNSPECIFIED":

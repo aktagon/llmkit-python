@@ -1,8 +1,8 @@
-"""Phase 2b smoke tests for llmkit.builders.
+"""
 
-Exercises every public symbol — chains, immutability, terminal stubs,
-type-alias re-exports — so the strict (eventual) Python coverage gate
-sees full function coverage on builders/__init__.py.
+
+
+
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ def noop_middleware(_ctx: object, _event: object) -> Exception | None:
     return None
 
 
-# ---------- chain methods land in fields ----------
+#
 
 
 def test_text_chain() -> None:
@@ -168,7 +168,7 @@ def test_upload_chain() -> None:
     assert up._path == "/tmp/x"
 
 
-# ---------- appender semantics (ADR-021) ----------
+#
 
 
 def test_agent_add_tool_appends() -> None:
@@ -185,7 +185,7 @@ def test_text_add_middleware_appends() -> None:
     assert len(bot._middleware) == 2
 
 
-# ---------- chain methods clone ----------
+#
 
 
 def test_chain_returns_new_instance() -> None:
@@ -201,12 +201,12 @@ def test_client_with_base_url_sets_and_returns_self() -> None:
     override = "https://example.test/v1"
     c = new_client("vertex", "test-token").with_base_url(override)
     assert c.provider.base_url == override
-    # Chainability: with_base_url must return the same Client so callers
-    # can write `c = vertex(token).with_base_url(url)` in one line.
+    #
+    #
     assert isinstance(c, Client)
 
 
-# ---------- per-provider factories ----------
+#
 
 
 def test_every_provider_factory() -> None:
@@ -248,7 +248,7 @@ def test_every_provider_factory() -> None:
         assert c.provider.name == expected_name
 
 
-# ---------- phase 3 wiring tests with a mock HTTP server ----------
+#
 
 
 import json
@@ -258,13 +258,13 @@ from typing import Any
 
 
 class _MockServer:
-    """Single-shot mock; serves the same canned response for every POST.
-
-    For test_phase3_*, we point the typed-builder Client's
-    ``provider.base_url`` at the mock and assert that the wired path
-    rolled chain config into the request and returned the parsed
-    response.
     """
+
+
+
+
+
+"""
 
     def __init__(self, response_body: dict[str, Any]):
         self.response_body = response_body
@@ -390,11 +390,11 @@ def test_phase3_text_batch_submits_and_returns_handle() -> None:
         assert handle.id == "msgbatch_123"
         body = server.last_body
         assert body is not None
-        # Anthropic batch shape: {requests: [{custom_id, params: {...}}]}
+        #
         assert isinstance(body["requests"], list)
         assert body["requests"][0]["custom_id"] == "req-0"
         assert body["requests"][1]["custom_id"] == "req-1"
-        # System propagates per-request through buildRequest.
+        #
         assert body["requests"][0]["params"]["system"] == "s"
 
 
@@ -416,23 +416,23 @@ def test_phase3_batch_handle_wait_polls_then_fetches_results() -> None:
 
 def test_phase3_upload_run_validates_xor() -> None:
     c = openai("k")
-    # Empty: error
+    #
     with pytest.raises(ValueError, match="exactly one of"):
         asyncio.run(c.upload.run())
-    # Both: error
+    #
     with pytest.raises(ValueError, match="mutually exclusive"):
         asyncio.run(c.upload.bytes(b"x").path("/p").run())
-    # Bytes without filename: error
+    #
     with pytest.raises(ValueError, match="filename"):
         asyncio.run(c.upload.bytes(b"x").run())
 
 
 def test_phase3_upload_run_bytes_branch_round_trips() -> None:
-    """Bytes branch posts the multipart body to the configured baseUrl.
-
-    Captures the raw multipart body and asserts the filename + payload
-    + mime override made it through.
     """
+
+
+
+"""
     captured: dict[str, bytes] = {}
 
     class Handler(BaseHTTPRequestHandler):
@@ -471,13 +471,13 @@ def test_phase3_upload_run_bytes_branch_round_trips() -> None:
 
 
 def test_phase3_text_stream_yields_chunks() -> None:
-    """Stream wiring proves the asyncio.Queue + to_thread bridge works.
-
-    Uses a Bytes-style raw-SSE response. The OpenAI streaming format
-    is ``data: {...}\\n\\n`` per event; legacy prompt_stream parses
-    these into chunks via a callback. Our bridge piles them in an
-    asyncio.Queue and yields from the async generator.
     """
+
+
+
+
+
+"""
 
     class StreamHandler(BaseHTTPRequestHandler):
         def log_message(self, *_args, **_kwargs):
@@ -511,7 +511,7 @@ def test_phase3_text_stream_yields_chunks() -> None:
 
         chunks, stream = asyncio.run(consume())
         assert chunks == ["He", "llo"]
-        # Trailing handle: after iteration, response is populated.
+        #
         assert stream.response is not None
         assert stream.response.text == "Hello"
         assert stream.error is None
@@ -544,7 +544,7 @@ def test_phase3_image_generate_wires() -> None:
         assert resp.images[0].mime_type == "image/png"
 
 
-# ---------- Agent stateful builder ----------
+#
 
 
 def test_phase3_agent_prompt_initializes_state_and_reuses() -> None:
@@ -559,7 +559,7 @@ def test_phase3_agent_prompt_initializes_state_and_reuses() -> None:
         assert first_state is not None
         r2 = asyncio.run(bot.prompt("again"))
         assert r2.text == "ok"
-        # Same state instance — history retained.
+        #
         assert bot._state is first_state
 
 
@@ -575,19 +575,19 @@ def test_phase3_agent_reset_clears_state() -> None:
 
 
 def test_phase3_agent_state_forking_load_bearing() -> None:
-    """Load-bearing contract test for PYTHON_BUILDER_POST_MUTATION["Agent"].
-
-    Without ``out._state = None`` after every chain method, a forked
-    clone via ``bot.system("new")`` would silently share its parent's
-    accumulated history through the same ``AgentState`` reference.
     """
+
+
+
+
+"""
     from llmkit import Provider as ProviderType
     from llmkit.agent import Agent as LegacyAgent
     from llmkit.builders.agent import AgentState
 
     c = anthropic("k")
     bot = c.agent.system("orig")
-    # Manually populate state to simulate post-init.
+    #
     legacy = LegacyAgent(ProviderType(name="anthropic", api_key="k"))
     bot._state = AgentState(legacy)
 
@@ -597,35 +597,35 @@ def test_phase3_agent_state_forking_load_bearing() -> None:
 
 
 def test_phase_a_agent_history_writer_replaces_chain_state() -> None:
-    """ADR-020 HIST-003: bot.history(*msgs) replaces the chain history."""
+    """"""
     c = anthropic("k")
     msg_a = Message(role="user", content="first")
     msg_b = Message(role="assistant", content="ok")
     bot = c.agent.system("you are helpful").history(msg_a, msg_b)
     assert bot._history == [msg_a, msg_b]
-    # second call replaces, doesn't append.
+    #
     msg_c = Message(role="user", content="reset")
     rebot = bot.history(msg_c)
     assert rebot._history == [msg_c]
 
 
 def test_phase_a_agent_messages_reader_empty_before_prompt() -> None:
-    """ADR-020 HIST-004: bot.messages is an empty tuple before .prompt()."""
+    """"""
     c = anthropic("k")
     bot = c.agent.system("seeded").history(Message(role="user", content="hi"))
-    # Builder has chain history but no runtime state yet.
+    #
     assert bot.messages == ()
 
 
 def test_phase_a_agent_messages_reader_after_init() -> None:
-    """ADR-020 HIST-004: bot.messages projects internal history through the
-    runtime-state adapter once the legacy agent is constructed.
-
-    Tests the tool-turn projection: assistant-with-tools turn has
-    non-empty tool_calls; tool-result turn has non-None tool_result
-    and the public 'tool' role discriminator (mapped from internal
-    'tool_result').
     """
+
+
+
+
+
+
+"""
     from llmkit import Provider as ProviderType
     from llmkit import ToolCall as PubToolCall
     from llmkit import ToolResult as PubToolResult
@@ -657,7 +657,7 @@ def test_phase_a_agent_messages_reader_after_init() -> None:
     assert msgs[1].role == "assistant"
     assert len(msgs[1].tool_calls) == 1
     assert msgs[1].tool_calls[0].name == "list_files"
-    # Internal 'tool_result' role flattens to public 'tool'.
+    #
     assert msgs[2].role == "tool"
     assert msgs[2].tool_result is not None
     assert msgs[2].tool_result.tool_use_id == "call_1"
@@ -665,7 +665,7 @@ def test_phase_a_agent_messages_reader_after_init() -> None:
 
 
 def test_phase_a_agent_history_init_seeds_runtime() -> None:
-    """ADR-020 HIST-007: chain history populates the legacy agent on init."""
+    """"""
     from llmkit.builders.agent import _init_agent
 
     c = anthropic("k")
@@ -684,7 +684,7 @@ def test_phase_a_agent_history_init_seeds_runtime() -> None:
     assert state.agent.history[1].content == "hi back"
 
 
-# ---------- re-exported types are usable ----------
+#
 
 
 def test_type_aliases_constructible() -> None:
@@ -709,23 +709,23 @@ def test_type_aliases_constructible() -> None:
     assert mw is noop_middleware
 
 
-# ---------- A2 bounded stream queue ----------
+#
 
 
 def test_stream_queue_applies_backpressure(monkeypatch) -> None:
-    """A2: worker thread is paced by consumer when queue fills.
-
-    Stub legacy_prompt_stream with a tight loop that pushes 200
-    chunks via on_chunk. Consumer drains with asyncio.sleep(1ms)
-    per chunk. Verify two invariants:
-
-    1. All 200 chunks arrive in order (no loss, no scrambling).
-    2. The producer is paced by the consumer: with maxsize=64
-       and 200 chunks at 1ms drain each, the worker must spend
-       at least ~135ms (200-64 chunks past the buffer × 1ms)
-       inside on_chunk. An unbounded queue completes in <5ms
-       because put_nowait never blocks.
     """
+
+
+
+
+
+
+
+
+
+
+
+"""
     import time
 
     from llmkit.builders import stream as stream_mod
@@ -755,8 +755,8 @@ def test_stream_queue_applies_backpressure(monkeypatch) -> None:
     got = asyncio.run(run())
 
     assert got == [f"{i} " for i in range(total)], "chunks lost or out of order"
-    # Backpressure floor: 136 chunks must wait for consumer drain
-    # at >=1ms each. Allow generous slack (50ms) for scheduler noise.
+    #
+    #
     min_expected = (total - 64) * consumer_delay * 0.5
     assert producer_wallclock["value"] >= min_expected, (
         f"producer ran in {producer_wallclock['value']*1000:.1f}ms, "
@@ -764,9 +764,9 @@ def test_stream_queue_applies_backpressure(monkeypatch) -> None:
     )
 
 
-# ---------- Coverage gate Phase 2: chain methods previously untested ----------
-# These are the sampling hyperparameters + Text.batch + Agent.add_tool +
-# Agent.reset that the strict-mode public-symbol-untested gate flagged.
+#
+#
+#
 
 
 def test_text_sampling_hyperparameters_round_trip() -> None:
@@ -814,10 +814,10 @@ def test_agent_sampling_hyperparameters_round_trip() -> None:
 
 
 def test_text_batch_method_exists_and_is_async() -> None:
-    """Smoke-only: .batch is the multi-prompt convenience that runs
-    submit_batch + wait under the hood. End-to-end exercise lives in
-    plan-018 integration tests (real provider batch lifecycle); here we
-    just confirm the method is wired and async."""
+    """
+
+
+"""
     import inspect
 
     c = anthropic("k")
@@ -826,13 +826,13 @@ def test_text_batch_method_exists_and_is_async() -> None:
     assert inspect.iscoroutinefunction(method)
 
 
-# === ADR-014 — Raw response escape hatch ===
+#
 
 _ANTHROPIC_RAW_RESP = {
     "id": "msg_01",
     "content": [{"type": "text", "text": "ok"}],
     "usage": {"input_tokens": 1, "output_tokens": 1},
-    # Provider-specific field that the universal Response does not carry.
+    #
     "stop_reason": "end_turn",
 }
 
@@ -855,10 +855,10 @@ def test_text_raw_absent_leaves_response_raw_none() -> None:
 
 
 def test_image_and_agent_raw_chain_callable() -> None:
-    # Chain-method coverage. Image.generate and Agent.prompt route
-    # through the same b._raw -> options.raw -> result.raw plumbing
-    # exercised end-to-end in the Text.raw test; here we just confirm
-    # the chain hooks are wired and flip the private field.
+    #
+    #
+    #
+    #
     c = google("k")
     img = c.image.model("gemini-2.5-flash-image-preview").raw()
     assert img._raw is True

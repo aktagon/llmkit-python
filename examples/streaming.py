@@ -1,10 +1,10 @@
-"""Async streaming with trailing usage handle.
+"""
 
-Run: ANTHROPIC_API_KEY=sk-... python examples/streaming.py
 
-`TextStream` implements `__aiter__`. After iteration drains, the
-trailing-handle properties `stream.response` and `stream.error`
-carry the final `Response` (with `tokens`) and any terminal error.
+
+
+
+
 """
 import asyncio
 import os

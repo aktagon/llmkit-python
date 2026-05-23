@@ -1,4 +1,4 @@
-"""Image generation tests — mock HTTP server, no live API calls."""
+""""""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ FAKE_PNG = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
 
 
 class _MockServer:
-    """Single-shot HTTP server that captures one request and serves a canned response."""
+    """"""
 
     def __init__(self, response_body: dict[str, Any]):
         self.response_body = response_body
@@ -148,8 +148,8 @@ def test_image_generate_with_include_text_captures_text_part() -> None:
 
 
 def test_image_generate_parts_interleaved_compositional() -> None:
-    # ADR-008's motivating scenario: text and reference images interleaved
-    # so the model attends to the description-image pairing as intended.
+    #
+    #
     ref_a = b"\x89PNGA"
     ref_b = b"\x89PNGB"
     encoded = base64.b64encode(FAKE_PNG).decode("ascii")
@@ -202,9 +202,9 @@ def test_image_generate_rejects_too_many_image_parts() -> None:
     assert exc_info.value.field == "parts"
 
 
-# The "both prompt and parts set" XOR test from the legacy free-function
-# surface is no longer reachable via typed-builder: chain methods either
-# accumulate parts or pass a final-text msg, never both as a free-form pair.
+#
+#
+#
 
 
 def test_image_generate_rejects_neither_set() -> None:
@@ -253,11 +253,11 @@ def test_image_generate_middleware_pre_phase_can_veto() -> None:
         )
 
 
-# ===== OpenAI Image API (plan 020 phase 4) =====
 #
-# Two endpoints: /v1/images/generations (JSON; no image parts) and
-# /v1/images/edits (multipart/form-data; one or more image parts).
-# Output is forced to b64_json so the response shape stays uniform.
+#
+#
+#
+#
 
 OPENAI_IMAGE_2 = "gpt-image-2"
 
@@ -271,10 +271,10 @@ def _openai_image_response(encoded: str, n: int = 1) -> dict[str, Any]:
 
 
 class _OpenAIMockServer:
-    """Mock that captures either JSON (generations) or multipart (edits)
-    bodies. Parses multipart with stdlib ``email`` so test assertions can
-    walk fields and image[] files in caller order.
     """
+
+
+"""
 
     def __init__(self, response_body: dict[str, Any]):
         self.response_body = response_body
@@ -355,8 +355,8 @@ def _openai_client(server_url: str | None = None):
 
 
 def test_image_generate_openai_generations_omits_response_format() -> None:
-    """gpt-image-* always returns b64_json and rejects the
-    response_format parameter — must be absent on the wire."""
+    """
+"""
     encoded = base64.b64encode(FAKE_PNG).decode("ascii")
     with _OpenAIMockServer(_openai_image_response(encoded)) as server:
         c = _openai_client(server.url)
@@ -494,10 +494,10 @@ def test_image_generate_openai_middleware_veto_skips_http() -> None:
         assert server.hit is False
 
 
-# ===== xAI Grok Imagine =====
 #
-# JSON throughout — both endpoints. Image refs travel as data URLs in the
-# body. response_format must be forced to b64_json (xAI defaults to URL).
+#
+#
+#
 
 GROK_IMAGINE_QUALITY = "grok-imagine-image-quality"
 
@@ -531,14 +531,14 @@ def test_image_generate_grok_generations_forces_b64_json() -> None:
     assert body is not None
     assert body["model"] == GROK_IMAGINE_QUALITY
     assert body["prompt"] == "A red circle"
-    # xAI defaults to URL — we must force b64_json on the wire.
+    #
     assert body["response_format"] == "b64_json"
     assert "image" not in body
     assert "images" not in body
     assert len(resp.images) == 1
     assert resp.images[0].bytes == FAKE_PNG
     assert resp.images[0].mime_type == "image/png"
-    # xAI reports cost_in_usd_ticks, not tokens. Both should remain zero.
+    #
     assert resp.usage.input == 0
     assert resp.usage.output == 0
 
@@ -556,7 +556,7 @@ def test_image_generate_grok_aspect_ratio_and_resolution() -> None:
     body = server.received_json
     assert body is not None
     assert body["aspect_ratio"] == "16:9"
-    # image_size maps to xAI's `resolution` field (different name from OpenAI's `size`).
+    #
     assert body["resolution"] == "2k"
 
 
@@ -601,7 +601,7 @@ def test_image_generate_grok_edits_single_reference_as_data_url() -> None:
     assert server.received_path == "/v1/images/edits"
     body = server.received_json
     assert body is not None
-    # Single ref → `image: {url: "data:..."}` (not `images: [...]`).
+    #
     assert body["image"] == {"url": expected_data_url}
     assert "images" not in body
 
@@ -666,9 +666,9 @@ def test_image_generate_grok_middleware_fires_both_branches() -> None:
         assert phases == ["pre", "post"], branch
 
 
-# =============================================================================
-# Plan 020 phase 2 — typed image-gen knob tests
-# =============================================================================
+#
+#
+#
 
 
 def test_image_openai_typed_quality_lands_in_body() -> None:
@@ -814,9 +814,9 @@ def test_image_google_and_grok_reject_mask() -> None:
     assert excinfo.value.field == "mask"
 
 
-# =============================================================================
-# Vertex Imagen (plan 021) — JSONPredict input mode, bearer auth
-# =============================================================================
+#
+#
+#
 
 VERTEX_IMAGEN_3 = "imagen-3.0-generate-002"
 
@@ -839,24 +839,24 @@ def test_image_vertex_generations_happy_path() -> None:
         resp = asyncio.run(
             c.image.model(VERTEX_IMAGEN_3).generate("A red circle")
         )
-        # Path: /{model}:predict
+        #
         assert server.received_path == f"/{VERTEX_IMAGEN_3}:predict"
-        # Bearer auth header
+        #
         assert server.received_headers.get("Authorization") == "Bearer test-token"
-        # Body shape
+        #
         body = server.received_body or {}
         assert isinstance(body["instances"], list) and len(body["instances"]) == 1
         instance = body["instances"][0]
         assert instance["prompt"] == "A red circle"
-        # No image on generation path
+        #
         assert "image" not in instance
-        # sampleCount defaults to 1
+        #
         assert body["parameters"]["sampleCount"] == 1
-        # Response decode
+        #
         assert len(resp.images) == 1
         assert resp.images[0].bytes == FAKE_PNG
         assert resp.images[0].mime_type == "image/png"
-        # Vertex predict does not return token counts
+        #
         assert resp.usage.input == 0
         assert resp.usage.output == 0
 
@@ -951,9 +951,9 @@ def test_image_vertex_rejects_quality_output_format_background() -> None:
 
 
 def test_image_generate_google_surfaces_finish_reason_when_blocked() -> None:
-    """Gemini returns a candidate with finishReason + finishMessage but no
-    parts when it declines to generate. Verify both fields land on
-    ImageResponse so callers can show a useful message."""
+    """
+
+"""
     response = {
         "candidates": [
             {

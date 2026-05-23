@@ -1,5 +1,5 @@
-"""Phase 2.5 catalogue tests (ADR-019). Mirror of Go go/catalogue_test.go
-and TS ts/tests/catalogue.test.ts."""
+"""
+"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def test_models_list_returns_compiled_in_catalogue() -> None:
     c = anthropic("test-key")
     models = c.models.list()
     assert len(models) > 0
-    # sorted by (provider, id) -> first entry is anthropic
+    #
     assert models[0].provider.name == "anthropic"
 
 
@@ -72,7 +72,7 @@ def test_providers_supported_returns_full_sdk_roster() -> None:
     supported = c.providers.supported()
     assert len(supported) >= 10
     names = [p.name for p in supported]
-    # Wire-format names — guards against str(Enum) leaking "ProviderName.ANTHROPIC".
+    #
     assert "anthropic" in names
     assert "openai" in names
     assert "google" in names
@@ -94,7 +94,7 @@ def test_scoped_raw_chain_is_immutable() -> None:
 
 
 def test_error_sentinels_default_messages() -> None:
-    # Exercises each sentinel's default constructor so coverage sees __init__.
+    #
     assert "models endpoint" in str(ErrModelsNotSupported())
     assert "unavailable" in str(ErrModelsUnavailable())
     assert "scope" in str(ErrModelsScope())

@@ -1,10 +1,10 @@
-"""Image generation runtime — mirror of go/image.go.
+"""
 
-Pre-flight validation rejects unsupported aspect ratios, sizes, and
-reference-image counts before any HTTP call. Dispatch branches on
-img_cfg.input_mode (InlineParts → Google generateContent;
-MultipartForm → OpenAI Image API with /generations vs /edits picked
-dynamically per call based on whether image parts are present).
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -36,11 +36,11 @@ from .structs import MediaRef  # noqa: E402,F401
 
 @dataclass
 class Part:
-    """Universal multimodal input atom. Exactly one of text or image is
-    set; both empty or both set is invalid (rejected by pre-flight).
-    Typed-builder accumulators (``c.text.text(s)``, ``c.image.image(m, b)``,
-    ...) are the canonical user-facing path; users assembling Part lists
-    manually can construct Part(text=..., image=MediaRef(...)) directly."""
+    """
+
+
+
+"""
 
     text: str = ""
     image: MediaRef | None = None
@@ -51,32 +51,32 @@ from .structs import ImageData  # noqa: E402,F401
 
 @dataclass
 class ImageRequest:
-    """Image-generation request. Model is required.
-
-    Input is provided in one of two mutually-exclusive forms:
-      - prompt: terse sugar for the text-only hot path. Internally
-        desugars to parts=[Part(text=prompt)] before serialisation.
-      - parts: canonical multimodal sequence; required for editing and
-        compositional generation where caller-controlled ordering matters.
-
-    Pre-flight validation requires exactly one of prompt or parts to be
-    non-empty (XOR). Image-typed parts respect img_cfg.max_input_count.
     """
+
+
+
+
+
+
+
+
+
+"""
 
     model: str = ""
     prompt: str = ""
     parts: list[Part] = field(default_factory=list)
 
 
-# ImageResponse is generated from the ontology (ADR-018, API-PDS-002)
-# and lives in llmkit.structs. Type annotations in this file are
-# strings (PEP 563 — `from __future__ import annotations` at the top)
-# so referencing ImageResponse in annotations does not need an import.
-# Runtime constructor calls use a function-local `from .structs import
-# ImageResponse` because a module-level import would create a cycle:
-# structs.py imports ImageData from this module, so this module cannot
-# back-import ImageResponse at top level without breaking structs's
-# initialization.
+#
+#
+#
+#
+#
+#
+#
+#
+#
 
 
 def generate_image(
@@ -98,9 +98,9 @@ def generate_image(
     request_timeout: float = 600.0,
     raw: bool = False,
 ) -> ImageResponse:
-    """Produce one or more images from a text prompt, optionally conditioned
-    on reference images for editing/composition.
     """
+
+"""
     if not provider.api_key:
         raise ValidationError(field="api_key", message="required")
     if not request.model:
@@ -125,9 +125,9 @@ def generate_image(
             field="model",
             message=f"{request.model} is not a known image-generation model for {provider.name}",
         )
-    # Empty whitelist means "no client-side check; pass through" — used by
-    # providers (e.g., OpenAI) that accept arbitrary sizes within documented
-    # bounds (plan 020 q1).
+    #
+    #
+    #
     if aspect_ratio and model.aspect_ratios and aspect_ratio not in model.aspect_ratios:
         raise ValidationError(
             field="aspect_ratio",
@@ -148,9 +148,9 @@ def generate_image(
             ),
         )
 
-    # Per-provider knob validation. Quality/output_format/background are
-    # OpenAI-only on the wire; count (n) is OpenAI + xAI; mask is OpenAI
-    # edits-only. Mirrors go/image.go.
+    #
+    #
+    #
     if img_cfg.input_mode == "InlineParts":
         if quality:
             raise ValidationError(field="quality", message=f"not supported by {provider.name}")
@@ -164,7 +164,7 @@ def generate_image(
             raise ValidationError(field="mask", message=f"not supported by {provider.name}")
         if safety_filter:
             raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
-        # safety_settings valid for InlineParts (Google); wired in _build_image_body
+        #
     elif img_cfg.input_mode == "JSONInlineRefs":
         if quality:
             raise ValidationError(field="quality", message=f"not supported by {provider.name}")
@@ -277,7 +277,7 @@ def generate_image(
                     timeout=request_timeout,
                 )
         except APIError as raw_err:
-            # parse_error returned above is already an APIError; only wrap raw HTTP errors.
+            #
             if raw_err.status_code == 0 or raw_err.message:
                 err = parse_error(
                     provider.name,
@@ -320,10 +320,10 @@ def _find_image_model(cfg: ImageGenDef, model_id: str) -> ImageModelDef | None:
 
 
 def _normalize_image_parts(request: ImageRequest) -> list[Part]:
-    """Enforce the XOR rule and produce the canonical list[Part] the rest
-    of the pipeline operates on. When only prompt is set (the text-only
-    sugar path), synthesise [Part(text=prompt)]. Both empty or both set raises
-    ValidationError."""
+    """
+
+
+"""
     has_prompt = bool(request.prompt)
     has_parts = bool(request.parts)
     if has_prompt and has_parts:
@@ -356,12 +356,12 @@ def _build_openai_gen_body(
     count: int | None,
     extra_fields: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """JSON body for /v1/images/generations.
-
-    Note: gpt-image-* models always return base64-encoded images via
-    ``data[i].b64_json`` and reject the ``response_format`` parameter
-    (it belonged to the legacy dall-e-* surface). Don't set it.
     """
+
+
+
+
+"""
     body: dict[str, Any] = {
         "model": model,
         "prompt": _join_text_parts(parts),
@@ -392,9 +392,9 @@ def _build_openai_edit_multipart(
     mask: MediaRef | None,
     extra_fields: dict[str, Any] | None,
 ) -> tuple[list[tuple[str, str, str, bytes]], dict[str, str]]:
-    """Multipart payload for /v1/images/edits. Each image Part becomes one
-    image[] file in caller order; text Parts join into the ``prompt`` field.
     """
+
+"""
     files: list[tuple[str, str, str, bytes]] = []
     idx = 0
     for part in parts:
@@ -442,12 +442,12 @@ def _build_xai_gen_body(
     count: int | None,
     extra_fields: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """JSON body for xAI Grok /v1/images/generations.
-
-    image_size maps to ``resolution`` (xAI's name for the same concept).
-    aspect_ratio maps as-is. response_format=b64_json is forced because
-    xAI defaults to URL.
     """
+
+
+
+
+"""
     body: dict[str, Any] = {
         "model": model,
         "prompt": _join_text_parts(parts),
@@ -472,8 +472,8 @@ def _build_xai_edit_body(
     count: int | None,
     extra_fields: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """JSON body for xAI Grok /v1/images/edits. Single image part →
-    ``image: {url: "data:..."}``; multiple → ``images: [...]`` in caller order."""
+    """
+"""
     body = _build_xai_gen_body(parts, model, aspect_ratio, image_size, count, extra_fields)
     refs: list[dict[str, str]] = []
     for part in parts:
@@ -539,14 +539,14 @@ def _build_vertex_body(
     safety_filter: str,
     extra_fields: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Assemble the Vertex AI Imagen :predict request body.
-
-    Vertex uses an instances/parameters envelope: instance carries the
-    per-call inputs (prompt, image ref for editing, mask for inpainting);
-    parameters carries config (sampleCount, aspectRatio). Extra fields like
-    negativePrompt and safetySetting spread into parameters so callers can
-    reach Imagen-specific knobs without typed chain methods.
     """
+
+
+
+
+
+
+"""
     instance: dict[str, Any] = {"prompt": _join_text_parts(parts)}
     for p in parts:
         if p.image is not None:
@@ -576,10 +576,10 @@ def _build_vertex_body(
 
 
 def _parse_vertex_image_response(raw: dict[str, Any]) -> ImageResponse:
-    """Decode Vertex AI Imagen :predict responses. Shape:
-    {predictions: [{bytesBase64Encoded, mimeType}]}. Vertex does not return
-    token counts in the predict response so Usage stays zero.
     """
+
+
+"""
     from .structs import ImageResponse  # deferred to break import cycle
     preds = raw.get("predictions") if isinstance(raw, dict) else None
     images: list[ImageData] = []
@@ -648,9 +648,9 @@ def _parse_image_response(provider_name: str, body: bytes, cfg: Any) -> ImageRes
     if provider_name == "openai":
         return _parse_image_response_data_array(raw, "input_tokens", "output_tokens")
     if provider_name == "grok":
-        # xAI reports usage.cost_in_usd_ticks instead of token counts;
-        # passing empty field names yields zero tokens (correct, no
-        # fabricated values).
+        #
+        #
+        #
         return _parse_image_response_data_array(raw, "", "")
     if provider_name == "vertex":
         return _parse_vertex_image_response(raw)
@@ -674,13 +674,13 @@ def _parse_image_response_data_array(
     input_token_field: str,
     output_token_field: str,
 ) -> ImageResponse:
-    """Walk the data[] array shape used by both OpenAI's and xAI's image
-    APIs. Decodes data[i].b64_json into ImageData; honors data[i].mime_type
-    when echoed back (xAI does, OpenAI does not), defaulting to image/png.
-    Concatenates any data[i].revised_prompt into text. Pass empty token-
-    field names for providers that don't report counts (xAI reports
-    usage.cost_in_usd_ticks instead).
     """
+
+
+
+
+
+"""
     from .structs import ImageResponse  # deferred to break import cycle
     data = raw.get("data") if isinstance(raw, dict) else None
     images: list[ImageData] = []
@@ -715,9 +715,9 @@ def _parse_image_response_data_array(
 def _extract_google_image_parts(
     raw: dict[str, Any],
 ) -> tuple[list[ImageData], str, str, str]:
-    """Return (images, text, finish_reason, finish_message). finish_reason/
-    finish_message are pulled from candidates[0]; both stay empty when the
-    response carries no such fields."""
+    """
+
+"""
     candidates = raw.get("candidates")
     if not isinstance(candidates, list) or not candidates:
         return [], "", "", ""

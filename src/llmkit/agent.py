@@ -1,4 +1,4 @@
-"""Multi-turn Agent with tool-calling loop. Mirrors go/agent.go."""
+""""""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ class _InternalMessage:
 
 
 class Agent:
-    """Multi-turn conversation manager with optional tool calling."""
+    """"""
 
     def __init__(
         self,
@@ -92,7 +92,7 @@ class Agent:
         self.tools = []
 
     def chat(self, msg: str) -> Response:
-        """Send a message, execute any tool calls the LLM requests, and return the final response."""
+        """"""
         self.history.append(_InternalMessage(role="user", content=msg))
         return self._run_tool_loop()
 
@@ -191,9 +191,9 @@ class Agent:
             from .structs import ToolResult
 
             for tc in calls:
-                # ADR-020 widened ToolCall.input to Any | None. Tool authors'
-                # run() callback still receives the dict shape they registered,
-                # so coerce non-dicts (None, primitives, lists) to {} here.
+                #
+                #
+                #
                 tc_args = tc.input if isinstance(tc.input, dict) else {}
                 tool = self._find_tool(tc.name)
                 if tool is None:

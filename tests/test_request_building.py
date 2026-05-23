@@ -1,4 +1,4 @@
-"""Unit tests for request building. No network, no API keys."""
+""""""
 
 from __future__ import annotations
 
@@ -29,11 +29,11 @@ def test_anthropic_builds_top_level_system() -> None:
 
 
 def test_anthropic_thinking_budget_nests_dotted_path_with_extras() -> None:
-    """Regression: thinking.budget_tokens must nest into {thinking: {...}},
-    not be a literal top-level "thinking.budget_tokens" key. Anthropic
-    silently ignores unknown top-level keys, so this only shows up as a
-    body-shape check. extra_fields_json adds {"type":"enabled"} as a sibling.
     """
+
+
+
+"""
     cfg = PROVIDERS["anthropic"]
     body, _headers = _build_request(
         llmkit.Provider(name="anthropic", api_key="sk", model="claude-sonnet-4-6"),
@@ -111,7 +111,7 @@ def test_validation_rejects_empty_api_key() -> None:
 
 
 def test_validation_rejects_unsupported_option() -> None:
-    # Anthropic does not support frequency_penalty per the ontology.
+    #
     import asyncio
 
     from llmkit.builders import new_client
@@ -158,7 +158,7 @@ def test_providers_registry_has_all_expected_keys() -> None:
 
 
 def test_reasoning_tokens_extracted_for_openai() -> None:
-    """OpenAI o1/o3/o4 expose reasoning_tokens via completion_tokens_details."""
+    """"""
     from llmkit.client import _parse_response
 
     body = json.dumps({
@@ -176,7 +176,7 @@ def test_reasoning_tokens_extracted_for_openai() -> None:
 
 
 def test_reasoning_tokens_zero_for_unreported_provider() -> None:
-    """Anthropic does not report reasoning tokens separately; Usage.reasoning stays 0."""
+    """"""
     from llmkit.client import _parse_response
 
     body = json.dumps({

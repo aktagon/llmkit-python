@@ -1,4 +1,4 @@
-"""Message and tool transforms. Selected by ProviderConfig fields, not provider name."""
+""""""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def is_bedrock(cfg: ProviderConfig) -> bool:
 
 
 def auth_scheme_for(cfg: ProviderConfig) -> AuthScheme:
-    """Resolve a ProviderConfig to its AuthScheme using the generated table."""
+    """"""
     from .providers.generated.providers import ProviderName
 
     return auth_scheme(ProviderName(cfg.name))
@@ -106,9 +106,9 @@ def _tool_call_def(cfg: ProviderConfig):
     return tool_call_config(ProviderName(cfg.name))
 
 
-# =============================================================================
-# Message transforms — build the messages/contents array in request body
-# =============================================================================
+#
+#
+#
 
 def transform_flat_content(body: dict[str, Any], req: "Request", cfg: ProviderConfig) -> None:
     msgs: list[dict[str, Any]] = []
@@ -285,9 +285,9 @@ def transform_bedrock_converse(body: dict[str, Any], req: "Request", cfg: Provid
     body["messages"] = msgs
 
 
-# =============================================================================
-# Tool definition transforms
-# =============================================================================
+#
+#
+#
 
 def transform_openai_functions(body: dict[str, Any], tools: list["Tool"]) -> None:
     body["tools"] = [
@@ -340,9 +340,9 @@ def transform_bedrock_tool_defs(body: dict[str, Any], tools: list["Tool"]) -> No
     body["toolConfig"] = {"tools": defs}
 
 
-# =============================================================================
-# Tool call message transforms
-# =============================================================================
+#
+#
+#
 
 def transform_openai_tool_call_msg(calls: list[ToolCall], role_mappings: dict[str, str]) -> dict[str, Any]:
     return {
@@ -407,9 +407,9 @@ def transform_bedrock_tool_call_msg(calls: list[ToolCall], role_mappings: dict[s
     }
 
 
-# =============================================================================
-# Tool result message transforms
-# =============================================================================
+#
+#
+#
 
 def transform_openai_tool_result_msg(result: ToolResult, _: dict[str, str]) -> dict[str, Any]:
     return {
@@ -460,9 +460,9 @@ def transform_bedrock_tool_result_msg(result: ToolResult, _: dict[str, str]) -> 
     }
 
 
-# =============================================================================
-# Tool call extraction
-# =============================================================================
+#
+#
+#
 
 def extract_openai_tool_calls(raw: dict[str, Any], tc_cfg: Any) -> list[ToolCall]:
     choices = raw.get("choices")
@@ -582,5 +582,5 @@ def extract_bedrock_tool_calls(raw: dict[str, Any], _: Any) -> list[ToolCall]:
     return calls
 
 
-# Forward-declare `Request` and `Tool` via TYPE_CHECKING import at top
+#
 from .types import Request, Tool  # noqa: E402  (imported late to avoid circular types)

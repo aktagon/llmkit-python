@@ -1,19 +1,19 @@
-"""llmkit — unified LLM client. One API, many providers, zero dependencies.
+"""
 
-Quick start::
 
-    import llmkit
-    c = llmkit.anthropic(api_key)
-    resp = await c.text.system("...").temperature(0.7).prompt("hello")
 
-Or via the explicit subpackage::
 
-    from llmkit.builders import new_client, anthropic, openai, google
 
-The typed builder is the only public surface as of v1.0.0. Imports at
-the top level bring in the per-provider factories, the `Client` type,
-and the four builder classes (`Text`, `Image`, `Agent`, `Upload`) so
-`import llmkit` is enough for the common case.
+
+
+
+
+
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ from .types import (
 )
 
 __all__ = [
-    # Typed builder factories (the v1.0.0 entry points).
+    #
     "new_client",
     "ai21",
     "anthropic",
@@ -119,21 +119,21 @@ __all__ = [
     "vllm",
     "yi",
     "zhipu",
-    # Builder + result types.
+    #
     "Client",
     "Text",
     "Image",
     "Agent",
     "Upload",
     "BatchHandle",
-    # Conversation / response types.
+    #
     "File",
     "Message",
     "Response",
     "Tool",
     "ToolCall",
     "ToolResult",
-    # Wire format (ADR-023).
+    #
     "save_history",
     "load_history",
     "WIRE_SCHEMA_VERSION",
@@ -145,23 +145,23 @@ __all__ = [
     "ImageResponse",
     "MediaRef",
     "Part",
-    # Middleware.
+    #
     "Event",
     "MiddlewareFn",
     "MiddlewareOp",
     "MiddlewarePhase",
     "Usage",
-    # Errors.
+    #
     "APIError",
     "MiddlewareVetoError",
     "ValidationError",
-    # Provider enum + registry (for use with `new_client`).
+    #
     "ProviderName",
     "ProviderConfig",
     "PROVIDERS",
-    # Codegen-runtime types — kept exposed for the contract-level test
-    # surface and for callers writing custom transports. Typical v1.0.0
-    # callers should not need these; use the typed builder.
+    #
+    #
+    #
     "InputImage",
     "Options",
     "Provider",
