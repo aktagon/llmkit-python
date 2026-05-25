@@ -36,6 +36,7 @@ class ToolCallDef:
     args_format: str
     result_role: str
     id_source: str
+    params_wire_field: str = "parameters"  # ADR-025
 
 
 @dataclass(frozen=True)
@@ -180,136 +181,163 @@ _TOOL_CALLS: dict[ProviderName, ToolCallDef] = {
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.ANTHROPIC: ToolCallDef(
         args_format="map",
         result_role="user",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.AZURE: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.BEDROCK: ToolCallDef(
         args_format="map",
         result_role="user",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.CEREBRAS: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.COHERE: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.DEEPSEEK: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.DOUBAO: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.ERNIE: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.FIREWORKS: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.GOOGLE: ToolCallDef(
         args_format="map",
         result_role="user",
         id_source="function_name",
+        params_wire_field="parametersJsonSchema",
     ),
     ProviderName.GROK: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.GROQ: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.JAN: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.LLAMACPP: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.LMSTUDIO: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.MINIMAX: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.MISTRAL: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.MOONSHOT: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.OLLAMA: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.OPENAI: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.OPENROUTER: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.QWEN: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.SAMBANOVA: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.TOGETHER: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.VLLM: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
     ProviderName.ZHIPU: ToolCallDef(
         args_format="json_string",
         result_role="tool",
         id_source="id_field",
+        params_wire_field="parameters",
     ),
 }
 
