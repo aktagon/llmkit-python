@@ -14,16 +14,9 @@ from .middleware import fire_post, fire_pre, resolve_model
 from .paths import extract_float_path, extract_int_path, extract_path
 from .providers.generated.middleware import Event, MiddlewareOp, Usage
 from .providers.generated.providers import PROVIDERS, ProviderName
-from .providers.generated.request import AuthScheme, SystemPlacement, auth_scheme, system_placement, tool_call_config
-from .transforms import (
-    map_role,
-    select_message_transform,
-    select_tool_call_extractor,
-    select_tool_call_transform,
-    select_tool_def_transform,
-    select_tool_result_transform,
-)
-from .types import Message, Options, Provider, Request, Response, Tool
+from .providers.generated.request import AuthScheme, auth_scheme, tool_call_config
+from .transforms import select_tool_call_extractor
+from .types import Options, Provider, Request, Response, Tool
 
 
 @dataclass
@@ -97,21 +90,37 @@ class Agent:
         return self._run_tool_loop()
 
     def _run_tool_loop(self) -> Response:
-        from .client import _build_url  # noqa: F401
+        # Deferred import: client.py imports agent.py at module load, so these
+        # must resolve at call time to break the cycle (existing pattern).
+        from .client import _build_request, _build_url
+        from .transforms import _MsgCalls, _MsgResult, _MsgText
 
         cfg = PROVIDERS.get(self.provider.name)
         if cfg is None:
             raise ValidationError(field="provider", message=f"unknown: {self.provider.name}")
 
         tc_cfg = tool_call_config(ProviderName(self.provider.name))
-        tc_call_transform = select_tool_call_transform(cfg)
-        tc_result_transform = select_tool_result_transform(cfg)
         tc_extractor = select_tool_call_extractor(cfg)
 
         total_usage = Usage()
 
         for _ in range(self.opts.max_tool_iterations):
-            body, headers = self._build_agent_request(cfg)
+            # Build through the shared builder (ADR-026 PIPE-001/004): the agent
+            # constructs no body of its own. Its trusted history is converted
+            # straight into the internal message sum (PIPE-007) — no round-trip
+            # through the lossy public Message shape — so the tool-aware message
+            # transforms and the option/safety/structured-output steps all run
+            # identically to the Text/batch path.
+            req = Request(system=self.system)
+            msgs: list = []
+            for m in self.history:
+                if m.tool_result is not None:
+                    msgs.append(_MsgResult(result=m.tool_result))
+                elif m.tool_calls:
+                    msgs.append(_MsgCalls(calls=list(m.tool_calls)))
+                else:
+                    msgs.append(_MsgText(role=m.role, text=m.content))
+            body, headers = _build_request(self.provider, req, self.opts, cfg, self.tools, msgs=msgs)
 
             # Caching is a shared request-construction step (ADR-026): applied
             # on every send path by construction, like Text/batch. Before this,
@@ -257,123 +266,6 @@ class Agent:
             message=f"max tool iterations ({self.opts.max_tool_iterations}) reached",
             status_code=0,
         )
-
-    def _build_agent_request(self, cfg) -> tuple[dict[str, Any], dict[str, str]]:
-        from .client import _add_options, _build_url, _resolve_option_key  # noqa: F401
-        from .providers.generated.options import OptionKey, supported_options
-
-        body: dict[str, Any] = {}
-        headers: dict[str, str] = {}
-
-        model = self.provider.model or cfg.default_model
-        if cfg.model_in_body:
-            body["model"] = model
-
-        max_tokens = cfg.default_max_tokens
-        if self.opts.max_tokens is not None:
-            max_tokens = self.opts.max_tokens
-
-        supported = {o.key: o for o in supported_options(ProviderName(self.provider.name))}
-
-        placement = system_placement(ProviderName(self.provider.name))
-        if placement == SystemPlacement.TOP_LEVEL_FIELD and self.system:
-            body["system"] = self.system
-        elif placement == SystemPlacement.SIBLING_OBJECT and self.system:
-            body["system_instruction"] = {"parts": [{"text": self.system}]}
-
-        msg_transform = select_message_transform(cfg)
-        tc_call_transform = select_tool_call_transform(cfg)
-        tc_result_transform = select_tool_result_transform(cfg)
-
-        self._build_history_messages(body, cfg, msg_transform, tc_call_transform, tc_result_transform)
-
-        if self.tools:
-            tool_def_transform = select_tool_def_transform(cfg)
-            tool_def_transform(body, self.tools)
-
-        from .paths import set_nested_field
-
-        pname = ProviderName(self.provider.name)
-        max_json_key = _resolve_option_key(pname, model, OptionKey.MAX_TOKENS, supported)
-        if cfg.wraps_options_in:
-            opt_body: dict[str, Any] = {}
-            _add_options(opt_body, self.opts, self.provider.name, model)
-            if max_json_key is not None:
-                set_nested_field(opt_body, max_json_key, max_tokens)
-            if opt_body:
-                body[cfg.wraps_options_in] = opt_body
-        else:
-            if max_json_key is not None:
-                set_nested_field(body, max_json_key, max_tokens)
-            _add_options(body, self.opts, self.provider.name, model)
-
-        scheme = auth_scheme(ProviderName(self.provider.name))
-        if scheme == AuthScheme.BEARER_TOKEN:
-            headers[cfg.auth_header] = cfg.auth_prefix + " " + self.provider.api_key
-        elif scheme == AuthScheme.HEADER_API_KEY:
-            headers[cfg.auth_header] = self.provider.api_key
-        if cfg.required_header:
-            headers[cfg.required_header] = cfg.required_header_value
-
-        return body, headers
-
-    def _build_history_messages(
-        self,
-        body: dict[str, Any],
-        cfg,
-        msg_transform,
-        tc_call_transform,
-        tc_result_transform,
-    ) -> None:
-        has_tool_messages = any(
-            m.tool_result is not None or m.tool_calls for m in self.history
-        )
-
-        if not has_tool_messages:
-            req = Request(system=self.system)
-            req.messages = [Message(role=m.role, content=m.content) for m in self.history]
-            msg_transform(body, req, cfg)
-            return
-
-        placement = system_placement(ProviderName(self.provider.name))
-        if placement == SystemPlacement.SIBLING_OBJECT:
-            contents: list[dict[str, Any]] = []
-            for m in self.history:
-                if m.tool_result is not None:
-                    contents.append(tc_result_transform(m.tool_result, cfg.role_mappings))
-                elif m.tool_calls:
-                    contents.append(tc_call_transform(m.tool_calls, cfg.role_mappings))
-                else:
-                    contents.append(
-                        {
-                            "role": map_role(m.role, cfg.role_mappings),
-                            "parts": [{"text": m.content}],
-                        }
-                    )
-            body["contents"] = contents
-            return
-
-        msgs: list[dict[str, Any]] = []
-        if placement == SystemPlacement.MESSAGE_IN_ARRAY and self.system:
-            msgs.append(
-                {
-                    "role": map_role("system", cfg.role_mappings),
-                    "content": self.system,
-                }
-            )
-        for m in self.history:
-            if m.tool_result is not None:
-                msgs.append(tc_result_transform(m.tool_result, cfg.role_mappings))
-            elif m.tool_calls:
-                msgs.append(tc_call_transform(m.tool_calls, cfg.role_mappings))
-            else:
-                msgs.append(
-                    {
-                        "role": map_role(m.role, cfg.role_mappings),
-                        "content": m.content,
-                    }
-                )
-        body["messages"] = msgs
 
     def _find_tool(self, name: str) -> Tool | None:
         for tool in self.tools:

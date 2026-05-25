@@ -143,3 +143,78 @@ def test_agent_options_threaded_from_constructor() -> None:
     assert a.opts.reasoning_effort == "medium"
     assert a.opts.caching is True
     assert a.opts.max_tool_iterations == 5
+
+
+# ---------- ADR-026: request parity with the Text path ----------
+
+
+class _CaptureServer:
+    """Mock LLM endpoint capturing the request body the Agent sends."""
+
+    def __init__(self, response: dict) -> None:
+        self._response = response
+        self.received_body: dict | None = None
+
+    def __enter__(self):
+        import json
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                pass
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length", 0))
+                outer.received_body = json.loads(self.rfile.read(length))
+                payload = json.dumps(outer._response).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(payload)
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        import threading
+
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc):
+        self._httpd.shutdown()
+        self._httpd.server_close()
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_port}"
+
+
+def test_agent_request_applies_options_and_safety_like_text() -> None:
+    """ADR-026 PIPE-001/004: the Agent builds its body through the shared
+    _build_request, so generation options AND safety settings reach the wire
+    body — matching the Text path. The old _build_agent_request applied options
+    but dropped safety settings (the latent gap class). Google is used because
+    it is the only shape that emits safetySettings."""
+    from llmkit.types import SafetySetting
+
+    google_response = {
+        "candidates": [{"content": {"parts": [{"text": "ok"}]}}],
+        "usageMetadata": {"promptTokenCount": 3, "candidatesTokenCount": 1},
+    }
+    with _CaptureServer(google_response) as server:
+        agent = Agent(
+            provider=Provider(name="google", api_key="k", base_url=server.url),
+            temperature=0.1,
+            safety_settings=[
+                SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE")
+            ],
+        )
+        resp = agent.chat("hi")
+
+    assert resp.text == "ok"
+    assert server.received_body is not None
+    assert server.received_body["generationConfig"]["temperature"] == 0.1
+    assert server.received_body["safetySettings"] == [
+        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}
+    ]

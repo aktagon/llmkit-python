@@ -113,6 +113,41 @@ def test_bedrock_uses_text_block_arrays_and_inference_config() -> None:
     assert body["inferenceConfig"]["maxTokens"] == 50
 
 
+def test_google_tool_result_resolves_function_name() -> None:
+    """ADR-026 #2: Google's wire identifies a tool result by function NAME, but
+    the universal ToolResult carries only tool_use_id. On the Text/batch path a
+    user supplies a history where the id differs from the name (unlike the
+    agent, whose extractor sets id==name), so the result's functionResponse.name
+    must resolve back to the function name via the preceding tool-call turn — not
+    echo the raw id."""
+    cfg = PROVIDERS["google"]
+    req = llmkit.Request(
+        messages=[
+            llmkit.Message(role="user", content="weather in Paris?"),
+            llmkit.Message(
+                role="assistant",
+                tool_calls=[
+                    llmkit.ToolCall(id="call_abc123", name="get_weather", input={"city": "Paris"})
+                ],
+            ),
+            llmkit.Message(
+                role="tool",
+                tool_result=llmkit.ToolResult(tool_use_id="call_abc123", content="sunny, 21C"),
+            ),
+        ]
+    )
+    body, _ = _build_request(
+        llmkit.Provider(name="google", api_key="AIza-test"),
+        req,
+        llmkit.Options(),
+        cfg,
+    )
+    contents = body["contents"]
+    assert len(contents) == 3
+    fr = contents[2]["parts"][0]["functionResponse"]
+    assert fr["name"] == "get_weather"
+
+
 def test_google_url_appends_api_key_as_query_param() -> None:
     cfg = PROVIDERS["google"]
     url = _build_url(
