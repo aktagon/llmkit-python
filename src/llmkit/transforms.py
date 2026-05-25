@@ -121,20 +121,20 @@ def _tool_call_def(cfg: ProviderConfig):
 # Internal message sum (ADR-026 PIPE-007/008)
 # =============================================================================
 
-@dataclass
+@dataclass(frozen=True)
 class _MsgText:
     """A text turn: exactly a role and its text content."""
     role: str
     text: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class _MsgCalls:
     """An assistant turn carrying one or more tool invocations."""
     calls: list[ToolCall]
 
 
-@dataclass
+@dataclass(frozen=True)
 class _MsgResult:
     """A tool turn carrying exactly one execution result."""
     result: ToolResult
