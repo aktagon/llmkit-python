@@ -14,3 +14,8 @@ def usage_paths(provider: ProviderName) -> tuple[str, str]:
     """"""
     config = PROVIDERS[provider.value]
     return config.usage_input_path, config.usage_output_path
+
+
+def usage_cost_path(provider: ProviderName) -> str:
+    """"""
+    return PROVIDERS[provider.value].usage_cost_path

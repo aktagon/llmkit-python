@@ -14,6 +14,7 @@ class Usage:
     cache_write: int = 0
     cache_read: int = 0
     reasoning: int = 0
+    cost: float = 0.0
 
 
 class MiddlewarePhase(str, Enum):
