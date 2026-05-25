@@ -563,6 +563,22 @@ def test_phase3_agent_prompt_initializes_state_and_reuses() -> None:
         assert bot._state is first_state
 
 
+def test_agent_caching_applies_to_request() -> None:
+    """BUG-004 / ADR-026: Agent.caching() must annotate the request body with
+    cache_control, exactly like the Text path. Before the pipeline fix the
+    agent builder dropped caching, so a stable prefix was never cached."""
+    with _MockServer(_ANTHROPIC_RESP) as server:
+        c = anthropic("k")
+        c.provider.base_url = server.url
+        asyncio.run(c.agent.system("a long stable system prefix").caching().prompt("hi"))
+        body = server.last_body
+        assert body is not None
+        # Anthropic explicit caching: system becomes a content-block array with
+        # cache_control. A plain string means caching never applied.
+        assert isinstance(body["system"], list), "caching not applied on agent path"
+        assert body["system"][0]["cache_control"] == {"type": "ephemeral"}
+
+
 def test_phase3_agent_reset_clears_state() -> None:
     with _MockServer(_ANTHROPIC_RESP) as server:
         c = anthropic("k")

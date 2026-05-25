@@ -45,6 +45,30 @@ def test_anthropic_thinking_budget_nests_dotted_path_with_extras() -> None:
     assert body["thinking"] == {"budget_tokens": 1024, "type": "enabled"}
 
 
+@pytest.mark.parametrize(
+    "model,want_key,wrong_key",
+    [
+        ("gpt-5", "max_completion_tokens", "max_tokens"),
+        ("gpt-5-mini", "max_completion_tokens", "max_tokens"),  # glob gpt-5*
+        ("o3", "max_completion_tokens", "max_tokens"),
+        ("o4-mini", "max_completion_tokens", "max_tokens"),  # glob o*
+        ("gpt-4o", "max_tokens", "max_completion_tokens"),  # unaffected
+    ],
+)
+def test_openai_per_model_max_tokens_key(model: str, want_key: str, wrong_key: str) -> None:
+    """BUG-001 / ADR-024: gpt-5 and the o-series emit max_completion_tokens;
+    gpt-4o keeps max_tokens. Per-model, same provider."""
+    cfg = PROVIDERS["openai"]
+    body, _ = _build_request(
+        llmkit.Provider(name="openai", api_key="sk-openai-test", model=model),
+        llmkit.Request(user="hi"),
+        llmkit.Options(max_tokens=128),
+        cfg,
+    )
+    assert body[want_key] == 128
+    assert wrong_key not in body
+
+
 def test_openai_puts_system_in_messages_array() -> None:
     cfg = PROVIDERS["openai"]
     body, headers = _build_request(
@@ -155,6 +179,30 @@ def test_providers_registry_has_all_expected_keys() -> None:
         "ollama",
     }
     assert expected.issubset(llmkit.PROVIDERS.keys())
+
+
+def test_usage_cost_extracted_for_openrouter() -> None:
+    """BUG-005 / ADR-027: OpenRouter reports usage.cost (USD) -> Usage.cost."""
+    from llmkit.client import _parse_response
+
+    body = json.dumps({
+        "choices": [{"message": {"content": "ok"}}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.00042},
+    })
+    resp = _parse_response("openrouter", body.encode())
+    assert resp.usage.cost == 0.00042
+
+
+def test_usage_cost_zero_for_no_cost_provider() -> None:
+    """OpenAI declares no usage_cost_path, so a stray cost field is ignored."""
+    from llmkit.client import _parse_response
+
+    body = json.dumps({
+        "choices": [{"message": {"content": "ok"}}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.99},
+    })
+    resp = _parse_response("openai", body.encode())
+    assert resp.usage.cost == 0.0
 
 
 def test_reasoning_tokens_extracted_for_openai() -> None:
