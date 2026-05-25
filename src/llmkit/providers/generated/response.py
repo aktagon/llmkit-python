@@ -19,3 +19,8 @@ def usage_paths(provider: ProviderName) -> tuple[str, str]:
 def usage_cost_path(provider: ProviderName) -> str:
     """"""
     return PROVIDERS[provider.value].usage_cost_path
+
+
+def usage_cost_scale(provider: ProviderName) -> float:
+    """"""
+    return PROVIDERS[provider.value].usage_cost_scale
