@@ -193,6 +193,19 @@ def test_usage_cost_extracted_for_openrouter() -> None:
     assert resp.usage.cost == 0.00042
 
 
+def test_usage_cost_grok_ticks_to_usd() -> None:
+    """ADR-027 usageCostScale: xAI reports cost_in_usd_ticks (1 USD = 1e10
+    ticks), so scale 1e-10 converts to USD. 2856000 ticks = $0.0002856."""
+    from llmkit.client import _parse_response
+
+    body = json.dumps({
+        "choices": [{"message": {"content": "ok"}}],
+        "usage": {"prompt_tokens": 136, "completion_tokens": 100, "cost_in_usd_ticks": 2856000},
+    })
+    resp = _parse_response("grok", body.encode())
+    assert resp.usage.cost == 0.0002856
+
+
 def test_usage_cost_zero_for_no_cost_provider() -> None:
     """OpenAI declares no usage_cost_path, so a stray cost field is ignored."""
     from llmkit.client import _parse_response
