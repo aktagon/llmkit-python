@@ -40,7 +40,7 @@ from .providers.generated.request import (
     system_placement,
 )
 from .providers.generated.stream import stream_config
-from .transforms import select_message_transform
+from .transforms import select_message_transform, select_tool_def_transform, to_internal
 from .types import File, Options, Provider, Request, Response
 
 StreamCallback = Callable[[str], None]
@@ -93,6 +93,10 @@ def prompt(
     if cfg is None:
         raise ValidationError(field="provider", message=f"unknown: {provider.name}")
 
+    # Carrier-validate at the single boundary before firing middleware, so a
+    # malformed message rejects without a dangling pre-hook (PIPE-008).
+    msgs = to_internal(request.messages)
+
     base_event = Event(
         op=MiddlewareOp.LLM_REQUEST,
         provider=provider.name,
@@ -101,7 +105,7 @@ def prompt(
     start = time.monotonic()
     fire_pre(opts.middleware, base_event)
 
-    body, headers = _build_request(provider, request, opts, cfg)
+    body, headers = _build_request(provider, request, opts, cfg, msgs=msgs)
 
     if opts.caching:
         try:
@@ -205,6 +209,9 @@ def prompt_stream(
     if stream_cfg is None:
         raise ValidationError(field="provider", message=f"streaming not supported: {provider.name}")
 
+    # Carrier-validate at the single boundary before firing middleware (PIPE-008).
+    msgs = to_internal(request.messages)
+
     base_event = Event(
         op=MiddlewareOp.LLM_REQUEST,
         provider=provider.name,
@@ -213,7 +220,7 @@ def prompt_stream(
     start = time.monotonic()
     fire_pre(opts.middleware, base_event)
 
-    body, headers = _build_request(provider, request, opts, cfg)
+    body, headers = _build_request(provider, request, opts, cfg, msgs=msgs)
 
     if opts.caching:
         try:
@@ -395,6 +402,9 @@ def _validate_provider(p: Provider) -> None:
 def _validate_request(req: Request) -> None:
     if not req.user and not req.messages:
         raise ValidationError(field="user", message="required")
+    # The carrier invariant (ADR-026: each message holds at most one of
+    # {text content, tool calls, tool result}) is enforced at the single
+    # to_internal boundary (PIPE-008), not here.
 
 
 def _validate_options(p: Provider, opts: Options) -> None:
@@ -496,7 +506,25 @@ def _resolve_option_key(
     return mapping.json_key if mapping is not None else None
 
 
-def _build_request(p: Provider, req: Request, opts: Options, cfg):
+def _build_request(p: Provider, req: Request, opts: Options, cfg, tools: list | None = None, *, msgs=None):
+    # msgs is the internal message sum (ADR-026 PIPE-007). The Text/batch/stream
+    # paths convert their public Message list via to_internal at the single
+    # carrier-validation boundary (PIPE-008); the Agent builds it directly from
+    # its trusted history, with no lossy public-Message hop. When msgs is None
+    # it is derived here (the common Text/batch call), so unit tests and batch
+    # need no change; prompt/prompt_stream pass it in so the carrier check runs
+    # before fire_pre (preserving the middleware contract).
+    #
+    # Deliberate scope limit (vs the TS slice, matching the Go slice): only
+    # multi-turn history flows through the sum. The single-turn req.user path —
+    # which also carries media (req.files/req.images) — is handled directly in
+    # each message transform's elif branch, because _MsgText carries only
+    # (role, text). Unifying it is tracked as a follow-up; see CLAUDE.md.
+    #
+    # tools is the Agent's tool set; Text/batch pass None, so the tool-def step
+    # is a no-op there and their wire body stays identical (ADR-026 PIPE-005).
+    if msgs is None:
+        msgs = to_internal(req.messages)
     body: dict[str, Any] = {}
     headers: dict[str, str] = {}
 
@@ -524,7 +552,10 @@ def _build_request(p: Provider, req: Request, opts: Options, cfg):
             body["system_instruction"] = {"parts": [{"text": req.system}]}
 
     msg_transform = select_message_transform(cfg)
-    msg_transform(body, req, cfg)
+    msg_transform(body, msgs, req, cfg)
+
+    if tools:
+        select_tool_def_transform(cfg)(body, tools)
 
     if cfg.wraps_options_in:
         opt_body: dict[str, Any] = {}
