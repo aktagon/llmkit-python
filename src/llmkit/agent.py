@@ -167,7 +167,7 @@ class Agent:
             output_path = cfg.usage_output_path
             turn_input = extract_int_path(raw, input_path)
             turn_output = extract_int_path(raw, output_path)
-            turn_cost = extract_float_path(raw, cfg.usage_cost_path) if cfg.usage_cost_path else 0.0
+            turn_cost = extract_float_path(raw, cfg.usage_cost_path) * cfg.usage_cost_scale if cfg.usage_cost_path else 0.0
             total_usage.input += turn_input
             total_usage.output += turn_output
             total_usage.cost += turn_cost

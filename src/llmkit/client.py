@@ -662,7 +662,7 @@ def _parse_response(provider: str, body: bytes) -> Response:
     output_tokens = extract_int_path(raw, cfg.usage_output_path)
     cache_write, cache_read = _extract_cache_usage(raw, provider)
     reasoning = extract_int_path(raw, cfg.reasoning_tokens_path) if cfg.reasoning_tokens_path else 0
-    cost = extract_float_path(raw, cfg.usage_cost_path) if cfg.usage_cost_path else 0.0
+    cost = extract_float_path(raw, cfg.usage_cost_path) * cfg.usage_cost_scale if cfg.usage_cost_path else 0.0
     finish_reason = extract_path(raw, cfg.finish_reason_path) if cfg.finish_reason_path else ""
     finish_message = extract_path(raw, cfg.finish_message_path) if cfg.finish_message_path else ""
 
