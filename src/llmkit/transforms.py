@@ -60,7 +60,16 @@ def select_tool_def_transform(cfg: ProviderConfig) -> ToolDefTransform:
     if is_bedrock(cfg):
         return transform_bedrock_tool_defs
     if placement_for(cfg) == SystemPlacement.SIBLING_OBJECT:
-        return transform_google_function_declarations
+        # Google carries tool params under a per-provider wire field (ADR-025):
+        # "parametersJsonSchema" accepts native JSON Schema verbatim, vs the
+        # OpenAPI-3.0-subset "parameters" default.
+        tc = _tool_call_def(cfg)
+        field = tc.params_wire_field if tc is not None and tc.params_wire_field else "parameters"
+
+        def _google(body: dict[str, Any], tools: list["Tool"]) -> None:
+            transform_google_function_declarations(body, tools, field)
+
+        return _google
     tc = _tool_call_def(cfg)
     if tc is not None and tc.args_format == "map":
         return transform_anthropic_tools
@@ -314,12 +323,14 @@ def transform_anthropic_tools(body: dict[str, Any], tools: list["Tool"]) -> None
     ]
 
 
-def transform_google_function_declarations(body: dict[str, Any], tools: list["Tool"]) -> None:
+def transform_google_function_declarations(
+    body: dict[str, Any], tools: list["Tool"], params_wire_field: str = "parameters"
+) -> None:
     decls = [
         {
             "name": t.name,
             "description": t.description,
-            "parameters": t.schema,
+            params_wire_field: t.schema,
         }
         for t in tools
     ]

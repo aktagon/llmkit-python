@@ -72,6 +72,39 @@ def extract_int_path(data: Any, path: str) -> int:
     return 0
 
 
+def extract_float_path(data: Any, path: str) -> float:
+    """Like extract_int_path but returns a float (0.0 on miss).
+
+    Used for provider-reported USD cost (ADR-027), which is fractional.
+    """
+    if not path:
+        return 0.0
+    current: Any = data
+    for part in path.split("."):
+        m = _INDEX_RE.match(part)
+        if m:
+            field = m.group("field")
+            idx = int(m.group("idx"))
+            if isinstance(current, dict):
+                current = current.get(field)
+            else:
+                return 0.0
+            if isinstance(current, list) and idx < len(current):
+                current = current[idx]
+            else:
+                return 0.0
+        else:
+            if isinstance(current, dict):
+                current = current.get(part)
+            else:
+                return 0.0
+    if isinstance(current, bool):
+        return 0.0
+    if isinstance(current, (int, float)):
+        return float(current)
+    return 0.0
+
+
 def detect_mime_type(path: str) -> str:
     """Map file extension to MIME type (subset matching the Go handwritten table)."""
     ext = os.path.splitext(path)[1].lower()
