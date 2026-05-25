@@ -11,7 +11,7 @@ from typing import Any
 from .errors import APIError, ValidationError, parse_error
 from .http import do_post, do_sigv4_post
 from .middleware import fire_post, fire_pre, resolve_model
-from .paths import extract_int_path, extract_path
+from .paths import extract_float_path, extract_int_path, extract_path
 from .providers.generated.middleware import Event, MiddlewareOp, Usage
 from .providers.generated.providers import PROVIDERS, ProviderName
 from .providers.generated.request import AuthScheme, SystemPlacement, auth_scheme, system_placement, tool_call_config
@@ -113,6 +113,14 @@ class Agent:
         for _ in range(self.opts.max_tool_iterations):
             body, headers = self._build_agent_request(cfg)
 
+            # Caching is a shared request-construction step (ADR-026): applied
+            # on every send path by construction, like Text/batch. Before this,
+            # a .caching() agent silently paid full input price (BUG-004).
+            if self.opts.caching:
+                from .caching import apply_caching
+
+                apply_caching(body, self.provider, self.opts, cfg)
+
             llm_event = Event(
                 op=MiddlewareOp.LLM_REQUEST,
                 provider=self.provider.name,
@@ -159,8 +167,10 @@ class Agent:
             output_path = cfg.usage_output_path
             turn_input = extract_int_path(raw, input_path)
             turn_output = extract_int_path(raw, output_path)
+            turn_cost = extract_float_path(raw, cfg.usage_cost_path) if cfg.usage_cost_path else 0.0
             total_usage.input += turn_input
             total_usage.output += turn_output
+            total_usage.cost += turn_cost
 
             post_ev = Event(
                 op=MiddlewareOp.LLM_REQUEST,
@@ -249,7 +259,7 @@ class Agent:
         )
 
     def _build_agent_request(self, cfg) -> tuple[dict[str, Any], dict[str, str]]:
-        from .client import _add_options, _build_url  # noqa: F401
+        from .client import _add_options, _build_url, _resolve_option_key  # noqa: F401
         from .providers.generated.options import OptionKey, supported_options
 
         body: dict[str, Any] = {}
@@ -283,19 +293,19 @@ class Agent:
 
         from .paths import set_nested_field
 
+        pname = ProviderName(self.provider.name)
+        max_json_key = _resolve_option_key(pname, model, OptionKey.MAX_TOKENS, supported)
         if cfg.wraps_options_in:
             opt_body: dict[str, Any] = {}
-            _add_options(opt_body, self.opts, self.provider.name)
-            max_key = supported.get(OptionKey.MAX_TOKENS)
-            if max_key is not None:
-                set_nested_field(opt_body, max_key.json_key, max_tokens)
+            _add_options(opt_body, self.opts, self.provider.name, model)
+            if max_json_key is not None:
+                set_nested_field(opt_body, max_json_key, max_tokens)
             if opt_body:
                 body[cfg.wraps_options_in] = opt_body
         else:
-            max_key = supported.get(OptionKey.MAX_TOKENS)
-            if max_key is not None:
-                set_nested_field(body, max_key.json_key, max_tokens)
-            _add_options(body, self.opts, self.provider.name)
+            if max_json_key is not None:
+                set_nested_field(body, max_json_key, max_tokens)
+            _add_options(body, self.opts, self.provider.name, model)
 
         scheme = auth_scheme(ProviderName(self.provider.name))
         if scheme == AuthScheme.BEARER_TOKEN:

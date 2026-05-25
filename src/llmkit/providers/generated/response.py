@@ -14,3 +14,8 @@ def usage_paths(provider: ProviderName) -> tuple[str, str]:
     """(input_tokens_path, output_tokens_path) in the provider response."""
     config = PROVIDERS[provider.value]
     return config.usage_input_path, config.usage_output_path
+
+
+def usage_cost_path(provider: ProviderName) -> str:
+    """Dotted path to provider-reported USD cost, or "" when unreported (ADR-027)."""
+    return PROVIDERS[provider.value].usage_cost_path

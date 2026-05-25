@@ -13,6 +13,7 @@ from .http import do_multipart_post, do_post, do_sigv4_post, do_stream_post
 from .middleware import fire_post, fire_pre, resolve_model
 from .paths import (
     contains_value,
+    extract_float_path,
     extract_int_path,
     extract_path,
     merge_into_parent,
@@ -22,7 +23,13 @@ from .paths import (
 )
 from .providers.generated.caching import caching_config
 from .providers.generated.middleware import Event, MiddlewareOp, Usage
-from .providers.generated.options import OptionKey, option_overrides, supported_options
+from .providers.generated.options import (
+    OptionKey,
+    SupportedOptionDef,
+    model_option_overrides,
+    option_overrides,
+    supported_options,
+)
 from .providers.generated.providers import PROVIDERS, ProviderName
 from .providers.generated.request import (
     AuthScheme,
@@ -457,6 +464,38 @@ def _build_stream_url(p: Provider, cfg, stream_cfg) -> str:
     return base + endpoint
 
 
+def _resolve_option_key(
+    pname: ProviderName,
+    model: str,
+    param: OptionKey,
+    supported: dict[OptionKey, SupportedOptionDef],
+) -> str | None:
+    """Wire (JSON) key for ``param`` on ``(provider, model)``.
+
+    Per-model overrides (ADR-024) outrank the provider default table: an exact
+    model id wins outright, otherwise the longest-prefix glob wins, and failing
+    any override the provider's default supported-options key is used. This is
+    the single resolution path; both the max-tokens site and the general option
+    loop call it (OPT-005).
+    """
+    best_key: str | None = None
+    best_len = -1
+    for ov in model_option_overrides(pname):
+        if ov.key != param:
+            continue
+        if ov.matcher_kind == "id":
+            if ov.matcher_value == model:
+                return ov.json_key
+        else:  # "pattern": literal prefix + single trailing '*'
+            prefix = ov.matcher_value[:-1] if ov.matcher_value.endswith("*") else ov.matcher_value
+            if model.startswith(prefix) and len(prefix) > best_len:
+                best_key, best_len = ov.json_key, len(prefix)
+    if best_len >= 0:
+        return best_key
+    mapping = supported.get(param)
+    return mapping.json_key if mapping is not None else None
+
+
 def _build_request(p: Provider, req: Request, opts: Options, cfg):
     body: dict[str, Any] = {}
     headers: dict[str, str] = {}
@@ -469,11 +508,12 @@ def _build_request(p: Provider, req: Request, opts: Options, cfg):
     if opts.max_tokens is not None:
         max_tokens = opts.max_tokens
 
-    supported = {o.key: o for o in supported_options(ProviderName(p.name))}
+    pname = ProviderName(p.name)
+    supported = {o.key: o for o in supported_options(pname)}
 
-    max_key = supported.get(OptionKey.MAX_TOKENS)
-    if max_key is not None:
-        body[max_key.json_key] = max_tokens
+    max_json_key = _resolve_option_key(pname, model, OptionKey.MAX_TOKENS, supported)
+    if max_json_key is not None:
+        body[max_json_key] = max_tokens
 
     placement = system_placement(ProviderName(p.name))
     if placement == SystemPlacement.TOP_LEVEL_FIELD:
@@ -488,14 +528,14 @@ def _build_request(p: Provider, req: Request, opts: Options, cfg):
 
     if cfg.wraps_options_in:
         opt_body: dict[str, Any] = {}
-        _add_options(opt_body, opts, p.name)
-        if max_key is not None:
-            set_nested_field(opt_body, max_key.json_key, max_tokens)
-            body.pop(max_key.json_key.split(".", 1)[0], None)
+        _add_options(opt_body, opts, p.name, model)
+        if max_json_key is not None:
+            set_nested_field(opt_body, max_json_key, max_tokens)
+            body.pop(max_json_key.split(".", 1)[0], None)
         if opt_body:
             body[cfg.wraps_options_in] = opt_body
     else:
-        _add_options(body, opts, p.name)
+        _add_options(body, opts, p.name, model)
 
     if cfg.safety_settings_wire_path and opts.safety_settings:
         body[cfg.safety_settings_wire_path] = [
@@ -518,7 +558,7 @@ def _build_request(p: Provider, req: Request, opts: Options, cfg):
     return body, headers
 
 
-def _add_options(body: dict[str, Any], opts: Options, provider_name: str) -> None:
+def _add_options(body: dict[str, Any], opts: Options, provider_name: str, model: str) -> None:
     """Apply generation parameters to body, honouring dotted JSON keys + extra_fields.
 
     JSON keys may be dotted (e.g. "thinking.budget_tokens") for providers that
@@ -531,10 +571,10 @@ def _add_options(body: dict[str, Any], opts: Options, provider_name: str) -> Non
     overrides = {ov.key: ov for ov in option_overrides(pname)}
 
     def put(opt_key: OptionKey, value: Any) -> None:
-        mapping = supported.get(opt_key)
-        if mapping is None:
+        json_key = _resolve_option_key(pname, model, opt_key, supported)
+        if json_key is None:
             return
-        set_nested_field(body, mapping.json_key, value)
+        set_nested_field(body, json_key, value)
         ov = overrides.get(opt_key)
         if ov and ov.extra_fields_json:
             try:
@@ -542,7 +582,7 @@ def _add_options(body: dict[str, Any], opts: Options, provider_name: str) -> Non
             except ValueError:
                 return
             if isinstance(extras, dict):
-                merge_into_parent(body, mapping.json_key, extras)
+                merge_into_parent(body, json_key, extras)
 
     if opts.temperature is not None:
         put(OptionKey.TEMPERATURE, opts.temperature)
@@ -622,6 +662,7 @@ def _parse_response(provider: str, body: bytes) -> Response:
     output_tokens = extract_int_path(raw, cfg.usage_output_path)
     cache_write, cache_read = _extract_cache_usage(raw, provider)
     reasoning = extract_int_path(raw, cfg.reasoning_tokens_path) if cfg.reasoning_tokens_path else 0
+    cost = extract_float_path(raw, cfg.usage_cost_path) if cfg.usage_cost_path else 0.0
     finish_reason = extract_path(raw, cfg.finish_reason_path) if cfg.finish_reason_path else ""
     finish_message = extract_path(raw, cfg.finish_message_path) if cfg.finish_message_path else ""
 
@@ -631,6 +672,7 @@ def _parse_response(provider: str, body: bytes) -> Response:
         cache_write=cache_write,
         cache_read=cache_read,
         reasoning=reasoning,
+        cost=cost,
     )
     return Response(
         text=text,

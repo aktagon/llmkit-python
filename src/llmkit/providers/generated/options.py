@@ -940,3 +940,92 @@ def supported_options(provider: ProviderName) -> tuple[SupportedOptionDef, ...]:
 def option_overrides(provider: ProviderName) -> tuple[OptionOverrideDef, ...]:
     """Return per-provider option overrides (custom json keys, allowed values, extra fields)."""
     return _OPTION_OVERRIDES[provider]
+
+
+@dataclass(frozen=True)
+class ModelOptionOverrideDef:
+    matcher_kind: str  # "id" | "pattern"
+    matcher_value: str
+    key: OptionKey
+    json_key: str
+
+
+_MODEL_OPTION_OVERRIDES: dict[ProviderName, tuple[ModelOptionOverrideDef, ...]] = {
+    ProviderName.AI21: (
+    ),
+    ProviderName.ANTHROPIC: (
+    ),
+    ProviderName.AZURE: (
+    ),
+    ProviderName.BEDROCK: (
+    ),
+    ProviderName.CEREBRAS: (
+    ),
+    ProviderName.COHERE: (
+    ),
+    ProviderName.DEEPSEEK: (
+    ),
+    ProviderName.DOUBAO: (
+    ),
+    ProviderName.ERNIE: (
+    ),
+    ProviderName.FIREWORKS: (
+    ),
+    ProviderName.GOOGLE: (
+    ),
+    ProviderName.GROK: (
+    ),
+    ProviderName.GROQ: (
+    ),
+    ProviderName.JAN: (
+    ),
+    ProviderName.LLAMACPP: (
+    ),
+    ProviderName.LMSTUDIO: (
+    ),
+    ProviderName.MINIMAX: (
+    ),
+    ProviderName.MISTRAL: (
+    ),
+    ProviderName.MOONSHOT: (
+    ),
+    ProviderName.OLLAMA: (
+    ),
+    ProviderName.OPENAI: (
+        ModelOptionOverrideDef(
+            matcher_kind="pattern",
+            matcher_value="gpt-5*",
+            key=OptionKey.MAX_TOKENS,
+            json_key="max_completion_tokens",
+        ),
+        ModelOptionOverrideDef(
+            matcher_kind="pattern",
+            matcher_value="o*",
+            key=OptionKey.MAX_TOKENS,
+            json_key="max_completion_tokens",
+        ),
+    ),
+    ProviderName.OPENROUTER: (
+    ),
+    ProviderName.PERPLEXITY: (
+    ),
+    ProviderName.QWEN: (
+    ),
+    ProviderName.SAMBANOVA: (
+    ),
+    ProviderName.TOGETHER: (
+    ),
+    ProviderName.VERTEX: (
+    ),
+    ProviderName.VLLM: (
+    ),
+    ProviderName.YI: (
+    ),
+    ProviderName.ZHIPU: (
+    ),
+}
+
+
+def model_option_overrides(provider: ProviderName) -> tuple[ModelOptionOverrideDef, ...]:
+    """Return per-model wire-key overrides for a provider (ADR-024), precedence-ordered."""
+    return _MODEL_OPTION_OVERRIDES[provider]
