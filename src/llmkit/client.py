@@ -40,7 +40,7 @@ from .providers.generated.request import (
     system_placement,
 )
 from .providers.generated.stream import stream_config
-from .transforms import select_message_transform
+from .transforms import select_message_transform, select_tool_def_transform, to_internal
 from .types import File, Options, Provider, Request, Response
 
 StreamCallback = Callable[[str], None]
@@ -93,6 +93,10 @@ def prompt(
     if cfg is None:
         raise ValidationError(field="provider", message=f"unknown: {provider.name}")
 
+    #
+    #
+    msgs = to_internal(request.messages)
+
     base_event = Event(
         op=MiddlewareOp.LLM_REQUEST,
         provider=provider.name,
@@ -101,7 +105,7 @@ def prompt(
     start = time.monotonic()
     fire_pre(opts.middleware, base_event)
 
-    body, headers = _build_request(provider, request, opts, cfg)
+    body, headers = _build_request(provider, request, opts, cfg, msgs=msgs)
 
     if opts.caching:
         try:
@@ -205,6 +209,9 @@ def prompt_stream(
     if stream_cfg is None:
         raise ValidationError(field="provider", message=f"streaming not supported: {provider.name}")
 
+    #
+    msgs = to_internal(request.messages)
+
     base_event = Event(
         op=MiddlewareOp.LLM_REQUEST,
         provider=provider.name,
@@ -213,7 +220,7 @@ def prompt_stream(
     start = time.monotonic()
     fire_pre(opts.middleware, base_event)
 
-    body, headers = _build_request(provider, request, opts, cfg)
+    body, headers = _build_request(provider, request, opts, cfg, msgs=msgs)
 
     if opts.caching:
         try:
@@ -395,6 +402,9 @@ def _validate_provider(p: Provider) -> None:
 def _validate_request(req: Request) -> None:
     if not req.user and not req.messages:
         raise ValidationError(field="user", message="required")
+    #
+    #
+    #
 
 
 def _validate_options(p: Provider, opts: Options) -> None:
@@ -496,7 +506,25 @@ def _resolve_option_key(
     return mapping.json_key if mapping is not None else None
 
 
-def _build_request(p: Provider, req: Request, opts: Options, cfg):
+def _build_request(p: Provider, req: Request, opts: Options, cfg, tools: list | None = None, *, msgs=None):
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    if msgs is None:
+        msgs = to_internal(req.messages)
     body: dict[str, Any] = {}
     headers: dict[str, str] = {}
 
@@ -524,7 +552,10 @@ def _build_request(p: Provider, req: Request, opts: Options, cfg):
             body["system_instruction"] = {"parts": [{"text": req.system}]}
 
     msg_transform = select_message_transform(cfg)
-    msg_transform(body, req, cfg)
+    msg_transform(body, msgs, req, cfg)
+
+    if tools:
+        select_tool_def_transform(cfg)(body, tools)
 
     if cfg.wraps_options_in:
         opt_body: dict[str, Any] = {}
