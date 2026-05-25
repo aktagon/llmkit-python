@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from dataclasses import dataclass
+from typing import Any, Callable, NoReturn
 
+from .errors import ValidationError
 from .paths import parse_data_uri
 from .providers.generated.providers import ProviderConfig
 from .providers.generated.request import (
@@ -14,10 +16,10 @@ from .providers.generated.request import (
     system_placement,
     tool_call_config,
 )
-from .structs import ToolCall, ToolResult
+from .structs import Message, ToolCall, ToolResult
 
 
-MessageTransform = Callable[[dict[str, Any], "Request", ProviderConfig], None]
+MessageTransform = Callable[[dict[str, Any], list["_Msg"], "Request", ProviderConfig], None]
 ToolDefTransform = Callable[[dict[str, Any], list["Tool"]], None]
 ToolCallTransform = Callable[[list[ToolCall], dict[str, str]], dict[str, Any]]
 ToolResultTransform = Callable[[ToolResult, dict[str, str]], dict[str, Any]]
@@ -119,12 +121,81 @@ def _tool_call_def(cfg: ProviderConfig):
 #
 #
 
-def transform_flat_content(body: dict[str, Any], req: "Request", cfg: ProviderConfig) -> None:
-    msgs: list[dict[str, Any]] = []
+@dataclass
+class _MsgText:
+    """"""
+    role: str
+    text: str
+
+
+@dataclass
+class _MsgCalls:
+    """"""
+    calls: list[ToolCall]
+
+
+@dataclass
+class _MsgResult:
+    """"""
+    result: ToolResult
+
+
+#
+#
+#
+#
+_Msg = _MsgText | _MsgCalls | _MsgResult
+
+
+def _assert_never(value: NoReturn) -> NoReturn:
+    """
+
+
+
+
+
+"""
+    raise TypeError(f"unhandled message variant {type(value).__name__}")
+
+
+def to_internal(messages: list[Message]) -> list[_Msg]:
+    """
+
+
+
+
+
+
+"""
+    out: list[_Msg] = []
+    for i, m in enumerate(messages):
+        carriers = sum(
+            (m.tool_result is not None, bool(m.tool_calls), bool(m.content))
+        )
+        if carriers > 1:
+            raise ValidationError(
+                field=f"messages[{i}]",
+                message="must carry only one of content, tool calls, or tool result",
+            )
+        if m.tool_result is not None:
+            out.append(_MsgResult(result=m.tool_result))
+        elif m.tool_calls:
+            out.append(_MsgCalls(calls=list(m.tool_calls)))
+        else:
+            out.append(_MsgText(role=m.role, text=m.content))
+    return out
+
+
+#
+#
+#
+
+def transform_flat_content(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderConfig) -> None:
+    out: list[dict[str, Any]] = []
     placement = placement_for(cfg)
 
     if placement == SystemPlacement.MESSAGE_IN_ARRAY and req.system:
-        msgs.append(
+        out.append(
             {
                 "role": map_role("system", cfg.role_mappings),
                 "content": req.system,
@@ -133,31 +204,43 @@ def transform_flat_content(body: dict[str, Any], req: "Request", cfg: ProviderCo
 
     has_media = bool(req.files) or bool(req.images)
 
-    if req.messages:
-        for m in req.messages:
-            msgs.append(
-                {
-                    "role": map_role(m.role, cfg.role_mappings),
-                    "content": m.content,
-                }
-            )
+    if msgs:
+        #
+        #
+        call_t = select_tool_call_transform(cfg)
+        result_t = select_tool_result_transform(cfg)
+        for m in msgs:
+            match m:
+                case _MsgResult():
+                    out.append(result_t(m.result, cfg.role_mappings))
+                case _MsgCalls():
+                    out.append(call_t(m.calls, cfg.role_mappings))
+                case _MsgText():
+                    out.append(
+                        {
+                            "role": map_role(m.role, cfg.role_mappings),
+                            "content": m.text,
+                        }
+                    )
+                case _:
+                    _assert_never(m)
     elif req.user:
         if has_media:
-            msgs.append(
+            out.append(
                 {
                     "role": map_role("user", cfg.role_mappings),
                     "content": _build_flat_content_parts(req, cfg),
                 }
             )
         else:
-            msgs.append(
+            out.append(
                 {
                     "role": map_role("user", cfg.role_mappings),
                     "content": req.user,
                 }
             )
 
-    body["messages"] = msgs
+    body["messages"] = out
 
 
 def _build_flat_content_parts(req: "Request", cfg: ProviderConfig) -> list[dict[str, Any]]:
@@ -214,16 +297,40 @@ def _build_flat_content_parts(req: "Request", cfg: ProviderConfig) -> list[dict[
     return parts
 
 
-def transform_google_parts(body: dict[str, Any], req: "Request", cfg: ProviderConfig) -> None:
+def transform_google_parts(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderConfig) -> None:
     contents: list[dict[str, Any]] = []
-    if req.messages:
-        for m in req.messages:
-            contents.append(
-                {
-                    "role": map_role(m.role, cfg.role_mappings),
-                    "parts": [{"text": m.content}],
-                }
-            )
+    if msgs:
+        call_t = select_tool_call_transform(cfg)
+        result_t = select_tool_result_transform(cfg)
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        id_to_name: dict[str, str] = {}
+        for m in msgs:
+            match m:
+                case _MsgResult():
+                    r = m.result
+                    name = id_to_name.get(r.tool_use_id)
+                    if name:
+                        r = ToolResult(tool_use_id=name, content=r.content)
+                    contents.append(result_t(r, cfg.role_mappings))
+                case _MsgCalls():
+                    for c in m.calls:
+                        id_to_name[c.id] = c.name
+                    contents.append(call_t(m.calls, cfg.role_mappings))
+                case _MsgText():
+                    contents.append(
+                        {
+                            "role": map_role(m.role, cfg.role_mappings),
+                            "parts": [{"text": m.text}],
+                        }
+                    )
+                case _:
+                    _assert_never(m)
     elif req.user:
         parts = _build_google_content_parts(req)
         contents.append(
@@ -272,26 +379,36 @@ def _build_google_content_parts(req: "Request") -> list[dict[str, Any]]:
     return parts
 
 
-def transform_bedrock_converse(body: dict[str, Any], req: "Request", cfg: ProviderConfig) -> None:
+def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderConfig) -> None:
     if req.system:
         body["system"] = [{"text": req.system}]
-    msgs: list[dict[str, Any]] = []
-    if req.messages:
-        for m in req.messages:
-            msgs.append(
-                {
-                    "role": map_role(m.role, cfg.role_mappings),
-                    "content": [{"text": m.content}],
-                }
-            )
+    out: list[dict[str, Any]] = []
+    if msgs:
+        call_t = select_tool_call_transform(cfg)
+        result_t = select_tool_result_transform(cfg)
+        for m in msgs:
+            match m:
+                case _MsgResult():
+                    out.append(result_t(m.result, cfg.role_mappings))
+                case _MsgCalls():
+                    out.append(call_t(m.calls, cfg.role_mappings))
+                case _MsgText():
+                    out.append(
+                        {
+                            "role": map_role(m.role, cfg.role_mappings),
+                            "content": [{"text": m.text}],
+                        }
+                    )
+                case _:
+                    _assert_never(m)
     elif req.user:
-        msgs.append(
+        out.append(
             {
                 "role": map_role("user", cfg.role_mappings),
                 "content": [{"text": req.user}],
             }
         )
-    body["messages"] = msgs
+    body["messages"] = out
 
 
 #
