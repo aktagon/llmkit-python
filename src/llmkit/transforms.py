@@ -121,20 +121,20 @@ def _tool_call_def(cfg: ProviderConfig):
 #
 #
 
-@dataclass
+@dataclass(frozen=True)
 class _MsgText:
     """"""
     role: str
     text: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class _MsgCalls:
     """"""
     calls: list[ToolCall]
 
 
-@dataclass
+@dataclass(frozen=True)
 class _MsgResult:
     """"""
     result: ToolResult
