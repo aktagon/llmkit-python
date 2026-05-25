@@ -17,5 +17,10 @@ def usage_paths(provider: ProviderName) -> tuple[str, str]:
 
 
 def usage_cost_path(provider: ProviderName) -> str:
-    """Dotted path to provider-reported USD cost, or "" when unreported (ADR-027)."""
+    """Dotted path to provider-reported cost, or "" when unreported (ADR-027)."""
     return PROVIDERS[provider.value].usage_cost_path
+
+
+def usage_cost_scale(provider: ProviderName) -> float:
+    """Multiplier converting the reported cost to USD (xAI ticks -> 1e-10); default 1.0 (ADR-027)."""
+    return PROVIDERS[provider.value].usage_cost_scale
