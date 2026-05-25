@@ -91,10 +91,13 @@ def test_transform_anthropic_tools_uses_input_schema_key() -> None:
 
 def test_transform_google_function_declarations_nests_decls() -> None:
     body: dict[str, Any] = {}
-    transform_google_function_declarations(body, [_adder_tool()])
+    transform_google_function_declarations(body, [_adder_tool()], "parametersJsonSchema")
     # Google wraps under tools[0].functionDeclarations[].
-    assert body["tools"][0]["functionDeclarations"][0]["name"] == "add"
-    assert body["tools"][0]["functionDeclarations"][0]["parameters"] == _adder_tool().schema
+    decl = body["tools"][0]["functionDeclarations"][0]
+    assert decl["name"] == "add"
+    # ADR-025 / BUG-002: schema goes under parametersJsonSchema, verbatim.
+    assert decl["parametersJsonSchema"] == _adder_tool().schema
+    assert "parameters" not in decl
 
 
 def test_transform_bedrock_tool_defs_uses_toolconfig_envelope() -> None:
@@ -326,11 +329,17 @@ def test_select_tool_def_transform_anthropic_returns_anthropic_tools() -> None:
     assert fn is transform_anthropic_tools
 
 
-def test_select_tool_def_transform_google_returns_google_declarations() -> None:
+def test_select_tool_def_transform_google_emits_parameters_json_schema() -> None:
     cfg = PROVIDERS["google"]
     fn = select_tool_def_transform(cfg)
-    # Google has SiblingObject system placement → maps to google declarations.
-    assert fn is transform_google_function_declarations
+    # Google's selector closes over the per-provider wire field (ADR-025), so it
+    # is no longer the bare function. Assert the wired behaviour instead: the
+    # emitted decl carries the schema under parametersJsonSchema.
+    body: dict[str, Any] = {}
+    fn(body, [_adder_tool()])
+    decl = body["tools"][0]["functionDeclarations"][0]
+    assert decl["parametersJsonSchema"] == _adder_tool().schema
+    assert "parameters" not in decl
 
 
 def test_select_tool_def_transform_bedrock_returns_bedrock_defs() -> None:
