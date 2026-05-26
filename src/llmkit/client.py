@@ -135,7 +135,12 @@ def prompt(
         else:
             resp_body = do_post(url, json_body, headers, timeout=opts.request_timeout)
     except APIError as raw_api_err:
-        err = parse_error(provider.name, raw_api_err.status_code, raw_api_err.message.encode("utf-8"), None)
+        err = parse_error(
+            provider.name,
+            raw_api_err.status_code,
+            raw_api_err.message.encode("utf-8"),
+            None,
+        )
         _fire_post_err(opts.middleware, base_event, err, start)
         raise err from raw_api_err
     except Exception as exc:
@@ -207,7 +212,9 @@ def prompt_stream(
 
     stream_cfg = stream_config(ProviderName(provider.name))
     if stream_cfg is None:
-        raise ValidationError(field="provider", message=f"streaming not supported: {provider.name}")
+        raise ValidationError(
+            field="provider", message=f"streaming not supported: {provider.name}"
+        )
 
     # Carrier-validate at the single boundary before firing middleware (PIPE-008).
     msgs = to_internal(request.messages)
@@ -292,7 +299,9 @@ def upload_file(
     """
     if isinstance(source, (bytes, bytearray)):
         if not filename:
-            raise ValidationError(field="filename", message="required when source is bytes")
+            raise ValidationError(
+                field="filename", message="required when source is bytes"
+            )
         data = bytes(source)
         name = filename
     else:
@@ -307,7 +316,9 @@ def upload_file(
         raise ValidationError(field="provider", message=f"unknown: {provider.name}")
     fu = file_upload_config(ProviderName(provider.name))
     if fu is None:
-        raise ValidationError(field="provider", message=f"file upload not supported: {provider.name}")
+        raise ValidationError(
+            field="provider", message=f"file upload not supported: {provider.name}"
+        )
 
     mws = list(middleware or [])
     base_event = Event(
@@ -350,8 +361,14 @@ def upload_file(
 
     try:
         resp_body, status_code = do_multipart_post(
-            upload_url, fu.field_name, name, data, extra_fields, headers,
-            timeout=request_timeout, mime_type=mime_type,
+            upload_url,
+            fu.field_name,
+            name,
+            data,
+            extra_fields,
+            headers,
+            timeout=request_timeout,
+            mime_type=mime_type,
         )
     except Exception as exc:
         _fire_post_err(mws, base_event, exc, start)
@@ -394,6 +411,7 @@ def upload_file(
 # Validation
 # =============================================================================
 
+
 def _validate_provider(p: Provider) -> None:
     if not p.api_key:
         raise ValidationError(field="api_key", message="required")
@@ -414,7 +432,9 @@ def _validate_options(p: Provider, opts: Options) -> None:
 
     def require(opt_key: OptionKey, field_name: str) -> None:
         if opt_key not in supported:
-            raise ValidationError(field=field_name, message=f"not supported by {p.name}")
+            raise ValidationError(
+                field=field_name, message=f"not supported by {p.name}"
+            )
 
     if opts.top_k is not None:
         require(OptionKey.TOP_K, "top_k")
@@ -443,6 +463,7 @@ def _validate_options(p: Provider, opts: Options) -> None:
 # =============================================================================
 # URL and request builders
 # =============================================================================
+
 
 def _build_url(p: Provider, cfg) -> str:
     base = p.base_url or cfg.base_url
@@ -497,7 +518,11 @@ def _resolve_option_key(
             if ov.matcher_value == model:
                 return ov.json_key
         else:  # "pattern": literal prefix + single trailing '*'
-            prefix = ov.matcher_value[:-1] if ov.matcher_value.endswith("*") else ov.matcher_value
+            prefix = (
+                ov.matcher_value[:-1]
+                if ov.matcher_value.endswith("*")
+                else ov.matcher_value
+            )
             if model.startswith(prefix) and len(prefix) > best_len:
                 best_key, best_len = ov.json_key, len(prefix)
     if best_len >= 0:
@@ -506,7 +531,15 @@ def _resolve_option_key(
     return mapping.json_key if mapping is not None else None
 
 
-def _build_request(p: Provider, req: Request, opts: Options, cfg, tools: list | None = None, *, msgs=None):
+def _build_request(
+    p: Provider,
+    req: Request,
+    opts: Options,
+    cfg,
+    tools: list | None = None,
+    *,
+    msgs=None,
+):
     # msgs is the internal message sum (ADR-026 PIPE-007). The Text/batch/stream
     # paths convert their public Message list via to_internal at the single
     # carrier-validation boundary (PIPE-008); the Agent builds it directly from
@@ -589,7 +622,9 @@ def _build_request(p: Provider, req: Request, opts: Options, cfg, tools: list | 
     return body, headers
 
 
-def _add_options(body: dict[str, Any], opts: Options, provider_name: str, model: str) -> None:
+def _add_options(
+    body: dict[str, Any], opts: Options, provider_name: str, model: str
+) -> None:
     """Apply generation parameters to body, honouring dotted JSON keys + extra_fields.
 
     JSON keys may be dotted (e.g. "thinking.budget_tokens") for providers that
@@ -635,7 +670,9 @@ def _add_options(body: dict[str, Any], opts: Options, provider_name: str, model:
         put(OptionKey.REASONING_EFFORT, opts.reasoning_effort)
 
 
-def _add_structured_output(body: dict[str, Any], headers: dict[str, str], schema: str, provider_name: str, cfg) -> None:
+def _add_structured_output(
+    body: dict[str, Any], headers: dict[str, str], schema: str, provider_name: str, cfg
+) -> None:
     so = structured_output(ProviderName(provider_name))
     if so is None:
         return
@@ -651,6 +688,14 @@ def _add_structured_output(body: dict[str, Any], headers: dict[str, str], schema
 
     if so.beta_header:
         headers["anthropic-beta"] = so.beta_header
+
+    # SiblingOfFormat placement (Google): the format field carries the literal
+    # format type (responseMimeType: "application/json") and the schema is an
+    # independent sibling at schema_path (responseSchema), not nested in a wrapper.
+    if so.schema_placement == "SiblingOfFormat":
+        set_nested_field(body, so.format_field, so.format_type)
+        set_nested_field(body, so.schema_path, parsed_schema)
+        return
 
     path_parts = so.schema_path.split(".")
     if len(path_parts) == 1:
@@ -677,6 +722,7 @@ def _add_structured_output(body: dict[str, Any], headers: dict[str, str], schema
 # Response parsing
 # =============================================================================
 
+
 def _parse_response(provider: str, body: bytes) -> Response:
     try:
         raw = json.loads(body)
@@ -692,10 +738,22 @@ def _parse_response(provider: str, body: bytes) -> Response:
     input_tokens = extract_int_path(raw, cfg.usage_input_path)
     output_tokens = extract_int_path(raw, cfg.usage_output_path)
     cache_write, cache_read = _extract_cache_usage(raw, provider)
-    reasoning = extract_int_path(raw, cfg.reasoning_tokens_path) if cfg.reasoning_tokens_path else 0
-    cost = extract_float_path(raw, cfg.usage_cost_path) * cfg.usage_cost_scale if cfg.usage_cost_path else 0.0
-    finish_reason = extract_path(raw, cfg.finish_reason_path) if cfg.finish_reason_path else ""
-    finish_message = extract_path(raw, cfg.finish_message_path) if cfg.finish_message_path else ""
+    reasoning = (
+        extract_int_path(raw, cfg.reasoning_tokens_path)
+        if cfg.reasoning_tokens_path
+        else 0
+    )
+    cost = (
+        extract_float_path(raw, cfg.usage_cost_path) * cfg.usage_cost_scale
+        if cfg.usage_cost_path
+        else 0.0
+    )
+    finish_reason = (
+        extract_path(raw, cfg.finish_reason_path) if cfg.finish_reason_path else ""
+    )
+    finish_message = (
+        extract_path(raw, cfg.finish_message_path) if cfg.finish_message_path else ""
+    )
 
     tokens = Usage(
         input=input_tokens,
@@ -722,8 +780,12 @@ def _extract_cache_usage(raw: dict[str, Any], provider: str) -> tuple[int, int]:
     return write, read
 
 
-def _fire_post_err(mws: list, base_event: Event, exc: BaseException, start: float) -> None:
+def _fire_post_err(
+    mws: list, base_event: Event, exc: BaseException, start: float
+) -> None:
     import dataclasses
 
-    ev = dataclasses.replace(base_event, err=str(exc), duration=time.monotonic() - start)
+    ev = dataclasses.replace(
+        base_event, err=str(exc), duration=time.monotonic() - start
+    )
     fire_post(mws, ev)
