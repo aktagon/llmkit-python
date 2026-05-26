@@ -29,6 +29,7 @@ class StructuredOutputDef:
     beta_header: str = ""
     enforce_strict: bool = False
     remove_additional_props: bool = False
+    schema_placement: str = "WrappedInFormat"
 
 
 @dataclass(frozen=True)
@@ -132,6 +133,7 @@ _STRUCTURED_OUTPUTS: dict[ProviderName, StructuredOutputDef] = {
         beta_header="structured-outputs-2025-11-13",
         enforce_strict=True,
         remove_additional_props=False,
+        schema_placement="WrappedInFormat",
     ),
     ProviderName.AZURE: StructuredOutputDef(
         format_field="response_format",
@@ -140,6 +142,7 @@ _STRUCTURED_OUTPUTS: dict[ProviderName, StructuredOutputDef] = {
         beta_header="",
         enforce_strict=True,
         remove_additional_props=False,
+        schema_placement="WrappedInFormat",
     ),
     ProviderName.GOOGLE: StructuredOutputDef(
         format_field="generationConfig.responseMimeType",
@@ -148,6 +151,7 @@ _STRUCTURED_OUTPUTS: dict[ProviderName, StructuredOutputDef] = {
         beta_header="",
         enforce_strict=False,
         remove_additional_props=True,
+        schema_placement="SiblingOfFormat",
     ),
     ProviderName.GROK: StructuredOutputDef(
         format_field="response_format",
@@ -156,6 +160,7 @@ _STRUCTURED_OUTPUTS: dict[ProviderName, StructuredOutputDef] = {
         beta_header="",
         enforce_strict=True,
         remove_additional_props=False,
+        schema_placement="WrappedInFormat",
     ),
     ProviderName.MISTRAL: StructuredOutputDef(
         format_field="response_format",
@@ -164,6 +169,7 @@ _STRUCTURED_OUTPUTS: dict[ProviderName, StructuredOutputDef] = {
         beta_header="",
         enforce_strict=True,
         remove_additional_props=False,
+        schema_placement="WrappedInFormat",
     ),
     ProviderName.OPENAI: StructuredOutputDef(
         format_field="response_format",
@@ -172,6 +178,7 @@ _STRUCTURED_OUTPUTS: dict[ProviderName, StructuredOutputDef] = {
         beta_header="",
         enforce_strict=True,
         remove_additional_props=False,
+        schema_placement="WrappedInFormat",
     ),
 }
 
