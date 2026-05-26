@@ -14,7 +14,9 @@ from llmkit.providers.generated.providers import PROVIDERS
 def test_anthropic_builds_top_level_system() -> None:
     cfg = PROVIDERS["anthropic"]
     body, headers = _build_request(
-        llmkit.Provider(name="anthropic", api_key="sk-ant-test", model="claude-sonnet-4-6"),
+        llmkit.Provider(
+            name="anthropic", api_key="sk-ant-test", model="claude-sonnet-4-6"
+        ),
         llmkit.Request(system="Be terse.", user="Hi"),
         llmkit.Options(temperature=0.3, max_tokens=100),
         cfg,
@@ -55,7 +57,9 @@ def test_anthropic_thinking_budget_nests_dotted_path_with_extras() -> None:
         ("gpt-4o", "max_tokens", "max_completion_tokens"),  # unaffected
     ],
 )
-def test_openai_per_model_max_tokens_key(model: str, want_key: str, wrong_key: str) -> None:
+def test_openai_per_model_max_tokens_key(
+    model: str, want_key: str, wrong_key: str
+) -> None:
     """BUG-001 / ADR-024: gpt-5 and the o-series emit max_completion_tokens;
     gpt-4o keeps max_tokens. Per-model, same provider."""
     cfg = PROVIDERS["openai"]
@@ -127,12 +131,16 @@ def test_google_tool_result_resolves_function_name() -> None:
             llmkit.Message(
                 role="assistant",
                 tool_calls=[
-                    llmkit.ToolCall(id="call_abc123", name="get_weather", input={"city": "Paris"})
+                    llmkit.ToolCall(
+                        id="call_abc123", name="get_weather", input={"city": "Paris"}
+                    )
                 ],
             ),
             llmkit.Message(
                 role="tool",
-                tool_result=llmkit.ToolResult(tool_use_id="call_abc123", content="sunny, 21C"),
+                tool_result=llmkit.ToolResult(
+                    tool_use_id="call_abc123", content="sunny, 21C"
+                ),
             ),
         ]
     )
@@ -198,7 +206,9 @@ def test_sigv4_headers_have_required_fields() -> None:
     assert headers["Host"] == "bedrock-runtime.us-east-1.amazonaws.com"
     assert headers["X-Amz-Content-Sha256"]
     assert headers["X-Amz-Date"]
-    assert headers["Authorization"].startswith("AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE")
+    assert headers["Authorization"].startswith(
+        "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE"
+    )
     assert "SignedHeaders=" in headers["Authorization"]
     assert "Signature=" in headers["Authorization"]
 
@@ -220,10 +230,12 @@ def test_usage_cost_extracted_for_openrouter() -> None:
     """BUG-005 / ADR-027: OpenRouter reports usage.cost (USD) -> Usage.cost."""
     from llmkit.client import _parse_response
 
-    body = json.dumps({
-        "choices": [{"message": {"content": "ok"}}],
-        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.00042},
-    })
+    body = json.dumps(
+        {
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.00042},
+        }
+    )
     resp = _parse_response("openrouter", body.encode())
     assert resp.usage.cost == 0.00042
 
@@ -233,10 +245,16 @@ def test_usage_cost_grok_ticks_to_usd() -> None:
     ticks), so scale 1e-10 converts to USD. 2856000 ticks = $0.0002856."""
     from llmkit.client import _parse_response
 
-    body = json.dumps({
-        "choices": [{"message": {"content": "ok"}}],
-        "usage": {"prompt_tokens": 136, "completion_tokens": 100, "cost_in_usd_ticks": 2856000},
-    })
+    body = json.dumps(
+        {
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {
+                "prompt_tokens": 136,
+                "completion_tokens": 100,
+                "cost_in_usd_ticks": 2856000,
+            },
+        }
+    )
     resp = _parse_response("grok", body.encode())
     assert resp.usage.cost == 0.0002856
 
@@ -245,10 +263,12 @@ def test_usage_cost_zero_for_no_cost_provider() -> None:
     """OpenAI declares no usage_cost_path, so a stray cost field is ignored."""
     from llmkit.client import _parse_response
 
-    body = json.dumps({
-        "choices": [{"message": {"content": "ok"}}],
-        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.99},
-    })
+    body = json.dumps(
+        {
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.99},
+        }
+    )
     resp = _parse_response("openai", body.encode())
     assert resp.usage.cost == 0.0
 
@@ -257,14 +277,16 @@ def test_reasoning_tokens_extracted_for_openai() -> None:
     """OpenAI o1/o3/o4 expose reasoning_tokens via completion_tokens_details."""
     from llmkit.client import _parse_response
 
-    body = json.dumps({
-        "choices": [{"message": {"content": "reasoned answer"}}],
-        "usage": {
-            "prompt_tokens": 40,
-            "completion_tokens": 25,
-            "completion_tokens_details": {"reasoning_tokens": 17},
-        },
-    })
+    body = json.dumps(
+        {
+            "choices": [{"message": {"content": "reasoned answer"}}],
+            "usage": {
+                "prompt_tokens": 40,
+                "completion_tokens": 25,
+                "completion_tokens_details": {"reasoning_tokens": 17},
+            },
+        }
+    )
     resp = _parse_response("openai", body.encode())
     assert resp.usage.input == 40
     assert resp.usage.output == 25
@@ -275,10 +297,12 @@ def test_reasoning_tokens_zero_for_unreported_provider() -> None:
     """Anthropic does not report reasoning tokens separately; Usage.reasoning stays 0."""
     from llmkit.client import _parse_response
 
-    body = json.dumps({
-        "content": [{"type": "text", "text": "hello"}],
-        "usage": {"input_tokens": 5, "output_tokens": 3},
-    })
+    body = json.dumps(
+        {
+            "content": [{"type": "text", "text": "hello"}],
+            "usage": {"input_tokens": 5, "output_tokens": 3},
+        }
+    )
     resp = _parse_response("anthropic", body.encode())
     assert resp.usage.reasoning == 0
 
@@ -302,6 +326,60 @@ def test_google_safety_settings_written_as_top_level_field() -> None:
     assert body["safetySettings"] == [
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}
     ]
+
+
+def test_google_structured_output_sibling_fields() -> None:
+    """Google structured output: responseMimeType (literal string) +
+    responseSchema as siblings under generationConfig, additionalProperties
+    stripped. Not nested inside a wrapper object."""
+    cfg = PROVIDERS["google"]
+    body, _ = _build_request(
+        llmkit.Provider(name="google", api_key="AIza-test"),
+        llmkit.Request(
+            user="color of sky",
+            schema='{"type":"object","properties":{"color":{"type":"string"}},"additionalProperties":false}',
+        ),
+        llmkit.Options(),
+        cfg,
+    )
+    gc = body["generationConfig"]
+    assert gc["responseMimeType"] == "application/json"
+    assert gc["responseSchema"]["type"] == "object"
+    assert "additionalProperties" not in gc["responseSchema"]
+
+
+def test_openai_structured_output_wrapped_strict() -> None:
+    cfg = PROVIDERS["openai"]
+    body, _ = _build_request(
+        llmkit.Provider(name="openai", api_key="sk-openai-test"),
+        llmkit.Request(
+            user="color of sky",
+            schema='{"type":"object","properties":{"color":{"type":"string"}}}',
+        ),
+        llmkit.Options(),
+        cfg,
+    )
+    rf = body["response_format"]
+    assert rf["type"] == "json_schema"
+    assert rf["json_schema"]["strict"] is True
+    assert rf["json_schema"]["schema"]["additionalProperties"] is False
+    assert rf["json_schema"]["schema"]["required"] == ["color"]
+
+
+def test_anthropic_structured_output_sets_beta_header() -> None:
+    cfg = PROVIDERS["anthropic"]
+    body, headers = _build_request(
+        llmkit.Provider(name="anthropic", api_key="sk", model="claude-sonnet-4-6"),
+        llmkit.Request(
+            user="color of sky",
+            schema='{"type":"object","properties":{"color":{"type":"string"}}}',
+        ),
+        llmkit.Options(),
+        cfg,
+    )
+    assert body["output_format"]["type"] == "json_schema"
+    assert body["output_format"]["schema"]["type"] == "object"
+    assert headers["anthropic-beta"] == "structured-outputs-2025-11-13"
 
 
 def test_openai_safety_settings_silently_dropped() -> None:
