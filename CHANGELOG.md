@@ -7,10 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- Builder chain methods renamed per the ADR-021 naming convention (bare-noun replacers, `add_*` appenders): `tool()` is now `add_tool()` (Agent builder) and `middleware()` is now `add_middleware()` (Text, Image, Agent, and Upload builders). No back-compat aliases; update call sites. Replacers (`system()`, `model()`, `temperature()`, ...) are unchanged.
+
 ### Added
 
+- `Usage.cost` — provider-reported request cost in USD, default `0.0`. Populated only when the provider itself reports cost in its usage payload: OpenRouter (`usage.cost`; the request must opt into usage accounting by sending `usage: {include: true}` — llmkit does not add this automatically) and xAI Grok (`usage.cost_in_usd_ticks`, converted at 1 USD = 1e10 ticks). Providers that do not report cost (Anthropic, OpenAI, Google, and others) always return `0.0` — this passes through the provider's own figure; it is not a pricing table.
+- Model catalogue (ADR-019): `c.models` and `c.providers` namespaces on `Client`. Static catalogue via `c.models.list()` / `c.models.get(id)` / `c.models.with_capability(cap)` (`ModelInfo` carries `context_window`, `max_output`, `capabilities`, `display_name`). Live per-provider listing via `await c.models.provider(p).list()` / `.get(id)` against the provider's models endpoint (`.raw()` for the unparsed payload; raises `ErrModelsNotSupported` for providers without a live endpoint). Cross-provider sweep via `await c.models.live()` returning `LiveResult` with typed per-provider errors. `c.providers.list()` / `c.providers.supported()` enumerate providers.
+- Conversation history (ADR-020): public `Message` struct and `history(*msgs)` chain method on the Text and Agent builders for seeding multi-turn context.
+- Stable message wire format (ADR-023): versioned serialization for `Message` history with typed decode errors (`UnsupportedWireVersionError`, `MissingWireVersionError`, `UnknownWireKeyError`) instead of silent misparses.
 - `Response.finish_reason` and `Response.finish_message` — provider stop signal + free-text explanation passed through verbatim on `c.text.prompt()`, `c.agent.prompt()`, `c.text.batch()`, and `c.text.stream()` (the latter via the trailing `TextStream.response.finish_reason`). Examples: Anthropic `stop_reason`, OpenAI `choices[0].finish_reason`, Google `candidates[0].finishReason`. Default empty string; populated only when the provider response carries a signal. Streaming uses ADR-013's `event_name:json.path` locator — Anthropic captures from the `message_stop` event body; OpenAI/Grok/Google use last-non-empty-wins on the data frames; Google additionally filters `FINISH_REASON_UNSPECIFIED`. Bedrock Converse streaming is not yet wired.
 - `ImageResponse.finish_reason` and `ImageResponse.finish_message` — same shape on `c.image.generate()`. Google populates both (including `IMAGE_OTHER` / `SAFETY` / `MAX_TOKENS` reasons that previously vanished into "no image returned"); Vertex Imagen surfaces `predictions[0].raiFilteredReason` as `finish_reason`; OpenAI Images API and xAI Grok have no equivalent fields and leave them empty. Callers can now render a useful message when `len(resp.images) == 0` instead of synthesizing one.
+
+### Fixed
+
+- `safety_settings()` chain method on the Text builder raised `TypeError` at the terminal — `prompt()` did not accept the keyword the chain method passed. Caught by the cross-SDK wire-conformance suite (ADR-028 M2).
+- `schema()` structured-output chain method on the Text builder is now applied to the request body (previously silently dropped); Google's structured-output layout corrected.
 
 ## [1.0.0] — 2026-05-09
 
