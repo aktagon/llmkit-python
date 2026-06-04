@@ -30,47 +30,11 @@ def test_anthropic_builds_top_level_system() -> None:
     assert headers["anthropic-version"] == "2023-06-01"
 
 
-def test_anthropic_thinking_budget_nests_dotted_path_with_extras() -> None:
-    """Regression: thinking.budget_tokens must nest into {thinking: {...}},
-    not be a literal top-level "thinking.budget_tokens" key. Anthropic
-    silently ignores unknown top-level keys, so this only shows up as a
-    body-shape check. extra_fields_json adds {"type":"enabled"} as a sibling.
-    """
-    cfg = PROVIDERS["anthropic"]
-    body, _headers = _build_request(
-        llmkit.Provider(name="anthropic", api_key="sk", model="claude-sonnet-4-6"),
-        llmkit.Request(user="hi"),
-        llmkit.Options(thinking_budget=1024),
-        cfg,
-    )
-    assert "thinking.budget_tokens" not in body
-    assert body["thinking"] == {"budget_tokens": 1024, "type": "enabled"}
-
-
-@pytest.mark.parametrize(
-    "model,want_key,wrong_key",
-    [
-        ("gpt-5", "max_completion_tokens", "max_tokens"),
-        ("gpt-5-mini", "max_completion_tokens", "max_tokens"),  # glob gpt-5*
-        ("o3", "max_completion_tokens", "max_tokens"),
-        ("o4-mini", "max_completion_tokens", "max_tokens"),  # glob o*
-        ("gpt-4o", "max_tokens", "max_completion_tokens"),  # unaffected
-    ],
-)
-def test_openai_per_model_max_tokens_key(
-    model: str, want_key: str, wrong_key: str
-) -> None:
-    """BUG-001 / ADR-024: gpt-5 and the o-series emit max_completion_tokens;
-    gpt-4o keeps max_tokens. Per-model, same provider."""
-    cfg = PROVIDERS["openai"]
-    body, _ = _build_request(
-        llmkit.Provider(name="openai", api_key="sk-openai-test", model=model),
-        llmkit.Request(user="hi"),
-        llmkit.Options(max_tokens=128),
-        cfg,
-    )
-    assert body[want_key] == 128
-    assert wrong_key not in body
+# The thinking-budget dotted-path nesting test and the per-model
+# max-tokens key table (BUG-001 / ADR-024) migrated to the
+# wire-conformance suite (ADR-028 M2): the options-anthropic and
+# options-openai-* fixtures in test_request_wire.py witness those bodies
+# byte-for-byte across all four SDKs.
 
 
 def test_openai_puts_system_in_messages_array() -> None:
@@ -87,7 +51,11 @@ def test_openai_puts_system_in_messages_array() -> None:
     assert headers["Authorization"] == "Bearer sk-openai-test"
 
 
-def test_google_wraps_options_in_generation_config() -> None:
+def test_google_places_system_in_sibling_object() -> None:
+    # The generationConfig wrapped-options asserts migrated to the
+    # options-google wire fixture (ADR-028 M2); this test's remaining
+    # subject is system placement (PlacementSiblingObject) and the
+    # contents shape — M4 surfaces not yet fixture-covered.
     cfg = PROVIDERS["google"]
     body, _ = _build_request(
         llmkit.Provider(name="google", api_key="AIza-test"),
@@ -97,10 +65,6 @@ def test_google_wraps_options_in_generation_config() -> None:
     )
     assert body["system_instruction"] == {"parts": [{"text": "Be terse."}]}
     assert body["contents"][0]["parts"][0]["text"] == "Hi"
-    assert body["generationConfig"]["temperature"] == 0.7
-    assert body["generationConfig"]["max_output_tokens"] == 200
-    assert "temperature" not in body
-    assert "max_output_tokens" not in body
 
 
 def test_bedrock_uses_text_block_arrays_and_inference_config() -> None:
