@@ -108,11 +108,9 @@ def test_image_generate_google_flash_round_trips_png() -> None:
 
     assert FLASH_MODEL + ":generateContent" in server.received_path
     assert server.received_query.get("key") == ["test-key"]
-    body = server.received_body
-    assert body is not None
-    assert body["generationConfig"]["responseModalities"] == ["IMAGE"]
-    assert body["generationConfig"]["imageConfig"]["aspectRatio"] == "16:9"
-    assert body["generationConfig"]["imageConfig"]["imageSize"] == "2K"
+    # Body-shape asserts (generationConfig/imageConfig) migrated to the
+    # image-gen-google-flash wire fixture (ADR-028 M2); URL/auth shape and
+    # response parsing remain this test's subjects.
 
     assert len(resp.images) == 1
     assert resp.images[0].mime_type == "image/png"
@@ -142,36 +140,15 @@ def test_image_generate_with_include_text_captures_text_part() -> None:
         resp = asyncio.run(
             c.image.model(FLASH_MODEL).include_text().generate("x")
         )
-    assert server.received_body is not None
-    assert server.received_body["generationConfig"]["responseModalities"] == ["TEXT", "IMAGE"]
+    # The [TEXT, IMAGE] modality body assert migrated to the
+    # image-gen-google-pro wire fixture (ADR-028 M2).
     assert resp.text == "Here is your image:"
 
 
-def test_image_generate_parts_interleaved_compositional() -> None:
-    # ADR-008's motivating scenario: text and reference images interleaved
-    # so the model attends to the description-image pairing as intended.
-    ref_a = b"\x89PNGA"
-    ref_b = b"\x89PNGB"
-    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
-    with _MockServer(_flash_response(encoded)) as server:
-        c = _client(server.url)
-        asyncio.run(
-            c.image.model(FLASH_MODEL)
-            .text("Person:")
-            .image("image/png", ref_a)
-            .text("Outfit:")
-            .image("image/png", ref_b)
-            .generate("Generate the person wearing the outfit.")
-        )
-    body = server.received_body
-    assert body is not None
-    parts = body["contents"][0]["parts"]
-    assert len(parts) == 5
-    assert parts[0] == {"text": "Person:"}
-    assert base64.b64decode(parts[1]["inlineData"]["data"]) == ref_a
-    assert parts[2] == {"text": "Outfit:"}
-    assert base64.b64decode(parts[3]["inlineData"]["data"]) == ref_b
-    assert parts[4] == {"text": "Generate the person wearing the outfit."}
+# The Parts positional-ordering wire test (ADR-008) migrated to the
+# wire-conformance suite: the image-edit-google-flash fixture witnesses
+# inlineData encoding and caller-order preservation byte-for-byte
+# (ADR-028 M2, falsification class d2).
 
 
 def test_image_generate_rejects_unsupported_aspect_on_pro() -> None:
@@ -671,40 +648,18 @@ def test_image_generate_grok_middleware_fires_both_branches() -> None:
 # =============================================================================
 
 
-def test_image_openai_typed_quality_lands_in_body() -> None:
-    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
-    with _OpenAIMockServer(_openai_image_response(encoded)) as server:
-        c = _openai_client(server.url)
-        asyncio.run(c.image.model(OPENAI_IMAGE_2).quality("high").generate("x"))
-    assert server.received_json is not None
-    assert server.received_json.get("quality") == "high"
+# The quality/output_format/background JSON-body asserts migrated to the
+# image-gen-openai wire fixture (ADR-028 M2, falsification class d3),
+# which sets all five generations-branch knobs on one canonical call.
+# The count test survives for its response-side subject (n=3 -> three
+# decoded images), with the body assert dropped.
 
 
-def test_image_openai_typed_output_format_lands_in_body() -> None:
-    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
-    with _OpenAIMockServer(_openai_image_response(encoded)) as server:
-        c = _openai_client(server.url)
-        asyncio.run(c.image.model(OPENAI_IMAGE_2).output_format("webp").generate("x"))
-    assert server.received_json is not None
-    assert server.received_json.get("output_format") == "webp"
-
-
-def test_image_openai_typed_background_lands_in_body() -> None:
-    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
-    with _OpenAIMockServer(_openai_image_response(encoded)) as server:
-        c = _openai_client(server.url)
-        asyncio.run(c.image.model(OPENAI_IMAGE_2).background("transparent").generate("x"))
-    assert server.received_json is not None
-    assert server.received_json.get("background") == "transparent"
-
-
-def test_image_openai_typed_count_lands_as_n() -> None:
+def test_image_openai_typed_count_yields_three_images() -> None:
     encoded = base64.b64encode(FAKE_PNG).decode("ascii")
     with _OpenAIMockServer(_openai_image_response(encoded, n=3)) as server:
         c = _openai_client(server.url)
         resp = asyncio.run(c.image.model(OPENAI_IMAGE_2).count(3).generate("x"))
-    assert server.received_json is not None
-    assert server.received_json.get("n") == 3
     assert len(resp.images) == 3
 
 
