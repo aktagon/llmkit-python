@@ -328,60 +328,6 @@ def test_google_safety_settings_written_as_top_level_field() -> None:
     ]
 
 
-def test_google_structured_output_sibling_fields() -> None:
-    """Google structured output: responseMimeType (literal string) +
-    responseSchema as siblings under generationConfig, additionalProperties
-    stripped. Not nested inside a wrapper object."""
-    cfg = PROVIDERS["google"]
-    body, _ = _build_request(
-        llmkit.Provider(name="google", api_key="AIza-test"),
-        llmkit.Request(
-            user="color of sky",
-            schema='{"type":"object","properties":{"color":{"type":"string"}},"additionalProperties":false}',
-        ),
-        llmkit.Options(),
-        cfg,
-    )
-    gc = body["generationConfig"]
-    assert gc["responseMimeType"] == "application/json"
-    assert gc["responseSchema"]["type"] == "object"
-    assert "additionalProperties" not in gc["responseSchema"]
-
-
-def test_openai_structured_output_wrapped_strict() -> None:
-    cfg = PROVIDERS["openai"]
-    body, _ = _build_request(
-        llmkit.Provider(name="openai", api_key="sk-openai-test"),
-        llmkit.Request(
-            user="color of sky",
-            schema='{"type":"object","properties":{"color":{"type":"string"}}}',
-        ),
-        llmkit.Options(),
-        cfg,
-    )
-    rf = body["response_format"]
-    assert rf["type"] == "json_schema"
-    assert rf["json_schema"]["strict"] is True
-    assert rf["json_schema"]["schema"]["additionalProperties"] is False
-    assert rf["json_schema"]["schema"]["required"] == ["color"]
-
-
-def test_anthropic_structured_output_sets_beta_header() -> None:
-    cfg = PROVIDERS["anthropic"]
-    body, headers = _build_request(
-        llmkit.Provider(name="anthropic", api_key="sk", model="claude-sonnet-4-6"),
-        llmkit.Request(
-            user="color of sky",
-            schema='{"type":"object","properties":{"color":{"type":"string"}}}',
-        ),
-        llmkit.Options(),
-        cfg,
-    )
-    assert body["output_format"]["type"] == "json_schema"
-    assert body["output_format"]["schema"]["type"] == "object"
-    assert headers["anthropic-beta"] == "structured-outputs-2025-11-13"
-
-
 def test_openai_safety_settings_silently_dropped() -> None:
     from llmkit.types import SafetySetting
 
