@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import llmkit
-from llmkit import anthropic
+from llmkit import anthropic, openai
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
 
@@ -35,10 +35,13 @@ def _assert_wire_golden(fixture: str, body: dict[str, Any]) -> None:
 
 
 class _CaptureServer:
-    """Single-shot mock that records the outbound POST body."""
+    """Single-shot mock that records the outbound POST body and headers
+    (headers feed the in-driver asserts for load-bearing headers, e.g.
+    Anthropic's structured-output beta header)."""
 
     def __init__(self, response_body: dict[str, Any]):
         self.last_body: dict[str, Any] | None = None
+        self.last_headers: dict[str, str] = {}
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -50,6 +53,7 @@ class _CaptureServer:
                 raw = self.rfile.read(length)
                 if raw:
                     outer.last_body = json.loads(raw.decode("utf-8"))
+                    outer.last_headers = {k.lower(): v for k, v in self.headers.items()}
                 payload = json.dumps(response_body).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -70,33 +74,62 @@ class _CaptureServer:
         self._httpd.server_close()
 
 
-def test_structured_output_google_matches_shared_golden() -> None:
-    body, _ = _build_request(
-        llmkit.Provider(name="google", api_key="AIza-test"),
-        llmkit.Request(
-            user="What color is a clear daytime sky?",
-            schema=(
-                '{"type":"object","properties":{"color":{"type":"string"}},'
-                '"required":["color"],"additionalProperties":false}'
-            ),
-        ),
-        llmkit.Options(),
-        PROVIDERS["google"],
-    )
-    _assert_wire_golden("structured-output-google", body)
+# Omits "required" so the goldens witness EnforceStrict normalization
+# (auto-required); carries additionalProperties:false so Google's strip is
+# witnessed too. See the Go driver comment (the minting reference).
+_CANONICAL_SCHEMA = (
+    '{"type":"object","properties":{"color":{"type":"string"}},'
+    '"additionalProperties":false}'
+)
+_CANONICAL_PROMPT = "What color is a clear daytime sky?"
 
 
-# Response shape valid for the text, agent, and batch-submit paths (id is the
-# batch-create handle).
-_ANTHROPIC_RESP = {
+# Response shape valid for the text, agent, and batch-submit paths across
+# providers (id is the batch-create handle; missing provider paths parse to
+# empty text / zero usage, which the drivers never assert).
+_CANNED_RESP = {
     "id": "msgbatch_test",
     "content": [{"type": "text", "text": "done"}],
     "usage": {"input_tokens": 2000, "output_tokens": 5},
 }
 
 
+def test_structured_output_google_matches_shared_golden() -> None:
+    body, _ = _build_request(
+        llmkit.Provider(name="google", api_key="AIza-test"),
+        llmkit.Request(user=_CANONICAL_PROMPT, schema=_CANONICAL_SCHEMA),
+        llmkit.Options(),
+        PROVIDERS["google"],
+    )
+    _assert_wire_golden("structured-output-google", body)
+
+
+def test_structured_output_openai_matches_shared_golden() -> None:
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = openai("key")
+        c.provider.base_url = server.url
+        asyncio.run(c.text.schema(_CANONICAL_SCHEMA).prompt(_CANONICAL_PROMPT))
+        assert server.last_body is not None
+        _assert_wire_golden("structured-output-openai", server.last_body)
+
+
+def test_structured_output_anthropic_matches_shared_golden() -> None:
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = anthropic("key")
+        c.provider.base_url = server.url
+        asyncio.run(c.text.schema(_CANONICAL_SCHEMA).prompt(_CANONICAL_PROMPT))
+        assert server.last_body is not None
+        # ADR-028 Open Questions: load-bearing headers assert in-driver.
+        # Without this beta header Anthropic rejects output_format with a 400.
+        assert (
+            server.last_headers.get("anthropic-beta")
+            == "structured-outputs-2025-11-13"
+        )
+        _assert_wire_golden("structured-output-anthropic", server.last_body)
+
+
 def test_caching_agent_anthropic_matches_shared_golden() -> None:
-    with _CaptureServer(_ANTHROPIC_RESP) as server:
+    with _CaptureServer(_CANNED_RESP) as server:
         c = anthropic("key")
         c.provider.base_url = server.url
         asyncio.run(
@@ -107,7 +140,7 @@ def test_caching_agent_anthropic_matches_shared_golden() -> None:
 
 
 def test_caching_text_anthropic_matches_shared_golden() -> None:
-    with _CaptureServer(_ANTHROPIC_RESP) as server:
+    with _CaptureServer(_CANNED_RESP) as server:
         c = anthropic("key")
         c.provider.base_url = server.url
         asyncio.run(
@@ -118,7 +151,7 @@ def test_caching_text_anthropic_matches_shared_golden() -> None:
 
 
 def test_caching_batch_anthropic_matches_shared_golden() -> None:
-    with _CaptureServer(_ANTHROPIC_RESP) as server:
+    with _CaptureServer(_CANNED_RESP) as server:
         c = anthropic("key")
         c.provider.base_url = server.url
         asyncio.run(
