@@ -7,7 +7,8 @@ import asyncio
 
 import pytest
 
-from llmkit.builders import anthropic, cohere, openai
+from llmkit.builders import anthropic, cohere, ollama, openai
+from llmkit.catalogue import catalogue_by_provider
 from llmkit.models import (
     ErrModelsNotSupported,
     ErrModelsScope,
@@ -65,6 +66,27 @@ def test_providers_list_returns_configured_provider_with_endpoint() -> None:
 def test_providers_list_empty_for_endpointless_provider() -> None:
     c = cohere("test-key")
     assert c.providers.list() == []
+
+
+def test_local_providers_have_live_catalogue_configs() -> None:
+    # BUG-009(a): local daemons expose OpenAI-compatible /v1/models; the
+    # generated catalogue table must carry all five so list()/live() can
+    # reach the only authoritative model source they have. One witness
+    # guards all four SDKs — the table is emitted from a single A-Box.
+    for name in ("ollama", "vllm", "llamacpp", "lmstudio", "jan"):
+        cfg = catalogue_by_provider.get(name)
+        assert cfg is not None, f"{name} missing from catalogue_by_provider"
+        assert cfg.endpoint == "/v1/models"
+        assert cfg.parser_kind == "ParseOpenAICohortModels"
+
+
+def test_providers_list_includes_bound_local_provider() -> None:
+    # BUG-009(b): the bound keyless local is eligible for Live() —
+    # no silent exclusion (models: [], errors: {}).
+    c = ollama("")
+    got = c.providers.list()
+    assert len(got) == 1
+    assert got[0].name == "ollama"
 
 
 def test_providers_supported_returns_full_sdk_roster() -> None:
