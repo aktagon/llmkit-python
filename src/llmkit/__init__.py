@@ -79,6 +79,7 @@ from .providers.generated.middleware import (
 )
 from .providers.generated.providers import PROVIDERS, ProviderConfig, ProviderName
 from .types import (
+    Capability,
     File,
     InputImage,
     Message,
@@ -159,6 +160,9 @@ __all__ = [
     "ProviderName",
     "ProviderConfig",
     "PROVIDERS",
+    # Capability vocabulary (ADR-019 catalogue filter + ADR-030
+    # Client.supports query).
+    "Capability",
     # Codegen-runtime types — kept exposed for the contract-level test
     # surface and for callers writing custom transports. Typical v1.0.0
     # callers should not need these; use the typed builder.
