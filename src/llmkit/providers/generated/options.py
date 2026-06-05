@@ -360,7 +360,7 @@ _SUPPORTED_OPTIONS: dict[ProviderName, tuple[SupportedOptionDef, ...]] = {
         ),
         SupportedOptionDef(
             key=OptionKey.REASONING_EFFORT,
-            json_key="reasoning_effort",
+            json_key="thinkingConfig.thinkingLevel",
         ),
         SupportedOptionDef(
             key=OptionKey.SEED,
@@ -884,6 +884,12 @@ _OPTION_OVERRIDES: dict[ProviderName, tuple[OptionOverrideDef, ...]] = {
     ProviderName.FIREWORKS: (
     ),
     ProviderName.GOOGLE: (
+        OptionOverrideDef(
+            key=OptionKey.REASONING_EFFORT,
+            json_key="thinkingConfig.thinkingLevel",
+            allowed_values=("low", "high",),
+            extra_fields_json="",
+        ),
     ),
     ProviderName.GROK: (
     ),
