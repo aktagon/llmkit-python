@@ -79,6 +79,7 @@ from .providers.generated.middleware import (
 )
 from .providers.generated.providers import PROVIDERS, ProviderConfig, ProviderName
 from .types import (
+    Capability,
     File,
     InputImage,
     Message,
@@ -159,6 +160,9 @@ __all__ = [
     "ProviderName",
     "ProviderConfig",
     "PROVIDERS",
+    #
+    #
+    "Capability",
     #
     #
     #

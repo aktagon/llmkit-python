@@ -256,6 +256,11 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         comment="Returns BatchHandle immediately. Use WaitBatch to get results.",
     ),
     APIEntryPointDef(
+        py_func="supports",
+        py_param_type="Capability",
+        comment="Client.Supports(Capability) \u2014 true iff an explicit request for the capability will not hard-fail pre-flight on this client's provider (ADR-030). Gated arms (caching, batching, file_upload, image_generation) dispatch the same generated *_config(provider) lookup as the strict validation paths, so the query and the error cannot drift; capabilities with no provider-level pre-flight gate return true. Says nothing about per-model or per-option rejections \u2014 use the catalogue's ModelInfo.Capabilities for model-level facts. Sync, no IO, infallible.",
+    ),
+    APIEntryPointDef(
         py_func="upload_file",
         py_param_type="Bytes",
         comment="Uploads a file and returns a File handle suitable for inclusion in a Request.files slice.",
