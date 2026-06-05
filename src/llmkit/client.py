@@ -13,6 +13,7 @@ from .http import do_multipart_post, do_post, do_sigv4_post, do_stream_post
 from .middleware import fire_post, fire_pre, resolve_model
 from .paths import (
     contains_value,
+    deep_merge,
     extract_float_path,
     extract_int_path,
     extract_path,
@@ -594,14 +595,14 @@ def _build_request(
 
     if cfg.wraps_options_in:
         opt_body: dict[str, Any] = {}
-        _add_options(opt_body, opts, p.name, model)
+        _add_options(body, opt_body, opts, p.name, model)
         if max_json_key is not None:
             set_nested_field(opt_body, max_json_key, max_tokens)
             body.pop(max_json_key.split(".", 1)[0], None)
         if opt_body:
             body[cfg.wraps_options_in] = opt_body
     else:
-        _add_options(body, opts, p.name, model)
+        _add_options(body, body, opts, p.name, model)
 
     if cfg.safety_settings_wire_path and opts.safety_settings:
         body[cfg.safety_settings_wire_path] = [
@@ -625,9 +626,13 @@ def _build_request(
 
 
 def _add_options(
-    body: dict[str, Any], opts: Options, provider_name: str, model: str
+    root: dict[str, Any], body: dict[str, Any], opts: Options, provider_name: str, model: str
 ) -> None:
     """
+
+
+
+
 
 
 
@@ -651,6 +656,13 @@ def _add_options(
                 return
             if isinstance(extras, dict):
                 merge_into_parent(body, json_key, extras)
+        if ov and ov.root_extra_fields_json:
+            try:
+                root_extras = json.loads(ov.root_extra_fields_json)
+            except ValueError:
+                return
+            if isinstance(root_extras, dict):
+                deep_merge(root, root_extras)
 
     if opts.temperature is not None:
         put(OptionKey.TEMPERATURE, opts.temperature)

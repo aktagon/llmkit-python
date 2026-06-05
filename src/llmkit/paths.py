@@ -174,6 +174,21 @@ def merge_into_parent(body: dict[str, Any], path: str, extras: dict[str, Any]) -
     current.update(extras)
 
 
+def deep_merge(dst: dict[str, Any], src: dict[str, Any]) -> None:
+    """
+
+
+
+
+"""
+    for k, v in src.items():
+        dv = dst.get(k)
+        if isinstance(v, dict) and isinstance(dv, dict):
+            deep_merge(dv, v)
+        else:
+            dst[k] = v
+
+
 def set_additional_properties_false(schema: Any) -> None:
     """"""
     if not isinstance(schema, dict):
