@@ -295,6 +295,21 @@ def test_options_anthropic_plain_matches_shared_golden() -> None:
         _assert_wire_golden("options-anthropic-plain", server.last_body)
 
 
+def test_options_anthropic_adaptive_matches_shared_golden() -> None:
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = anthropic("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.text.model(wi.WIRE_OPTIONS_ANTHROPIC_ADAPTIVE_MODEL)
+            .max_tokens(wi.WIRE_OPTIONS_ANTHROPIC_ADAPTIVE_MAX_TOKENS)
+            .reasoning_effort(wi.WIRE_OPTIONS_ANTHROPIC_ADAPTIVE_REASONING_EFFORT)
+            .stop_sequences(wi.WIRE_OPTIONS_ANTHROPIC_ADAPTIVE_STOP_SEQUENCES)
+            .prompt(wi.WIRE_OPTIONS_ANTHROPIC_ADAPTIVE_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("options-anthropic-adaptive", server.last_body)
+
+
 def test_options_google_matches_shared_golden() -> None:
     with _CaptureServer(_CANNED_RESP) as server:
         c = google("key")
