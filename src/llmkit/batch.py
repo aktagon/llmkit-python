@@ -119,7 +119,7 @@ def submit_batch(
     base_event = Event(
         op=MiddlewareOp.BATCH_SUBMIT,
         provider=provider.name,
-        model=resolve_model(provider.model, cfg),
+        model=resolve_model(provider, cfg),
     )
     start = time.monotonic()
     fire_pre(mws, base_event)
