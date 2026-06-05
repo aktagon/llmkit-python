@@ -13,6 +13,7 @@ from .http import do_multipart_post, do_post, do_sigv4_post, do_stream_post
 from .middleware import fire_post, fire_pre, resolve_model
 from .paths import (
     contains_value,
+    deep_merge,
     extract_float_path,
     extract_int_path,
     extract_path,
@@ -594,14 +595,14 @@ def _build_request(
 
     if cfg.wraps_options_in:
         opt_body: dict[str, Any] = {}
-        _add_options(opt_body, opts, p.name, model)
+        _add_options(body, opt_body, opts, p.name, model)
         if max_json_key is not None:
             set_nested_field(opt_body, max_json_key, max_tokens)
             body.pop(max_json_key.split(".", 1)[0], None)
         if opt_body:
             body[cfg.wraps_options_in] = opt_body
     else:
-        _add_options(body, opts, p.name, model)
+        _add_options(body, body, opts, p.name, model)
 
     if cfg.safety_settings_wire_path and opts.safety_settings:
         body[cfg.safety_settings_wire_path] = [
@@ -625,14 +626,18 @@ def _build_request(
 
 
 def _add_options(
-    body: dict[str, Any], opts: Options, provider_name: str, model: str
+    root: dict[str, Any], body: dict[str, Any], opts: Options, provider_name: str, model: str
 ) -> None:
     """Apply generation parameters to body, honouring dotted JSON keys + extra_fields.
 
     JSON keys may be dotted (e.g. "thinking.budget_tokens") for providers that
     require nested objects. Each option's per-provider OptionOverrideDef may
     also carry extra_fields_json — sibling JSON merged into the same parent
-    path (e.g. {"type":"enabled"} alongside Anthropic's thinking.budget_tokens).
+    path (e.g. {"type":"enabled"} alongside Anthropic's thinking.budget_tokens)
+    — and root_extra_fields_json (ADR-029 THK-003) — JSON deep-merged at the
+    request body ROOT (root differs from body for wraps_options_in providers),
+    for options that imply a sibling object elsewhere in the body (e.g.
+    {"thinking":{"type":"adaptive"}} alongside Anthropic's output_config.effort).
     """
     pname = ProviderName(provider_name)
     supported = {o.key: o for o in supported_options(pname)}
@@ -651,6 +656,13 @@ def _add_options(
                 return
             if isinstance(extras, dict):
                 merge_into_parent(body, json_key, extras)
+        if ov and ov.root_extra_fields_json:
+            try:
+                root_extras = json.loads(ov.root_extra_fields_json)
+            except ValueError:
+                return
+            if isinstance(root_extras, dict):
+                deep_merge(root, root_extras)
 
     if opts.temperature is not None:
         put(OptionKey.TEMPERATURE, opts.temperature)
