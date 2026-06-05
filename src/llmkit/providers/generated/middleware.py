@@ -14,6 +14,7 @@ class Usage:
     cache_write: int = 0
     cache_read: int = 0
     reasoning: int = 0
+    # cost is the provider-reported request cost in USD (ADR-027). Not a TokenDimension — a distinct monetary field. Only OpenRouter (the request must opt in with usage: {include: true}) and xAI report it. 0 is ambiguous: unreported or genuinely free — providers whose usageCostPath is empty never report cost.
     cost: float = 0.0
 
 
