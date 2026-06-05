@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from .errors import MiddlewareVetoError
 from .providers.generated.middleware import Event, MiddlewareFn, MiddlewarePhase
 from .providers.generated.providers import ProviderConfig
+
+if TYPE_CHECKING:
+    from .types import Provider
 
 
 def fire_pre(mws: list[MiddlewareFn], base: Event) -> None:
@@ -34,9 +39,22 @@ def fire_post(mws: list[MiddlewareFn], base: Event) -> None:
             pass
 
 
-def resolve_model(provider_model: str, cfg: ProviderConfig) -> str:
-    """Return caller-specified model or provider default."""
-    return provider_model or cfg.default_model
+def resolve_model(provider: Provider, cfg: ProviderConfig) -> str:
+    """Return the caller-specified model or the provider default.
+
+    For machine-local daemons (cfg.local, ADR-031 / BUG-009c) the default
+    resolves from the daemon's live listing — the registry constant is a
+    guess that 404s when not pulled. Cloud defaults are curated constants
+    and stay registry-resolved."""
+    if provider.model:
+        return provider.model
+    if cfg.local:
+        # Function-local import: models.py imports fire_pre/fire_post
+        # from this module, so a top-level import would be circular.
+        from .models import resolve_local_default
+
+        return resolve_local_default(provider, cfg)
+    return cfg.default_model
 
 
 def _copy_event(e: Event) -> Event:

@@ -200,6 +200,42 @@ def catalogue_providers_supported() -> list[Provider]:
     return [Provider(name=n, api_key="") for n in names]
 
 
+# === Local-daemon default resolution (ADR-031 / BUG-009c) ===
+
+# Successful resolutions keyed by effective base URL. Failures are NOT
+# cached so a daemon that comes up later self-heals on the next call.
+_local_default_cache: dict[str, str] = {}
+
+
+def resolve_local_default(p: Provider, pcfg: ProviderConfig) -> str:
+    """Default model for a machine-local daemon (pcfg.local), resolved
+    from the daemon's live listing: the registry default when installed,
+    else the first installed model. Registry fallback when the daemon is
+    unreachable or lists nothing. Sync HTTP — callers run in the same
+    worker threads the catalogue path uses (asyncio.to_thread)."""
+    base = p.base_url or pcfg.base_url
+    cached = _local_default_cache.get(base)
+    if cached is not None:
+        return cached
+    cfg = catalogue_by_provider.get(p.name)
+    if cfg is None:
+        return pcfg.default_model
+    try:
+        records = _paginate_sync(p, pcfg, cfg.endpoint, cfg.pagination, cfg.parser_kind)
+    except Exception:
+        # Daemon unreachable: the registry constant is the only answer
+        # left. Uncached, so recovery is immediate once the daemon is up.
+        return pcfg.default_model
+    installed = [r.id for r in records]
+    if not installed:
+        return pcfg.default_model
+    resolved = (
+        pcfg.default_model if pcfg.default_model in installed else installed[0]
+    )
+    _local_default_cache[base] = resolved
+    return resolved
+
+
 # === HTTP internals ===
 
 
