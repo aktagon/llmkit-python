@@ -133,7 +133,7 @@ class Agent:
             llm_event = Event(
                 op=MiddlewareOp.LLM_REQUEST,
                 provider=self.provider.name,
-                model=resolve_model(self.provider.model, cfg),
+                model=resolve_model(self.provider, cfg),
             )
             llm_start = time.monotonic()
             fire_pre(self.opts.middleware, llm_event)
@@ -184,7 +184,7 @@ class Agent:
             post_ev = Event(
                 op=MiddlewareOp.LLM_REQUEST,
                 provider=self.provider.name,
-                model=resolve_model(self.provider.model, cfg),
+                model=resolve_model(self.provider, cfg),
                 usage=Usage(input=turn_input, output=turn_output),
                 duration=time.monotonic() - llm_start,
             )
@@ -228,7 +228,7 @@ class Agent:
                 tool_ev = Event(
                     op=MiddlewareOp.TOOL_CALL,
                     provider=self.provider.name,
-                    model=resolve_model(self.provider.model, cfg),
+                    model=resolve_model(self.provider, cfg),
                     tool=tc.name,
                     args=dict(tc_args),
                 )
@@ -245,7 +245,7 @@ class Agent:
                 post_ev = Event(
                     op=MiddlewareOp.TOOL_CALL,
                     provider=self.provider.name,
-                    model=resolve_model(self.provider.model, cfg),
+                    model=resolve_model(self.provider, cfg),
                     tool=tc.name,
                     args=dict(tc_args),
                     result=output,
