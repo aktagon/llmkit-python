@@ -103,7 +103,7 @@ def prompt(
     base_event = Event(
         op=MiddlewareOp.LLM_REQUEST,
         provider=provider.name,
-        model=resolve_model(provider.model, cfg),
+        model=resolve_model(provider, cfg),
     )
     start = time.monotonic()
     fire_pre(opts.middleware, base_event)
@@ -159,7 +159,7 @@ def prompt(
     post_event = Event(
         op=MiddlewareOp.LLM_REQUEST,
         provider=provider.name,
-        model=resolve_model(provider.model, cfg),
+        model=resolve_model(provider, cfg),
         usage=resp.usage,
         duration=time.monotonic() - start,
     )
@@ -225,7 +225,7 @@ def prompt_stream(
     base_event = Event(
         op=MiddlewareOp.LLM_REQUEST,
         provider=provider.name,
-        model=resolve_model(provider.model, cfg),
+        model=resolve_model(provider, cfg),
     )
     start = time.monotonic()
     fire_pre(opts.middleware, base_event)
@@ -270,7 +270,7 @@ def prompt_stream(
     post_event = Event(
         op=MiddlewareOp.LLM_REQUEST,
         provider=provider.name,
-        model=resolve_model(provider.model, cfg),
+        model=resolve_model(provider, cfg),
         usage=usage,
         duration=time.monotonic() - start,
     )
@@ -327,7 +327,7 @@ def upload_file(
     base_event = Event(
         op=MiddlewareOp.UPLOAD,
         provider=provider.name,
-        model=resolve_model(provider.model, cfg),
+        model=resolve_model(provider, cfg),
     )
     start = time.monotonic()
     fire_pre(mws, base_event)
@@ -403,7 +403,7 @@ def upload_file(
     post_event = Event(
         op=MiddlewareOp.UPLOAD,
         provider=provider.name,
-        model=resolve_model(provider.model, cfg),
+        model=resolve_model(provider, cfg),
         duration=time.monotonic() - start,
     )
     fire_post(mws, post_event)
@@ -475,7 +475,7 @@ def _build_url(p: Provider, cfg) -> str:
     if auth_scheme(ProviderName(p.name)) == AuthScheme.QUERY_PARAM_KEY:
         endpoint = endpoint + "?" + cfg.auth_query_param + "=" + p.api_key
 
-    model = p.model or cfg.default_model
+    model = resolve_model(p, cfg)
     endpoint = endpoint.replace("{model}", model)
     endpoint = endpoint.replace("{apiKey}", p.api_key)
 
@@ -488,7 +488,7 @@ def _build_url(p: Provider, cfg) -> str:
 def _build_stream_url(p: Provider, cfg, stream_cfg) -> str:
     base = p.base_url or cfg.base_url
     endpoint = stream_cfg.endpoint
-    model = p.model or cfg.default_model
+    model = resolve_model(p, cfg)
     endpoint = endpoint.replace("{model}", model)
     endpoint = endpoint.replace("{apiKey}", p.api_key)
 
@@ -564,7 +564,7 @@ def _build_request(
     body: dict[str, Any] = {}
     headers: dict[str, str] = {}
 
-    model = p.model or cfg.default_model
+    model = resolve_model(p, cfg)
     if cfg.model_in_body:
         body["model"] = model
 
