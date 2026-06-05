@@ -40,6 +40,7 @@ class OptionOverrideDef:
     json_key: str
     allowed_values: tuple[str, ...] = ()
     extra_fields_json: str = ""
+    root_extra_fields_json: str = ""
 
 
 ALL_OPTIONS: tuple[OptionDef, ...] = (
@@ -119,6 +120,10 @@ _SUPPORTED_OPTIONS: dict[ProviderName, tuple[SupportedOptionDef, ...]] = {
         SupportedOptionDef(
             key=OptionKey.MAX_TOKENS,
             json_key="max_tokens",
+        ),
+        SupportedOptionDef(
+            key=OptionKey.REASONING_EFFORT,
+            json_key="output_config.effort",
         ),
         SupportedOptionDef(
             key=OptionKey.STOP_SEQUENCES,
@@ -861,10 +866,18 @@ _OPTION_OVERRIDES: dict[ProviderName, tuple[OptionOverrideDef, ...]] = {
     ),
     ProviderName.ANTHROPIC: (
         OptionOverrideDef(
+            key=OptionKey.REASONING_EFFORT,
+            json_key="output_config.effort",
+            allowed_values=("low", "medium", "high", "xhigh", "max",),
+            extra_fields_json="",
+            root_extra_fields_json="{\"thinking\":{\"type\":\"adaptive\"}}",
+        ),
+        OptionOverrideDef(
             key=OptionKey.THINKING_BUDGET,
             json_key="thinking.budget_tokens",
             allowed_values=(),
             extra_fields_json="{\"type\":\"enabled\"}",
+            root_extra_fields_json="",
         ),
     ),
     ProviderName.AZURE: (
@@ -889,6 +902,7 @@ _OPTION_OVERRIDES: dict[ProviderName, tuple[OptionOverrideDef, ...]] = {
             json_key="thinkingConfig.thinkingLevel",
             allowed_values=("low", "high",),
             extra_fields_json="",
+            root_extra_fields_json="",
         ),
     ),
     ProviderName.GROK: (
@@ -915,6 +929,7 @@ _OPTION_OVERRIDES: dict[ProviderName, tuple[OptionOverrideDef, ...]] = {
             json_key="reasoning_effort",
             allowed_values=("low", "medium", "high",),
             extra_fields_json="",
+            root_extra_fields_json="",
         ),
     ),
     ProviderName.OPENROUTER: (

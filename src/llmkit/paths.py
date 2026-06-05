@@ -174,6 +174,21 @@ def merge_into_parent(body: dict[str, Any], path: str, extras: dict[str, Any]) -
     current.update(extras)
 
 
+def deep_merge(dst: dict[str, Any], src: dict[str, Any]) -> None:
+    """Merge src into dst recursively: dicts merge per key, scalars overwrite.
+
+    Used for OptionOverrideDef.root_extra_fields_json (ADR-029) so e.g.
+    {"thinking":{"type":"adaptive"}} composes with an existing thinking
+    object rather than replacing it.
+    """
+    for k, v in src.items():
+        dv = dst.get(k)
+        if isinstance(v, dict) and isinstance(dv, dict):
+            deep_merge(dv, v)
+        else:
+            dst[k] = v
+
+
 def set_additional_properties_false(schema: Any) -> None:
     """Recursively set additionalProperties=false and auto-fill required on object schemas."""
     if not isinstance(schema, dict):
