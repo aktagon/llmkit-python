@@ -17,9 +17,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ..image import ImageData, MediaRef, Part
+from ..providers.generated.batch import batch_config
+from ..providers.generated.caching import caching_config
+from ..providers.generated.image_gen import image_gen_config
 from ..providers.generated.middleware import MiddlewareFn
+from ..providers.generated.providers import ProviderName
+from ..providers.generated.request import file_upload_config
 from ..structs import File, ImageResponse, Message, Response
-from ..types import SafetySetting, Tool
+from ..types import Capability, SafetySetting, Tool
 from .agent import _agent_messages
 from .batch import BatchHandle
 
@@ -547,6 +552,35 @@ class Client:
         the same Client for chaining."""
         self.provider.base_url = url
         return self
+
+    def supports(self, cap: str) -> bool:
+        """True iff an explicit request for ``cap`` (a Capability
+        value) will not hard-fail pre-flight on this client's
+        provider (ADR-030). Gated arms dispatch the same generated
+        lookups as the strict validation paths; capabilities with
+        no provider-level gate return True. Says nothing about
+        per-model or per-option rejections — use the catalogue's
+        ModelInfo.capabilities for model-level facts. Sync, no IO."""
+        gated = (
+            Capability.CACHING,
+            Capability.BATCHING,
+            Capability.FILE_UPLOAD,
+            Capability.IMAGE_GENERATION,
+        )
+        if cap not in gated:
+            return True
+        try:
+            pn = ProviderName(self.provider.name)
+        except ValueError:
+            # Unknown provider: the strict gate would hard-fail too.
+            return False
+        if cap == Capability.CACHING:
+            return caching_config(pn) is not None
+        if cap == Capability.BATCHING:
+            return batch_config(pn) is not None
+        if cap == Capability.FILE_UPLOAD:
+            return file_upload_config(pn) is not None
+        return image_gen_config(pn) is not None
 
 def new_client(name: str, api_key: str) -> Client:
     """Generic factory; per-provider helpers below are ergonomic shortcuts."""
