@@ -5,7 +5,20 @@ All notable changes to the Python SDK are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.1.0] — 2026-06-06
+
+### Added
+
+- `Client.supports(cap)` — public capability query. Answers "will an explicit request for this capability hard-fail pre-flight on this provider?" for `Capability.CACHING` / `BATCHING` / `FILE_UPLOAD` / `IMAGE_GENERATION`; capabilities without a provider-level gate return `True`. Sync, no IO. `Capability` is now re-exported from the package root. Gate optional chain calls with `if c.supports(Capability.CACHING): bot = bot.caching()` instead of importing internals.
+- Live model listing for local providers: ollama, vLLM, llama.cpp, LM Studio, and Jan now answer `await c.models.provider(p).list()` (and participate in `await c.models.live()`) via their OpenAI-compatible `/v1/models` endpoints. An unreachable daemon surfaces an explicit per-provider error instead of silently returning nothing.
+- Local daemon default-model resolution: when no model is set and the registry default is not installed on the daemon, the first installed model is used; the static default remains the fallback when the daemon is unreachable. Cloud-provider defaults are unchanged.
+- Anthropic adaptive thinking surface: `reasoning_effort()` on Anthropic models emits `output_config.effort` plus `thinking: {type: adaptive}` (required by `claude-opus-4-7`; accepted values `low`, `medium`, `high`, `xhigh`, `max`). `thinking_budget()` remains the budget-based control and is not converted.
+
+### Fixed
+
+- Google `reasoning_effort()` sent a field the API rejects; it now maps to `generationConfig.thinkingConfig.thinkingLevel` (accepted values `low`, `high`).
+
+## [2.0.0] — 2026-06-05
 
 ### Breaking
 
