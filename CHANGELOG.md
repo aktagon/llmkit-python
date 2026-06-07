@@ -5,6 +5,26 @@ All notable changes to the Python SDK are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] — 2026-06-07
+
+### Changed
+
+- **Local providers no longer guess a model.** The 2.1.0 daemon-resolved
+  default-model behavior is retracted: prompting a local provider (ollama,
+  vLLM, llama.cpp, LM Studio, Jan) without choosing a model now raises an
+  immediate `ValidationError` — `no model chosen and "<provider>" declares no
+  default; pick one (models.live() lists what the daemon serves)` — instead of
+  resolving one behind the scenes (or, before 2.1.0, sending a static default
+  that could 404). What a local daemon serves is runtime inventory; query it
+  with `await c.models.live()` and pass the choice via `.model(...)`.
+  `PROVIDERS[name].default_model` is now the empty string for the five local
+  providers. Cloud-provider defaults are unchanged.
+
+### Removed
+
+- The `local` field on `ProviderConfig` (added in 2.1.0; no longer needed once
+  no behavior dispatches on it).
+
 ## [2.1.0] — 2026-06-06
 
 ### Added
