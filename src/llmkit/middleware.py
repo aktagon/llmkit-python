@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .errors import MiddlewareVetoError
+from .errors import MiddlewareVetoError, ValidationError
 from .providers.generated.middleware import Event, MiddlewareFn, MiddlewarePhase
 from .providers.generated.providers import ProviderConfig
 
@@ -40,20 +40,21 @@ def fire_post(mws: list[MiddlewareFn], base: Event) -> None:
 
 
 def resolve_model(provider: Provider, cfg: ProviderConfig) -> str:
-    """Return the caller-specified model or the provider default.
+    """Return the caller-specified model or the provider's curated default.
 
-    For machine-local daemons (cfg.local, ADR-031 / BUG-009c) the default
-    resolves from the daemon's live listing — the registry constant is a
-    guess that 404s when not pulled. Cloud defaults are curated constants
-    and stay registry-resolved."""
+    Local daemons declare no default — what a daemon serves is runtime
+    inventory, not a registry fact (ADR-031). Both empty raises
+    immediately instead of guessing a model the daemon may not have."""
     if provider.model:
         return provider.model
-    if cfg.local:
-        # Function-local import: models.py imports fire_pre/fire_post
-        # from this module, so a top-level import would be circular.
-        from .models import resolve_local_default
-
-        return resolve_local_default(provider, cfg)
+    if not cfg.default_model:
+        raise ValidationError(
+            field="model",
+            message=(
+                f'no model chosen and "{provider.name}" declares no default; '
+                "pick one (models.live() lists what the daemon serves)"
+            ),
+        )
     return cfg.default_model
 
 
