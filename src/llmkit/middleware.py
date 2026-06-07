@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .errors import MiddlewareVetoError
+from .errors import MiddlewareVetoError, ValidationError
 from .providers.generated.middleware import Event, MiddlewareFn, MiddlewarePhase
 from .providers.generated.providers import ProviderConfig
 
@@ -44,16 +44,17 @@ def resolve_model(provider: Provider, cfg: ProviderConfig) -> str:
 
 
 
-
 """
     if provider.model:
         return provider.model
-    if cfg.local:
-        #
-        #
-        from .models import resolve_local_default
-
-        return resolve_local_default(provider, cfg)
+    if not cfg.default_model:
+        raise ValidationError(
+            field="model",
+            message=(
+                f'no model chosen and "{provider.name}" declares no default; '
+                "pick one (models.live() lists what the daemon serves)"
+            ),
+        )
     return cfg.default_model
 
 
