@@ -202,42 +202,6 @@ def catalogue_providers_supported() -> list[Provider]:
 
 #
 
-#
-#
-_local_default_cache: dict[str, str] = {}
-
-
-def resolve_local_default(p: Provider, pcfg: ProviderConfig) -> str:
-    """
-
-
-
-"""
-    base = p.base_url or pcfg.base_url
-    cached = _local_default_cache.get(base)
-    if cached is not None:
-        return cached
-    cfg = catalogue_by_provider.get(p.name)
-    if cfg is None:
-        return pcfg.default_model
-    try:
-        records = _paginate_sync(p, pcfg, cfg.endpoint, cfg.pagination, cfg.parser_kind)
-    except Exception:
-        #
-        #
-        return pcfg.default_model
-    installed = [r.id for r in records]
-    if not installed:
-        return pcfg.default_model
-    resolved = (
-        pcfg.default_model if pcfg.default_model in installed else installed[0]
-    )
-    _local_default_cache[base] = resolved
-    return resolved
-
-
-#
-
 
 def _effective_provider(scoped: "ScopedModels") -> Provider:
     """
