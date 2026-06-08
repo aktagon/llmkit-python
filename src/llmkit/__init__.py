@@ -23,6 +23,7 @@ from .builders import (
     Agent,
     Client,
     Image,
+    Music,
     Text,
     Upload,
     ai21,
@@ -61,7 +62,8 @@ from .image import (
     MediaRef,
     Part,
 )
-from .structs import ImageResponse, ToolCall, ToolResult
+from .music import MusicRequest
+from .structs import AudioData, ImageResponse, MusicResponse, ToolCall, ToolResult
 from .wire import (
     MissingWireVersionError,
     UnknownWireKeyError,
@@ -124,6 +126,7 @@ __all__ = [
     "Client",
     "Text",
     "Image",
+    "Music",
     "Agent",
     "Upload",
     "BatchHandle",
@@ -144,6 +147,9 @@ __all__ = [
     "ImageData",
     "ImageRequest",
     "ImageResponse",
+    "AudioData",
+    "MusicRequest",
+    "MusicResponse",
     "MediaRef",
     "Part",
     # Middleware.
