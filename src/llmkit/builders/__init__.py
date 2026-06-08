@@ -23,7 +23,7 @@ from ..providers.generated.image_gen import image_gen_config
 from ..providers.generated.middleware import MiddlewareFn
 from ..providers.generated.providers import ProviderName
 from ..providers.generated.request import file_upload_config
-from ..structs import File, ImageResponse, Message, Response
+from ..structs import File, ImageResponse, Message, MusicResponse, Response
 from ..types import Capability, SafetySetting, Tool
 from .agent import _agent_messages
 from .batch import BatchHandle
@@ -41,6 +41,7 @@ class ProviderConfig:
 from .agent import agent_prompt, agent_reset
 from .batch import text_batch, text_submit_batch
 from .image import image_generate
+from .music import music_generate
 from .stream import text_stream
 from .text import text_prompt
 from .upload import upload_run
@@ -300,6 +301,47 @@ class Image:
         return await image_generate(self, msg)
 
 
+# === Music — MusicGeneration builder ===
+
+class Music:
+    """Phase 2b skeleton; chain methods clone-then-mutate via copy.copy()."""
+
+    def __init__(self, client: "Client") -> None:
+        self.client = client
+        self._middleware: list[MiddlewareFn] = []
+        self._parts: list[Part] = []
+        self._model: str = ""
+        self._raw: bool = False
+
+    def add_middleware(self, *fns: MiddlewareFn) -> "Music":
+        out = copy.copy(self)
+        out._middleware = [*self._middleware, *fns]
+        return out
+
+    def lyrics(self, s: str) -> "Music":  # ordered
+        out = copy.copy(self)
+        out._parts = [*self._parts, Part(lyrics=s)]
+        return out
+
+    def model(self, name: str) -> "Music":
+        out = copy.copy(self)
+        out._model = name
+        return out
+
+    def raw(self) -> "Music":
+        out = copy.copy(self)
+        out._raw = True
+        return out
+
+    def text(self, s: str) -> "Music":  # ordered
+        out = copy.copy(self)
+        out._parts = [*self._parts, Part(text=s)]
+        return out
+
+    async def generate(self, msg: str) -> MusicResponse:
+        return await music_generate(self, msg)
+
+
 # === Agent — ToolCalling builder ===
 
 class Agent:
@@ -536,6 +578,7 @@ class Client:
         self.provider = ProviderConfig(name=name, api_key=api_key)
         self.text: Text = Text(self)
         self.image: Image = Image(self)
+        self.music: Music = Music(self)
         self.agent: Agent = Agent(self)
         self.upload: Upload = Upload(self)
         # ADR-019: catalogue namespaces. Lazy import to avoid a
@@ -624,6 +667,7 @@ __all__ = [
     "ProviderConfig",
     "Text",
     "Image",
+    "Music",
     "Agent",
     "Upload",
     "ai21",
@@ -664,6 +708,7 @@ __all__ = [
     "Tool",
     "ImageData",
     "ImageResponse",
+    "MusicResponse",
     "MediaRef",
     "Part",
     "MiddlewareFn",
