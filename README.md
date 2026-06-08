@@ -216,6 +216,25 @@ resp = await (
 
 Edit-mode (single image into `instances[0].image`) and inpainting (`.mask(mime, bytes)` into `instances[0].mask.image`) work the same way. Imagen-specific knobs like `negativePrompt` and `safetySetting` are reachable through `.extra_fields(...)` — they spread into the request's `parameters` block. Vertex's `:predict` response does not carry token counts; `resp.tokens` stays zero.
 
+### Music — text-to-music
+
+Generate audio from a text prompt via the typed-builder chain on `c.music`. Decoded audio bytes come back on `resp.audio[0].bytes`. Models that support vocals take lyrics via `.lyrics(...)` (use section tags like `[verse]`); instrumental-only models reject lyrics before the request is sent.
+
+```python
+r = await c.music.model("lyria-002").generate("a calm instrumental, warm piano and soft strings")
+with open("out.wav", "wb") as f:
+    f.write(r.audio[0].bytes)
+
+# with lyrics:
+song = await c.music.model("lyria-3-pro-preview").lyrics("[verse] neon lights").generate("dream pop, 90 bpm")
+```
+
+| Provider | Model(s)                                      | Lyrics | Output     |
+| -------- | --------------------------------------------- | ------ | ---------- |
+| Vertex   | `lyria-002`                                   | no     | WAV (~30s) |
+| Google   | `lyria-3-pro-preview`, `lyria-3-clip-preview` | yes    | MP3        |
+| MiniMax  | `music-2.6`                                   | yes    | MP3        |
+
 ### Safety Settings
 
 Control content filtering for Gemini providers. `safety_settings` applies to text
