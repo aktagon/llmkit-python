@@ -11,6 +11,16 @@ if TYPE_CHECKING:
     from .types import Capability, Provider
 
 
+@dataclass
+class AudioData:
+    """AudioData is one decoded audio payload returned in a MusicResponse. Same shape as MediaRef (mime type + raw bytes) but a distinct type so capability-specific return semantics stay typed: MusicResponse.audio carries decoded outputs; MediaRef appears in input payloads."""
+    # mime_type is the IANA media type of the returned audio (audio/wav, audio/mpeg). Drives the file extension the caller picks for storage.
+    mime_type: str = ""
+
+    # bytes is the raw (not encoded) decoded audio payload. The SDK decodes the provider wire format (base64 for Vertex/Gemini, hex for MiniMax) before returning so callers always see raw bytes.
+    bytes: bytes = b''
+
+
 @dataclass(kw_only=True)
 class BatchHandle:
     """BatchHandle is a value struct identifying a submitted batch. Cross-process resume works by persisting the three fields and reconstructing the handle."""
@@ -136,6 +146,28 @@ class ModelInfo:
     created: int = 0
 
     # raw is the parsed provider-native record for this model, populated only when the caller opted in via the builder's .Raw() chain method (ADR-014). Type-erased — consumers cast to a provider-shape type for fields the universal ModelInfo does not carry (Anthropic capability matrix, Google supportedGenerationMethods, etc.).
+    raw: Any | None = None
+
+
+@dataclass
+class MusicResponse:
+    """MusicResponse is the universal music-generation response container returned by Music.Generate. Carries the decoded audio, optional text (generated lyrics / commentary), usage, and the same finish-reason / finish-message / raw fields the image-gen and text-gen responses carry."""
+    # audio are the decoded audio payloads (mime type + raw bytes) returned by the provider. Empty when the provider blocks or refuses the request — inspect FinishReason / FinishMessage for the cause.
+    audio: list[AudioData] = field(default_factory=list)
+
+    # text is the optional text accompanying the audio (generated lyrics, song structure, or model commentary). Populated by Gemini Lyria 3; empty on Vertex Lyria 2 and MiniMax.
+    text: str = ""
+
+    # usage holds token consumption metrics for the music-generation call. None of the three verified providers report audio-output tokens as a distinct dimension; this stays zero unless a provider surfaces counts (ADR-033 OQ-3).
+    usage: Usage = field(default_factory=Usage)
+
+    # finish_reason is the provider stop signal. Gemini surfaces STOP/SAFETY etc.; Vertex Imagen-style providers surface a RAI filter reason when content is blocked; MiniMax carries a base_resp status. Optional.
+    finish_reason: str = ""
+
+    # finish_message is the free-text provider explanation of the stop signal. Use as the user-facing message when len(Audio) == 0.
+    finish_message: str = ""
+
+    # raw is the parsed provider response body, populated only when the caller opted in via the builder's .raw() chain method (ADR-014). Type-erased — consumers cast to a provider-shape type for fields the universal MusicResponse does not carry.
     raw: Any | None = None
 
 

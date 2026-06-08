@@ -36,14 +36,17 @@ from .structs import MediaRef  # noqa: E402,F401
 
 @dataclass
 class Part:
-    """Universal multimodal input atom. Exactly one of text or image is
-    set; both empty or both set is invalid (rejected by pre-flight).
-    Typed-builder accumulators (``c.text.text(s)``, ``c.image.image(m, b)``,
-    ...) are the canonical user-facing path; users assembling Part lists
-    manually can construct Part(text=..., image=MediaRef(...)) directly."""
+    """Universal multimodal input atom. Exactly one of text, image, or
+    lyrics is set; empty or multiple set is invalid (rejected by
+    pre-flight). Typed-builder accumulators (``c.text.text(s)``,
+    ``c.image.image(m, b)``, ``c.music.lyrics(s)``, ...) are the canonical
+    user-facing path; users assembling Part lists manually can construct
+    Part(text=..., image=MediaRef(...)) directly. lyrics is music-only
+    (ADR-033) — text-generation and image-generation runtimes ignore it."""
 
     text: str = ""
     image: MediaRef | None = None
+    lyrics: str = ""
 
 
 from .structs import ImageData  # noqa: E402,F401
