@@ -102,6 +102,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_lyrics",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_mask",
         sub_options=(
         ),
@@ -236,6 +241,11 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         comment="Synchronous text-to-image and image-to-image. Input is ImageRequest{ Model, Prompt, Parts []Part } where Parts is a positionally-ordered sequence of llm:Part (text or image MediaRef). Prompt is a sugar field for the text-only case (XOR with Parts; runtime synthesises []Part{Text(Prompt)} when only Prompt is set). Returns ImageResponse{ Images []ImageData, Text string, Usage }.",
     ),
     APIEntryPointDef(
+        py_func="generate_music",
+        py_param_type="MusicRequest",
+        comment="Synchronous text-to-music. Input is MusicRequest{ Model, Prompt, Parts []Part } where Parts is a positionally-ordered sequence of llm:Part (text prompt or Lyrics). Prompt is a sugar field for the prompt-only case (XOR with Parts; runtime synthesises []Part{Text(Prompt)} when only Prompt is set). Returns MusicResponse{ Audio []AudioData, Text string, Usage }.",
+    ),
+    APIEntryPointDef(
         py_func="prompt",
         py_param_type="Request",
         comment="One-shot synchronous request. Returns Response with text + Usage tokens.",
@@ -274,6 +284,11 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
 
 
 CACHE_RESPONSE_FIELDS: tuple[APIResponseFieldDef, ...] = (
+    APIResponseFieldDef(
+        py_field_name="audio",
+        py_field_type="list[AudioData]",
+        source_path="audioPath",
+    ),
     APIResponseFieldDef(
         py_field_name="cache_read",
         py_field_type="int",
