@@ -261,6 +261,11 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         comment="Streaming variant. Calls a per-chunk callback as deltas arrive; returns the accumulated Response on stream close.",
     ),
     APIEntryPointDef(
+        py_func="submit",
+        py_param_type="VideoRequest",
+        comment="Asynchronous text/image-to-video submit. Input is VideoRequest{ Model, Prompt, Parts []Part } where Parts is a positionally-ordered sequence of llm:Part (text prompt or image-to-video reference). Prompt is a sugar field for the prompt-only case (XOR with Parts; runtime synthesises []Part{Text(Prompt)} when only Prompt is set). Returns a VideoHandle immediately; poll it with Wait.",
+    ),
+    APIEntryPointDef(
         py_func="submit_batch",
         py_param_type="list[Request]",
         comment="Returns BatchHandle immediately. Use WaitBatch to get results.",
@@ -274,6 +279,11 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         py_func="upload_file",
         py_param_type="Bytes",
         comment="Uploads a file and returns a File handle suitable for inclusion in a Request.files slice.",
+    ),
+    APIEntryPointDef(
+        py_func="wait",
+        py_param_type="VideoHandle",
+        comment="Polls the provider (per the handle's submit endpoint + wire shape) until the job reaches a terminal state (status=done), then returns a VideoResponse. Poll cadence + timeout use per-provider defaults, overridable via chain option (ADR-034 D2). A failed/expired job surfaces as an error. Hand-written on VideoHandle (not a *Video builder terminal), mirroring BatchHandle.Wait.",
     ),
     APIEntryPointDef(
         py_func="wait_batch",
@@ -333,6 +343,11 @@ CACHE_RESPONSE_FIELDS: tuple[APIResponseFieldDef, ...] = (
         py_field_name="text",
         py_field_type="str",
         source_path="candidates[0].content.parts[*].text",
+    ),
+    APIResponseFieldDef(
+        py_field_name="videos",
+        py_field_type="list[VideoData]",
+        source_path="video",
     ),
 )
 
