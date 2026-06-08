@@ -40,10 +40,13 @@ class Part:
 
 
 
+
+
 """
 
     text: str = ""
     image: MediaRef | None = None
+    lyrics: str = ""
 
 
 from .structs import ImageData  # noqa: E402,F401

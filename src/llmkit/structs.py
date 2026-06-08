@@ -11,6 +11,16 @@ if TYPE_CHECKING:
     from .types import Capability, Provider
 
 
+@dataclass
+class AudioData:
+    """"""
+    #
+    mime_type: str = ""
+
+    #
+    bytes: bytes = b''
+
+
 @dataclass(kw_only=True)
 class BatchHandle:
     """"""
@@ -134,6 +144,28 @@ class ModelInfo:
 
     #
     created: int = 0
+
+    #
+    raw: Any | None = None
+
+
+@dataclass
+class MusicResponse:
+    """"""
+    #
+    audio: list[AudioData] = field(default_factory=list)
+
+    #
+    text: str = ""
+
+    #
+    usage: Usage = field(default_factory=Usage)
+
+    #
+    finish_reason: str = ""
+
+    #
+    finish_message: str = ""
 
     #
     raw: Any | None = None
