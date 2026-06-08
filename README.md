@@ -306,11 +306,17 @@ file2 = await (
 
 ### Batches
 
+<!-- llmkit:include python/examples/batch.py#batch -->
 ```python
 results = await (
     c.text
+    .model("claude-sonnet-4-6")
     .system("Be brief")
-    .batch(["Translate hello to French", "Translate hello to Spanish"])
+    .batch(
+        "Translate hello to French",
+        "Translate hello to Spanish",
+        "Translate hello to German",
+    )
 )
 for r in results:
     print(r.text)
