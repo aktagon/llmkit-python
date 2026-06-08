@@ -32,7 +32,7 @@ async def main():
         .prompt("Say hi")
     )
     print(resp.text)
-    print(resp.tokens.input, "input tokens")
+    print(resp.usage.input, "input tokens")
 
 asyncio.run(main())
 ```
@@ -69,11 +69,11 @@ resp = await (
 )
 
 print(resp.text)               # "4"
-print(resp.tokens.input)       # prompt tokens
-print(resp.tokens.output)      # completion tokens
-print(resp.tokens.cache_read)  # tokens served from cache
-print(resp.tokens.cache_write) # tokens written to cache (Anthropic explicit)
-print(resp.tokens.reasoning)   # internal reasoning tokens (OpenAI o-series, Gemini 2.5+)
+print(resp.usage.input)       # prompt tokens
+print(resp.usage.output)      # completion tokens
+print(resp.usage.cache_read)  # tokens served from cache
+print(resp.usage.cache_write) # tokens written to cache (Anthropic explicit)
+print(resp.usage.reasoning)   # internal reasoning tokens (OpenAI o-series, Gemini 2.5+)
 ```
 
 Capability-scoped fields (`cache_read`, `cache_write`, `reasoning`) are zero when the provider doesn't report them separately.
@@ -84,7 +84,7 @@ Capability-scoped fields (`cache_read`, `cache_write`, `reasoning`) are zero whe
 stream = c.text.system("Be brief").stream("Tell me a joke")
 async for chunk in stream:
     print(chunk, end="", flush=True)
-print("\nUsage:", stream.response.tokens)
+print("\nUsage:", stream.response.usage)
 ```
 
 `TextStream` implements `__aiter__`. After iteration completes, the `stream.response` property carries the final `Response` (with token counts) and `stream.error` carries any terminal error. Handles both Anthropic-style typed events and OpenAI-style data-only frames internally.
@@ -214,7 +214,7 @@ resp = await (
 )
 ```
 
-Edit-mode (single image into `instances[0].image`) and inpainting (`.mask(mime, bytes)` into `instances[0].mask.image`) work the same way. Imagen-specific knobs like `negativePrompt` and `safetySetting` are reachable through `.extra_fields(...)` — they spread into the request's `parameters` block. Vertex's `:predict` response does not carry token counts; `resp.tokens` stays zero.
+Edit-mode (single image into `instances[0].image`) and inpainting (`.mask(mime, bytes)` into `instances[0].mask.image`) work the same way. Imagen-specific knobs like `negativePrompt` and `safetySetting` are reachable through `.extra_fields(...)` — they spread into the request's `parameters` block. Vertex's `:predict` response does not carry token counts; `resp.usage` stays zero.
 
 ### Music — text-to-music
 
@@ -318,7 +318,7 @@ for r in results:
 await c.text.system(long_sys_prompt).caching().prompt("...")
 
 # OpenAI — automatic server-side caching (caching() is a hint; reads
-# surface in resp.tokens.cache_read regardless):
+# surface in resp.usage.cache_read regardless):
 await c.text.system(long_sys_prompt).caching().prompt("...")
 
 # Google — pre-flight POST creates a cachedContents resource, then the
