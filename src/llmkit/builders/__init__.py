@@ -45,6 +45,7 @@ from .music import music_generate
 from .stream import text_stream
 from .text import text_prompt
 from .upload import upload_run
+from .video import video_submit
 
 # === Text — ChatCompletion builder ===
 
@@ -342,6 +343,42 @@ class Music:
         return await music_generate(self, msg)
 
 
+# === Video — VideoGeneration builder ===
+
+class Video:
+    """Phase 2b skeleton; chain methods clone-then-mutate via copy.copy()."""
+
+    def __init__(self, client: "Client") -> None:
+        self.client = client
+        self._middleware: list[MiddlewareFn] = []
+        self._model: str = ""
+        self._raw: bool = False
+        self._parts: list[Part] = []
+
+    def add_middleware(self, *fns: MiddlewareFn) -> "Video":
+        out = copy.copy(self)
+        out._middleware = [*self._middleware, *fns]
+        return out
+
+    def model(self, name: str) -> "Video":
+        out = copy.copy(self)
+        out._model = name
+        return out
+
+    def raw(self) -> "Video":
+        out = copy.copy(self)
+        out._raw = True
+        return out
+
+    def text(self, s: str) -> "Video":  # ordered
+        out = copy.copy(self)
+        out._parts = [*self._parts, Part(text=s)]
+        return out
+
+    async def submit(self, msg: str) -> VideoHandle:
+        return await video_submit(self, msg)
+
+
 # === Agent — ToolCalling builder ===
 
 class Agent:
@@ -579,6 +616,7 @@ class Client:
         self.text: Text = Text(self)
         self.image: Image = Image(self)
         self.music: Music = Music(self)
+        self.video: Video = Video(self)
         self.agent: Agent = Agent(self)
         self.upload: Upload = Upload(self)
         # ADR-019: catalogue namespaces. Lazy import to avoid a
@@ -668,6 +706,7 @@ __all__ = [
     "Text",
     "Image",
     "Music",
+    "Video",
     "Agent",
     "Upload",
     "ai21",
