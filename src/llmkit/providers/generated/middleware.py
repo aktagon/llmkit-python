@@ -31,6 +31,7 @@ class MiddlewareOp(str, Enum):
     BATCH_SUBMIT = "batch_submit"
     IMAGE_GENERATION = "image_generation"
     MUSIC_GENERATION = "music_generation"
+    VIDEO_GENERATION = "video_generation"
     MODELS_LIST = "models_list"
 
 
