@@ -14,6 +14,7 @@ from llmkit.builders import anthropic
 
 async def main() -> None:
     c = anthropic(os.environ.get("ANTHROPIC_API_KEY", "sk-test"))
+    # #region batch
     results = await (
         c.text
         .model("claude-sonnet-4-6")
@@ -26,6 +27,7 @@ async def main() -> None:
     )
     for r in results:
         print(r.text)
+    # #endregion
 
 
 if __name__ == "__main__":
