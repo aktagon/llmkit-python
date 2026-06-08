@@ -14,6 +14,7 @@ from llmkit.builders import anthropic
 
 async def main() -> None:
     c = anthropic(os.environ.get("ANTHROPIC_API_KEY", "sk-test"))
+    # #region stream
     stream = c.text.system("Be brief").stream("Tell me a one-line joke")
     async for chunk in stream:
         print(chunk, end="", flush=True)
@@ -24,6 +25,7 @@ async def main() -> None:
             f"input={final.usage.input} output={final.usage.output} "
             f"finish_reason={final.finish_reason}"
         )
+    # #endregion
 
 
 if __name__ == "__main__":
