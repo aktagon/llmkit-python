@@ -227,12 +227,20 @@ Edit-mode (single image into `instances[0].image`) and inpainting (`.mask(mime, 
 
 Generate audio from a text prompt via the typed-builder chain on `c.music`. Decoded audio bytes come back on `resp.audio[0].bytes`. Models that support vocals take lyrics via `.lyrics(...)` (use section tags like `[verse]`); instrumental-only models reject lyrics before the request is sent.
 
+<!-- llmkit:include python/examples/music.py#music -->
 ```python
-r = await c.music.model("lyria-002").generate("a calm instrumental, warm piano and soft strings")
+r = await (
+    c.music
+    .model("lyria-002")
+    .generate("a calm instrumental, warm piano and soft strings")
+)
 with open("out.wav", "wb") as f:
     f.write(r.audio[0].bytes)
+```
 
-# with lyrics:
+Models with vocals take lyrics via `.lyrics(...)`:
+
+```python
 song = await c.music.model("lyria-3-pro-preview").lyrics("[verse] neon lights").generate("dream pop, 90 bpm")
 ```
 
