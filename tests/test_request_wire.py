@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import llmkit
-from llmkit import anthropic, google, openai
+from llmkit import anthropic, google, grok, openai
 from llmkit.types import SafetySetting
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
@@ -92,6 +92,7 @@ class _CaptureServer:
 # which the drivers never assert).
 _CANNED_RESP = {
     "id": "msgbatch_test",
+    "request_id": "vid_test",  # VID-007: Grok video-submit handle id
     "candidates": [
         {
             "content": {
@@ -398,3 +399,20 @@ def test_image_edit_google_flash_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("image-edit-google-flash", server.last_body)
+
+
+# === ADR-034 / VID-007: video generation submit body ===
+
+
+def test_video_grok_matches_shared_golden() -> None:
+    # Grok video-submit body {model, prompt}. The async VideoHandle is
+    # discarded — only the outbound submit bytes are asserted. The canned
+    # response carries request_id so submit parses a handle.
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = grok("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.video.model(wi.WIRE_VIDEO_GROK_MODEL).submit(wi.WIRE_VIDEO_GROK_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("video-grok", server.last_body)
