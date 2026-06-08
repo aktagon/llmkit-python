@@ -221,3 +221,51 @@ class ToolResult:
 
     #
     content: str = ""
+
+
+@dataclass
+class VideoData:
+    """"""
+    #
+    mime_type: str = ""
+
+    #
+    url: str = ""
+
+    #
+    bytes: bytes = b''
+
+    #
+    duration_seconds: int = 0
+
+
+@dataclass(kw_only=True)
+class VideoHandle:
+    """"""
+    #
+    id: str = ""
+
+    #
+    provider: Provider
+
+    #
+    raw: bool = False
+
+
+@dataclass
+class VideoResponse:
+    """"""
+    #
+    videos: list[VideoData] = field(default_factory=list)
+
+    #
+    usage: Usage = field(default_factory=Usage)
+
+    #
+    finish_reason: str = ""
+
+    #
+    finish_message: str = ""
+
+    #
+    raw: Any | None = None
