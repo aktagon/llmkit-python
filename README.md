@@ -80,11 +80,18 @@ Capability-scoped fields (`cache_read`, `cache_write`, `reasoning`) are zero whe
 
 ### Stream — async iteration with trailing handle
 
+<!-- llmkit:include python/examples/streaming.py#stream -->
 ```python
-stream = c.text.system("Be brief").stream("Tell me a joke")
+stream = c.text.system("Be brief").stream("Tell me a one-line joke")
 async for chunk in stream:
     print(chunk, end="", flush=True)
-print("\nUsage:", stream.response.usage)
+print()
+final = stream.response
+if final is not None:
+    print(
+        f"input={final.usage.input} output={final.usage.output} "
+        f"finish_reason={final.finish_reason}"
+    )
 ```
 
 `TextStream` implements `__aiter__`. After iteration completes, the `stream.response` property carries the final `Response` (with token counts) and `stream.error` carries any terminal error. Handles both Anthropic-style typed events and OpenAI-style data-only frames internally.
