@@ -221,3 +221,51 @@ class ToolResult:
 
     # content is the stringified tool return value. Tool authors that return non-string types must stringify before yielding; this stays string-typed to keep the wire shape uniform across providers.
     content: str = ""
+
+
+@dataclass
+class VideoData:
+    """VideoData is one finished video returned in a VideoResponse. Models bytes (downloaded payload) XOR url (a provider link or caller S3 URI) — the source-XOR pattern (VID-004). url-delivery and output-uri providers set url; download-delivery providers set bytes."""
+    # mime_type is the IANA media type of the video (video/mp4). Drives the file extension the caller picks for storage.
+    mime_type: str = ""
+
+    # url is the provider link (grok: a temporary xAI-hosted URL) or the caller-supplied S3 URI (Bedrock). Set for url and output-uri delivery; empty for download delivery. XOR with bytes.
+    url: str = ""
+
+    # bytes is the raw (not encoded) video payload, present only for download-delivery providers the SDK fetched on the caller's behalf. Empty for url and output-uri delivery. XOR with url.
+    bytes: bytes = b''
+
+    # duration_seconds is the duration of the finished video in seconds, when the provider reports it (grok: video.duration). Zero when unreported.
+    duration_seconds: int = 0
+
+
+@dataclass(kw_only=True)
+class VideoHandle:
+    """VideoHandle is a value struct identifying a submitted video job, modeled on BatchHandle (ADR-014). Cross-process resume works by persisting the fields and reconstructing the handle; the poll loop (Wait) is hand-written runtime, not part of the generated value."""
+    # id is the provider-assigned request id returned by the submit endpoint (grok: request_id). Opaque to the SDK; round-tripped to the poll endpoint verbatim.
+    id: str = ""
+
+    # provider is the Provider config used to submit the job. Carried on the handle so Wait knows where to poll without re-parameterising the client.
+    provider: Provider
+
+    # raw is the ADR-014 opt-in: when true, the VideoResponse returned from Wait carries raw set to the parsed provider poll body. Submit propagates the chain's .raw() flag onto the handle; cross-process resume callers set it directly.
+    raw: bool = False
+
+
+@dataclass
+class VideoResponse:
+    """VideoResponse is the universal video-generation response container returned by VideoHandle.Wait. Carries the finished video references, usage, and the same finish-reason / finish-message / raw fields the image-gen and music-gen responses carry."""
+    # videos are the finished video references. url-delivery providers (grok) fill VideoData.url; download-delivery providers fill VideoData.bytes with bytes the SDK fetched; output-uri providers (Bedrock) carry the caller S3 URI in url. Empty when the job failed — inspect FinishReason / FinishMessage.
+    videos: list[VideoData] = field(default_factory=list)
+
+    # usage holds token consumption metrics for the video-generation call. No verified provider reports a video usage axis yet; this stays zero unless a provider surfaces counts (ADR-034 OQ-3).
+    usage: Usage = field(default_factory=Usage)
+
+    # finish_reason is the provider terminal status / stop signal (grok: a non-done status such as expired or failed). Empty on success. Optional.
+    finish_reason: str = ""
+
+    # finish_message is the free-text provider explanation of a non-success status (grok: error.message on a failed job). Use as the user-facing message when len(Videos) == 0.
+    finish_message: str = ""
+
+    # raw is the parsed provider poll response body, populated only when the caller opted in via the builder's .raw() chain method (ADR-014). Type-erased — consumers cast to a provider-shape type for fields the universal VideoResponse does not carry.
+    raw: Any | None = None
