@@ -46,6 +46,22 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
             ),
         ),
     ),
+    ProviderName.ZHIPU: VideoGenDef(
+        wire_shape="VideoZhipu",
+        output_delivery="DeliveryURL",
+        gen_endpoint="/v4/videos/generations",
+        requires_output_uri=False,
+        models=(
+            VideoModelDef(
+                model_id="cogvideox-3",
+                label="CogVideoX-3",
+                supports_image_to_video=True,
+                max_duration_seconds=10,
+                output_mime="video/mp4",
+                resolutions=("1080p", "4k", "720p"),
+            ),
+        ),
+    ),
 }
 
 
