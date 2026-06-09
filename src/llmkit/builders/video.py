@@ -324,6 +324,8 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
     {"status": "failed", "error": {"code", "message"}}.
     VideoZhipu: {"task_status": "SUCCESS"|"FAIL"|"PROCESSING",
     "video_result": [{"url"}]}.
+    VideoTogether: {"status": "completed"|"failed"|"cancelled"|"queued"|
+    "in_progress", "outputs": {"video_url"}}.
     """
     try:
         raw = json.loads(body)
@@ -331,6 +333,15 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         raise APIError(
             message=f"unmarshal video poll response: {exc}", status_code=0
         ) from exc
+
+    if vg_cfg.wire_shape == "VideoTogether":
+        status = raw.get("status") if isinstance(raw, dict) else None
+        if status == "completed":
+            return _video_result_from_together(vg_cfg, raw), True
+        if status in ("failed", "cancelled"):
+            raise APIError(message=f"video generation {status}", status_code=0)
+        # queued, in_progress (or any non-terminal status)
+        return VideoResponse(), False
 
     if vg_cfg.wire_shape == "VideoZhipu":
         status = raw.get("task_status") if isinstance(raw, dict) else None
@@ -393,6 +404,23 @@ def _video_result_from_zhipu(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoR
     if not isinstance(first, dict):
         return VideoResponse()
     url = first.get("url")
+    return VideoResponse(
+        videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
+    )
+
+
+def _video_result_from_together(
+    vg_cfg: VideoGenDef, raw: dict[str, Any]
+) -> VideoResponse:
+    """Extract the finished video from a Together poll response. Together uses
+    url delivery: the finished video sits at outputs.video_url, so
+    VideoData.url carries the temporary Together-hosted URL and bytes stays
+    empty."""
+    mime = _video_fallback_mime(vg_cfg)
+    outputs = raw.get("outputs") if isinstance(raw, dict) else None
+    if not isinstance(outputs, dict):
+        return VideoResponse()
+    url = outputs.get("video_url")
     return VideoResponse(
         videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
     )
