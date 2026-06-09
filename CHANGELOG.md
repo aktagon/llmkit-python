@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Video generation — `c.video.model(id).submit(prompt)` returns a `VideoHandle` immediately; `await handle.wait(poll_interval=..., request_timeout=...)` polls until the job finishes and returns `VideoResponse(videos: list[VideoData], usage, finish_reason, finish_message)`. Each `VideoData` carries `url`, `mime_type`, and `duration_seconds`. One provider so far: xAI Grok Imagine (`grok-imagine-video`), which delivers a temporary hosted URL — download it yourself.
 - Music generation — `c.music.model(id).generate(prompt)` produces audio from a text prompt, with an optional `.lyrics(...)` chain method for models that support vocals. Returns `MusicResponse(audio: list[AudioData], text, usage)` with decoded audio bytes. Three providers: Vertex Lyria 2 (`lyria-002`, instrumental WAV), Google Lyria 3 (`lyria-3-pro-preview` / `lyria-3-clip-preview`, MP3 with lyrics), and MiniMax (`music-2.6`). Instrumental-only models reject lyrics before the request is sent.
 
 ## [2.2.0] — 2026-06-07
