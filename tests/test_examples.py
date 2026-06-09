@@ -96,6 +96,56 @@ class _JSONServer:
         return f"http://127.0.0.1:{self._httpd.server_port}"
 
 
+class _GrokVideoServer:
+    """Grok video lifecycle: POST submit returns a request id, GET poll
+    returns the done body immediately (no pending polls). Mirror of the
+    submit->poll->done mock in tests/test_video.py."""
+
+    def __init__(self, request_id: str, done_body: dict[str, Any]) -> None:
+        self.request_id = request_id
+        self.done_body = done_body
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a, **_k):
+                pass
+
+            def _send(self, body: dict[str, Any]) -> None:
+                payload = json.dumps(body).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length") or "0")
+                if length:
+                    self.rfile.read(length)
+                self._send({"request_id": outer.request_id})
+
+            def do_GET(self):
+                self._send(outer.done_body)
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(
+            target=self._httpd.serve_forever, daemon=True
+        )
+
+    def __enter__(self) -> "_GrokVideoServer":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join(timeout=2)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_port}"
+
+
 class _SSEServer:
     """Streams a canned SSE event sequence on POST."""
 
@@ -314,6 +364,7 @@ def _redirect(module, factory_name: str, base_url: str) -> None:
     from llmkit.builders import (  # local import to avoid cycle on collection
         anthropic,
         google,
+        grok,
         openai,
         vertex,
     )
@@ -323,6 +374,7 @@ def _redirect(module, factory_name: str, base_url: str) -> None:
         "openai": openai,
         "google": google,
         "vertex": vertex,
+        "grok": grok,
     }[factory_name]
 
     def patched(key: str):
@@ -397,6 +449,18 @@ def test_music_runs(tmp_path, monkeypatch) -> None:
         _redirect(ex, "vertex", server.url)
         asyncio.run(ex.main())
     assert (tmp_path / "out.wav").exists()
+
+
+def test_video_runs() -> None:
+    ex = _load("video")
+    done = {
+        "status": "done",
+        "video": {"url": "https://vidgen.x.ai/abc/video.mp4", "duration": 8},
+        "model": "grok-imagine-video",
+    }
+    with _GrokVideoServer("vid-123", done) as server:
+        _redirect(ex, "grok", server.url)
+        asyncio.run(ex.main())
 
 
 def test_batch_runs() -> None:
