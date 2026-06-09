@@ -19,7 +19,7 @@ class VideoModelDef:
 
 @dataclass(frozen=True)
 class VideoGenDef:
-    # wire_shape is VideoGrok | ...
+    # wire_shape is VideoGrok | VideoZhipu.
     wire_shape: str
     # output_delivery is DeliveryDownload | DeliveryURL | DeliveryOutputURI.
     output_delivery: str
@@ -43,6 +43,22 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=15,
                 output_mime="video/mp4",
                 resolutions=("480p", "720p"),
+            ),
+        ),
+    ),
+    ProviderName.ZHIPU: VideoGenDef(
+        wire_shape="VideoZhipu",
+        output_delivery="DeliveryURL",
+        gen_endpoint="/v4/videos/generations",
+        requires_output_uri=False,
+        models=(
+            VideoModelDef(
+                model_id="cogvideox-3",
+                label="CogVideoX-3",
+                supports_image_to_video=True,
+                max_duration_seconds=10,
+                output_mime="video/mp4",
+                resolutions=("1080p", "4k", "720p"),
             ),
         ),
     ),
