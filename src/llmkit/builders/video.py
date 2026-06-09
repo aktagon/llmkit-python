@@ -204,8 +204,11 @@ def _dispatch_video_submit(
 
 
 
+
+
+
+
 """
-    #
     body = {"model": model, "prompt": _join_prompt_text(parts)}
     json_body = json.dumps(body).encode("utf-8")
     resp_body = do_post(
@@ -219,10 +222,11 @@ def _dispatch_video_submit(
         raise APIError(
             message=f"unmarshal video submit response: {exc}", status_code=0
         ) from exc
-    request_id = raw.get("request_id") if isinstance(raw, dict) else None
-    if not isinstance(request_id, str) or not request_id:
-        raise APIError(message="video submit: empty request_id", status_code=0)
-    return request_id
+    id_field = "id" if vg_cfg.wire_shape == "VideoZhipu" else "request_id"
+    handle_id = raw.get(id_field) if isinstance(raw, dict) else None
+    if not isinstance(handle_id, str) or not handle_id:
+        raise APIError(message=f"video submit: empty {id_field}", status_code=0)
+    return handle_id
 
 
 def _wait_video(
@@ -250,7 +254,7 @@ def _wait_video(
 
     base = p.base_url or cfg.base_url
     headers = _image_auth_headers(p, cfg, pname)
-    poll_url = _video_poll_url(base, handle.id)
+    poll_url = _video_poll_url(vg_cfg.wire_shape, base, handle.id)
 
     #
     #
@@ -275,13 +279,21 @@ def _wait_video(
         time.sleep(poll_interval)
 
 
-def _video_poll_url(base: str, id: str) -> str:
-    """"""
+def _video_poll_url(wire_shape: str, base: str, id: str) -> str:
+    """
+
+
+
+"""
+    if wire_shape == "VideoZhipu":
+        return base + "/v4/async-result/" + id
     return base + "/v1/videos/" + id
 
 
 def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, bool]:
     """
+
+
 
 
 
@@ -297,6 +309,15 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         raise APIError(
             message=f"unmarshal video poll response: {exc}", status_code=0
         ) from exc
+
+    if vg_cfg.wire_shape == "VideoZhipu":
+        status = raw.get("task_status") if isinstance(raw, dict) else None
+        if status == "SUCCESS":
+            return _video_result_from_zhipu(vg_cfg, raw), True
+        if status == "FAIL":
+            raise APIError(message="video generation failed", status_code=0)
+        #
+        return VideoResponse(), False
 
     status = raw.get("status") if isinstance(raw, dict) else None
     if status == "done":
@@ -327,6 +348,24 @@ def _video_result_from_grok(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoRe
     if isinstance(duration, (int, float)):
         data.duration_seconds = int(duration)
     return VideoResponse(videos=[data])
+
+
+def _video_result_from_zhipu(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoResponse:
+    """
+
+
+"""
+    mime = _video_fallback_mime(vg_cfg)
+    results = raw.get("video_result") if isinstance(raw, dict) else None
+    if not isinstance(results, list) or not results:
+        return VideoResponse()
+    first = results[0]
+    if not isinstance(first, dict):
+        return VideoResponse()
+    url = first.get("url")
+    return VideoResponse(
+        videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
+    )
 
 
 def _video_fallback_mime(vg_cfg: VideoGenDef) -> str:
