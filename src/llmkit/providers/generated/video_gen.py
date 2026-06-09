@@ -19,7 +19,7 @@ class VideoModelDef:
 
 @dataclass(frozen=True)
 class VideoGenDef:
-    # wire_shape is VideoGrok | VideoZhipu.
+    # wire_shape is VideoGrok | VideoZhipu | VideoTogether.
     wire_shape: str
     # output_delivery is DeliveryDownload | DeliveryURL | DeliveryOutputURI.
     output_delivery: str
@@ -49,6 +49,24 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=15,
                 output_mime="video/mp4",
                 resolutions=("480p", "720p"),
+            ),
+        ),
+    ),
+    ProviderName.TOGETHER: VideoGenDef(
+        wire_shape="VideoTogether",
+        output_delivery="DeliveryURL",
+        gen_endpoint="/v2/videos",
+        poll_endpoint="/v2/videos/{id}",
+        submit_handle_field="id",
+        requires_output_uri=False,
+        models=(
+            VideoModelDef(
+                model_id="minimax/video-01-director",
+                label="MiniMax Video 01 Director (Together)",
+                supports_image_to_video=True,
+                max_duration_seconds=6,
+                output_mime="video/mp4",
+                resolutions=("720p",),
             ),
         ),
     ),
