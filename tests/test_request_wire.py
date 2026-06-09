@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import llmkit
-from llmkit import anthropic, google, grok, openai, zhipu
+from llmkit import anthropic, google, grok, openai, together, zhipu
 from llmkit.types import SafetySetting
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
@@ -430,3 +430,19 @@ def test_video_zhipu_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("video-zhipu", server.last_body)
+
+
+def test_video_together_matches_shared_golden() -> None:
+    # Together video-submit body {model, prompt} — structurally identical to
+    # Grok's/Zhipu's (the shared {model, prompt} arm); the lifecycle
+    # divergence is delivery-side, covered by the unit tests.
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = together("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.video.model(wi.WIRE_VIDEO_TOGETHER_MODEL).submit(
+                wi.WIRE_VIDEO_TOGETHER_PROMPT
+            )
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("video-together", server.last_body)

@@ -240,6 +240,107 @@ def test_video_wait_failed_zhipu_raises() -> None:
             asyncio.run(h.wait(**_FAST))
 
 
+TOGETHER_VIDEO_MODEL = "minimax/video-01-director"
+
+
+class _TogetherVideoServer:
+    """Serves the Together submit + poll endpoints. Submit returns the poll
+    handle as the top-level ``id`` with status=queued; the poll returns
+    ``status: in_progress`` for the first ``pending_polls`` GET calls, then the
+    supplied done body."""
+
+    def __init__(self, pending_polls: int, done_body: dict[str, Any]) -> None:
+        self.pending_polls = pending_polls
+        self.done_body = done_body
+        self.polls = 0
+        self.submit_body: dict[str, Any] | None = None
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a, **_k):
+                pass
+
+            def _send(self, body: dict[str, Any]) -> None:
+                payload = json.dumps(body).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def do_POST(self):
+                path = urlparse(self.path).path
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                outer.submit_body = json.loads(raw.decode("utf-8"))
+                if path.endswith("/v2/videos"):
+                    return self._send({"id": "together-vid-1", "status": "queued"})
+                self.send_response(404)
+                self.end_headers()
+
+            def do_GET(self):
+                path = urlparse(self.path).path
+                if "/v2/videos/together-vid-1" in path:
+                    outer.polls += 1
+                    if outer.polls <= outer.pending_polls:
+                        return self._send({"status": "in_progress"})
+                    return self._send(outer.done_body)
+                self.send_response(404)
+                self.end_headers()
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+
+    def __enter__(self) -> "_TogetherVideoServer":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join(timeout=2)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_port}"
+
+
+def test_video_submit_and_wait_together() -> None:
+    done = {
+        "status": "completed",
+        "outputs": {"video_url": "https://api.together.xyz/files/v.mp4"},
+        "model": TOGETHER_VIDEO_MODEL,
+    }
+    with _TogetherVideoServer(pending_polls=2, done_body=done) as server:
+        c = new_client("together", "test-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(
+            c.video.model(TOGETHER_VIDEO_MODEL).submit("a drone shot over the alps")
+        )
+        assert isinstance(h, VideoHandle)
+        assert h.id == "together-vid-1"  # the top-level id
+
+        resp = asyncio.run(h.wait(**_FAST))
+
+    assert server.submit_body == {
+        "model": TOGETHER_VIDEO_MODEL,
+        "prompt": "a drone shot over the alps",
+    }
+    assert len(resp.videos) == 1
+    assert resp.videos[0].url == "https://api.together.xyz/files/v.mp4"
+    assert resp.videos[0].mime_type == "video/mp4"
+    assert resp.videos[0].bytes == b""  # url delivery must not download bytes
+
+
+def test_video_wait_cancelled_together_raises() -> None:
+    with _TogetherVideoServer(pending_polls=0, done_body={"status": "cancelled"}) as server:
+        c = new_client("together", "test-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(c.video.model(TOGETHER_VIDEO_MODEL).submit("blocked prompt"))
+        with pytest.raises(APIError):
+            asyncio.run(h.wait(**_FAST))
+
+
 def test_video_text_chain_method() -> None:
     done = _done_body("https://vidgen.x.ai/t.mp4")
     with _GrokVideoServer(pending_polls=0, done_body=done) as server:
