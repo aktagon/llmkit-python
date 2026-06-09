@@ -212,21 +212,10 @@ def _dispatch_video_submit(
     #
     #
     #
-    #
-    if vg_cfg.wire_shape == "VideoGrok":
-        id_field = "request_id"
-    elif vg_cfg.wire_shape == "VideoZhipu":
-        id_field = "id"
-    else:
-        raise APIError(
-            message=f"video submit: unsupported wire shape {vg_cfg.wire_shape!r}",
-            status_code=0,
-        )
-
     body = {"model": model, "prompt": _join_prompt_text(parts)}
     json_body = json.dumps(body).encode("utf-8")
     resp_body = do_post(
-        base_url + vg_cfg.gen_endpoint,
+        _resolve_video_endpoint(base_url, vg_cfg.gen_endpoint),
         json_body,
         {**headers, "content-type": "application/json"},
     )
@@ -236,9 +225,12 @@ def _dispatch_video_submit(
         raise APIError(
             message=f"unmarshal video submit response: {exc}", status_code=0
         ) from exc
-    handle_id = raw.get(id_field) if isinstance(raw, dict) else None
-    if not isinstance(handle_id, str) or not handle_id:
-        raise APIError(message=f"video submit: empty {id_field}", status_code=0)
+    handle_id = _lookup_handle_field(raw, vg_cfg.submit_handle_field)
+    if not handle_id:
+        raise APIError(
+            message=f"video submit: empty handle field {vg_cfg.submit_handle_field!r}",
+            status_code=0,
+        )
     return handle_id
 
 
@@ -267,7 +259,7 @@ def _wait_video(
 
     base = p.base_url or cfg.base_url
     headers = _image_auth_headers(p, cfg, pname)
-    poll_url = _video_poll_url(vg_cfg.wire_shape, base, handle.id)
+    poll_url = _video_poll_url(vg_cfg.poll_endpoint, base, handle.id)
 
     #
     #
@@ -292,15 +284,32 @@ def _wait_video(
         time.sleep(poll_interval)
 
 
-def _video_poll_url(wire_shape: str, base: str, id: str) -> str:
+def _video_poll_url(poll_endpoint: str, base: str, id: str) -> str:
     """
 
+"""
+    return _resolve_video_endpoint(base, poll_endpoint.replace("{id}", id))
 
+
+def _resolve_video_endpoint(base: str, endpoint: str) -> str:
+    """"""
+    if endpoint.startswith(("http://", "https://")):
+        return endpoint
+    return base + endpoint
+
+
+def _lookup_handle_field(raw: Any, path: str) -> str:
+    """
 
 """
-    if wire_shape == "VideoZhipu":
-        return base + "/v4/async-result/" + id
-    return base + "/v1/videos/" + id
+    if not path:
+        return ""
+    cur: Any = raw
+    for seg in path.split("."):
+        if not isinstance(cur, dict):
+            return ""
+        cur = cur.get(seg)
+    return cur if isinstance(cur, str) else ""
 
 
 def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, bool]:

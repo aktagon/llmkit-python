@@ -25,6 +25,10 @@ class VideoGenDef:
     output_delivery: str
     #
     gen_endpoint: str = ""
+    #
+    poll_endpoint: str = ""
+    #
+    submit_handle_field: str = ""
     requires_output_uri: bool = False
     models: tuple[VideoModelDef, ...] = field(default_factory=tuple)
 
@@ -34,6 +38,8 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
         wire_shape="VideoGrok",
         output_delivery="DeliveryURL",
         gen_endpoint="/v1/videos/generations",
+        poll_endpoint="/v1/videos/{id}",
+        submit_handle_field="request_id",
         requires_output_uri=False,
         models=(
             VideoModelDef(
@@ -50,6 +56,8 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
         wire_shape="VideoZhipu",
         output_delivery="DeliveryURL",
         gen_endpoint="/v4/videos/generations",
+        poll_endpoint="/v4/async-result/{id}",
+        submit_handle_field="id",
         requires_output_uri=False,
         models=(
             VideoModelDef(
