@@ -200,12 +200,15 @@ def _dispatch_video_submit(
     headers: dict[str, str],
 ) -> str:
     """POST the submit body per wire shape (never by provider name) and
-    return the provider-assigned request id.
+    return the provider-assigned poll handle id.
 
-      - VideoGrok (xAI): POST {model, prompt} to gen_endpoint; the response
-        is {"request_id": "..."}.
+      - VideoGrok (xAI) and VideoZhipu (CogVideoX) share the simple
+        {model, prompt} submit body. They differ only in which response
+        field carries the poll handle: Grok returns it as request_id, Zhipu
+        as the top-level id (alongside its own request_id, which is NOT the
+        poll key). A future shape with a different submit body adds an arm
+        that builds its own body.
     """
-    # Only VideoGrok is wired (slice 1). The default arm is the Grok shape.
     body = {"model": model, "prompt": _join_prompt_text(parts)}
     json_body = json.dumps(body).encode("utf-8")
     resp_body = do_post(
@@ -219,10 +222,11 @@ def _dispatch_video_submit(
         raise APIError(
             message=f"unmarshal video submit response: {exc}", status_code=0
         ) from exc
-    request_id = raw.get("request_id") if isinstance(raw, dict) else None
-    if not isinstance(request_id, str) or not request_id:
-        raise APIError(message="video submit: empty request_id", status_code=0)
-    return request_id
+    id_field = "id" if vg_cfg.wire_shape == "VideoZhipu" else "request_id"
+    handle_id = raw.get(id_field) if isinstance(raw, dict) else None
+    if not isinstance(handle_id, str) or not handle_id:
+        raise APIError(message=f"video submit: empty {id_field}", status_code=0)
+    return handle_id
 
 
 def _wait_video(
@@ -250,7 +254,7 @@ def _wait_video(
 
     base = p.base_url or cfg.base_url
     headers = _image_auth_headers(p, cfg, pname)
-    poll_url = _video_poll_url(base, handle.id)
+    poll_url = _video_poll_url(vg_cfg.wire_shape, base, handle.id)
 
     # ADR-014 cross-process resume: a handle that remembers raw takes effect
     # at wait time even if the raw kwarg was not passed.
@@ -275,13 +279,19 @@ def _wait_video(
         time.sleep(poll_interval)
 
 
-def _video_poll_url(base: str, id: str) -> str:
-    """Build the per-wire-shape poll URL. VideoGrok: GET {base}/v1/videos/{id}."""
+def _video_poll_url(wire_shape: str, base: str, id: str) -> str:
+    """Build the per-wire-shape poll URL.
+
+    VideoGrok: GET {base}/v1/videos/{id}.
+    VideoZhipu: GET {base}/v4/async-result/{id}.
+    """
+    if wire_shape == "VideoZhipu":
+        return base + "/v4/async-result/" + id
     return base + "/v1/videos/" + id
 
 
 def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, bool]:
-    """Decode one poll response. Returns (resp, done):
+    """Decode one poll response per wire shape. Returns (resp, done):
 
       - done=False when the job is still pending (caller keeps polling).
       - done=True with the finished VideoResponse when status is
@@ -290,6 +300,8 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
 
     VideoGrok: {"status": "...", "video": {"url", "duration"}} or
     {"status": "failed", "error": {"code", "message"}}.
+    VideoZhipu: {"task_status": "SUCCESS"|"FAIL"|"PROCESSING",
+    "video_result": [{"url"}]}.
     """
     try:
         raw = json.loads(body)
@@ -297,6 +309,15 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         raise APIError(
             message=f"unmarshal video poll response: {exc}", status_code=0
         ) from exc
+
+    if vg_cfg.wire_shape == "VideoZhipu":
+        status = raw.get("task_status") if isinstance(raw, dict) else None
+        if status == "SUCCESS":
+            return _video_result_from_zhipu(vg_cfg, raw), True
+        if status == "FAIL":
+            raise APIError(message="video generation failed", status_code=0)
+        # PROCESSING (or any non-terminal status)
+        return VideoResponse(), False
 
     status = raw.get("status") if isinstance(raw, dict) else None
     if status == "done":
@@ -327,6 +348,24 @@ def _video_result_from_grok(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoRe
     if isinstance(duration, (int, float)):
         data.duration_seconds = int(duration)
     return VideoResponse(videos=[data])
+
+
+def _video_result_from_zhipu(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoResponse:
+    """Extract the finished video from a Zhipu CogVideoX poll response. Zhipu
+    uses url delivery: the finished video sits at video_result[0].url (no
+    duration field on the result), so VideoData.url carries the temporary
+    Zhipu-hosted URL and bytes stays empty."""
+    mime = _video_fallback_mime(vg_cfg)
+    results = raw.get("video_result") if isinstance(raw, dict) else None
+    if not isinstance(results, list) or not results:
+        return VideoResponse()
+    first = results[0]
+    if not isinstance(first, dict):
+        return VideoResponse()
+    url = first.get("url")
+    return VideoResponse(
+        videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
+    )
 
 
 def _video_fallback_mime(vg_cfg: VideoGenDef) -> str:
