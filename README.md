@@ -250,6 +250,26 @@ song = await c.music.model("lyria-3-pro-preview").lyrics("[verse] neon lights").
 | Google   | `lyria-3-pro-preview`, `lyria-3-clip-preview` | yes    | MP3        |
 | MiniMax  | `music-2.6`                                   | yes    | MP3        |
 
+### Video — text-to-video
+
+Generate video from a text prompt. Video generation is asynchronous: `submit` returns a handle immediately, and `handle.wait()` polls until the job finishes. The result carries a temporary hosted URL on `resp.videos[0].url` — download it yourself.
+
+<!-- llmkit:include python/examples/video.py#video -->
+```python
+handle = await (
+    c.video
+    .model("grok-imagine-video")
+    .submit("a slow cinematic drone shot flying over snow-capped alpine peaks at golden hour")
+)
+r = await handle.wait()
+v = r.videos[0]
+print(f"url={v.url} duration={v.duration_seconds}s mime={v.mime_type}")
+```
+
+| Provider | Model                | Delivery |
+| -------- | -------------------- | -------- |
+| Grok     | `grok-imagine-video` | URL      |
+
 ### Safety Settings
 
 Control content filtering for Gemini providers. `safety_settings` applies to text
