@@ -52,6 +52,24 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
             ),
         ),
     ),
+    ProviderName.TOGETHER: VideoGenDef(
+        wire_shape="VideoTogether",
+        output_delivery="DeliveryURL",
+        gen_endpoint="/v2/videos",
+        poll_endpoint="/v2/videos/{id}",
+        submit_handle_field="id",
+        requires_output_uri=False,
+        models=(
+            VideoModelDef(
+                model_id="minimax/video-01-director",
+                label="MiniMax Video 01 Director (Together)",
+                supports_image_to_video=True,
+                max_duration_seconds=6,
+                output_mime="video/mp4",
+                resolutions=("720p",),
+            ),
+        ),
+    ),
     ProviderName.ZHIPU: VideoGenDef(
         wire_shape="VideoZhipu",
         output_delivery="DeliveryURL",
