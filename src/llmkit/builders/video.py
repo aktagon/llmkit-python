@@ -209,24 +209,13 @@ def _dispatch_video_submit(
         poll key). A future shape with a different submit body adds an arm
         that builds its own body.
     """
-    # The submit-response field holding the poll handle id is the only
-    # per-shape difference for the {model, prompt} body. An unknown shape is
-    # rejected (not defaulted to Grok) so a config-only provider addition that
-    # forgets its runtime arm fails loud instead of silently POSTing as Grok.
-    if vg_cfg.wire_shape == "VideoGrok":
-        id_field = "request_id"
-    elif vg_cfg.wire_shape == "VideoZhipu":
-        id_field = "id"
-    else:
-        raise APIError(
-            message=f"video submit: unsupported wire shape {vg_cfg.wire_shape!r}",
-            status_code=0,
-        )
-
+    # Submit endpoint from config (absolute when the video host differs from
+    # the chat base); handle id from the config-declared dotted path (OQ7) --
+    # both are A-Box facts, not per-wire-shape code branches.
     body = {"model": model, "prompt": _join_prompt_text(parts)}
     json_body = json.dumps(body).encode("utf-8")
     resp_body = do_post(
-        base_url + vg_cfg.gen_endpoint,
+        _resolve_video_endpoint(base_url, vg_cfg.gen_endpoint),
         json_body,
         {**headers, "content-type": "application/json"},
     )
@@ -236,9 +225,12 @@ def _dispatch_video_submit(
         raise APIError(
             message=f"unmarshal video submit response: {exc}", status_code=0
         ) from exc
-    handle_id = raw.get(id_field) if isinstance(raw, dict) else None
-    if not isinstance(handle_id, str) or not handle_id:
-        raise APIError(message=f"video submit: empty {id_field}", status_code=0)
+    handle_id = _lookup_handle_field(raw, vg_cfg.submit_handle_field)
+    if not handle_id:
+        raise APIError(
+            message=f"video submit: empty handle field {vg_cfg.submit_handle_field!r}",
+            status_code=0,
+        )
     return handle_id
 
 
@@ -267,7 +259,7 @@ def _wait_video(
 
     base = p.base_url or cfg.base_url
     headers = _image_auth_headers(p, cfg, pname)
-    poll_url = _video_poll_url(vg_cfg.wire_shape, base, handle.id)
+    poll_url = _video_poll_url(vg_cfg.poll_endpoint, base, handle.id)
 
     # ADR-014 cross-process resume: a handle that remembers raw takes effect
     # at wait time even if the raw kwarg was not passed.
@@ -292,15 +284,32 @@ def _wait_video(
         time.sleep(poll_interval)
 
 
-def _video_poll_url(wire_shape: str, base: str, id: str) -> str:
-    """Build the per-wire-shape poll URL.
+def _video_poll_url(poll_endpoint: str, base: str, id: str) -> str:
+    """Build the poll URL from the config template (OQ7): substitute the {id}
+    placeholder, use verbatim when absolute or join to base otherwise. The
+    poll path is an A-Box fact, not a per-wire-shape code constant."""
+    return _resolve_video_endpoint(base, poll_endpoint.replace("{id}", id))
 
-    VideoGrok: GET {base}/v1/videos/{id}.
-    VideoZhipu: GET {base}/v4/async-result/{id}.
-    """
-    if wire_shape == "VideoZhipu":
-        return base + "/v4/async-result/" + id
-    return base + "/v1/videos/" + id
+
+def _resolve_video_endpoint(base: str, endpoint: str) -> str:
+    """Return endpoint verbatim when absolute (http(s)://), else join to base."""
+    if endpoint.startswith(("http://", "https://")):
+        return endpoint
+    return base + endpoint
+
+
+def _lookup_handle_field(raw: Any, path: str) -> str:
+    """Descend a dotted path (e.g. "id", "output.task_id") through the decoded
+    submit response, returning the string leaf or "" if any segment is missing
+    or the leaf is not a string."""
+    if not path:
+        return ""
+    cur: Any = raw
+    for seg in path.split("."):
+        if not isinstance(cur, dict):
+            return ""
+        cur = cur.get(seg)
+    return cur if isinstance(cur, str) else ""
 
 
 def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, bool]:
