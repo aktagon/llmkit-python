@@ -209,6 +209,20 @@ def _dispatch_video_submit(
         poll key). A future shape with a different submit body adds an arm
         that builds its own body.
     """
+    # The submit-response field holding the poll handle id is the only
+    # per-shape difference for the {model, prompt} body. An unknown shape is
+    # rejected (not defaulted to Grok) so a config-only provider addition that
+    # forgets its runtime arm fails loud instead of silently POSTing as Grok.
+    if vg_cfg.wire_shape == "VideoGrok":
+        id_field = "request_id"
+    elif vg_cfg.wire_shape == "VideoZhipu":
+        id_field = "id"
+    else:
+        raise APIError(
+            message=f"video submit: unsupported wire shape {vg_cfg.wire_shape!r}",
+            status_code=0,
+        )
+
     body = {"model": model, "prompt": _join_prompt_text(parts)}
     json_body = json.dumps(body).encode("utf-8")
     resp_body = do_post(
@@ -222,7 +236,6 @@ def _dispatch_video_submit(
         raise APIError(
             message=f"unmarshal video submit response: {exc}", status_code=0
         ) from exc
-    id_field = "id" if vg_cfg.wire_shape == "VideoZhipu" else "request_id"
     handle_id = raw.get(id_field) if isinstance(raw, dict) else None
     if not isinstance(handle_id, str) or not handle_id:
         raise APIError(message=f"video submit: empty {id_field}", status_code=0)
@@ -319,19 +332,27 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         # PROCESSING (or any non-terminal status)
         return VideoResponse(), False
 
-    status = raw.get("status") if isinstance(raw, dict) else None
-    if status == "done":
-        return _video_result_from_grok(vg_cfg, raw), True
-    if status in ("failed", "expired"):
-        msg = status
-        err_obj = raw.get("error") if isinstance(raw, dict) else None
-        if isinstance(err_obj, dict):
-            m = err_obj.get("message")
-            if isinstance(m, str) and m:
-                msg = m
-        raise APIError(message=f"video generation {status}: {msg}", status_code=0)
-    # pending (or any non-terminal status)
-    return VideoResponse(), False
+    if vg_cfg.wire_shape == "VideoGrok":
+        status = raw.get("status") if isinstance(raw, dict) else None
+        if status == "done":
+            return _video_result_from_grok(vg_cfg, raw), True
+        if status in ("failed", "expired"):
+            msg = status
+            err_obj = raw.get("error") if isinstance(raw, dict) else None
+            if isinstance(err_obj, dict):
+                m = err_obj.get("message")
+                if isinstance(m, str) and m:
+                    msg = m
+            raise APIError(message=f"video generation {status}: {msg}", status_code=0)
+        # pending (or any non-terminal status)
+        return VideoResponse(), False
+
+    # Unknown shape rejected (not defaulted to Grok): a forgotten poll arm
+    # fails loud instead of hanging on a never-terminal status.
+    raise APIError(
+        message=f"video poll: unsupported wire shape {vg_cfg.wire_shape!r}",
+        status_code=0,
+    )
 
 
 def _video_result_from_grok(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoResponse:
