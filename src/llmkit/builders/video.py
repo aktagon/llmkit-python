@@ -171,7 +171,7 @@ def _submit_video(
 
     try:
         headers = _image_auth_headers(provider, cfg, pname)
-        base_url = provider.base_url or cfg.base_url
+        base_url = _video_base_url(provider, cfg, vg_cfg)
         request_id = _dispatch_video_submit(
             cfg, vg_cfg, request.model, parts, base_url, headers
         )
@@ -215,7 +215,7 @@ def _dispatch_video_submit(
     body = {"model": model, "prompt": _join_prompt_text(parts)}
     json_body = json.dumps(body).encode("utf-8")
     resp_body = do_post(
-        _resolve_video_endpoint(base_url, vg_cfg.gen_endpoint),
+        base_url + vg_cfg.gen_endpoint,
         json_body,
         {**headers, "content-type": "application/json"},
     )
@@ -257,7 +257,7 @@ def _wait_video(
             message=f"{p.name} does not support video generation",
         )
 
-    base = p.base_url or cfg.base_url
+    base = _video_base_url(p, cfg, vg_cfg)
     headers = _image_auth_headers(p, cfg, pname)
     poll_url = _video_poll_url(vg_cfg.poll_endpoint, base, handle.id)
 
@@ -284,18 +284,19 @@ def _wait_video(
         time.sleep(poll_interval)
 
 
-def _video_poll_url(poll_endpoint: str, base: str, id: str) -> str:
+def _video_base_url(provider: Provider, cfg: Any, vg_cfg: VideoGenDef) -> str:
     """
 
+
+
 """
-    return _resolve_video_endpoint(base, poll_endpoint.replace("{id}", id))
+    return provider.base_url or vg_cfg.video_base_url or cfg.base_url
 
 
-def _resolve_video_endpoint(base: str, endpoint: str) -> str:
-    """"""
-    if endpoint.startswith(("http://", "https://")):
-        return endpoint
-    return base + endpoint
+def _video_poll_url(poll_endpoint: str, base: str, id: str) -> str:
+    """
+"""
+    return base + poll_endpoint.replace("{id}", id)
 
 
 def _lookup_handle_field(raw: Any, path: str) -> str:
