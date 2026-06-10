@@ -288,6 +288,11 @@ def _wait_video(
         resp_body = do_get(poll_url, headers)
         resp, done = _parse_video_poll(vg_cfg, resp_body)
         if done:
+            #
+            #
+            #
+            if vg_cfg.file_endpoint:
+                resp = _resolve_video_file(base, vg_cfg, resp_body, headers)
             if raw:
                 try:
                     resp.raw = json.loads(resp_body)
@@ -378,6 +383,18 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         #
         return VideoResponse(), False
 
+    if vg_cfg.wire_shape == "VideoMinimax":
+        #
+        #
+        #
+        status = raw.get("status") if isinstance(raw, dict) else None
+        if status == "Success":
+            return VideoResponse(), True
+        if status == "Fail":
+            raise APIError(message="video generation failed", status_code=0)
+        #
+        return VideoResponse(), False
+
     if vg_cfg.wire_shape == "VideoGrok":
         status = raw.get("status") if isinstance(raw, dict) else None
         if status == "done":
@@ -464,6 +481,63 @@ def _video_result_from_qwen(
     if not isinstance(output, dict):
         return VideoResponse()
     url = output.get("video_url")
+    return VideoResponse(
+        videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
+    )
+
+
+def _resolve_video_file(
+    base: str, vg_cfg: VideoGenDef, poll_body: bytes, headers: dict[str, str]
+) -> VideoResponse:
+    """
+
+
+
+
+"""
+    try:
+        poll = json.loads(poll_body)
+    except ValueError as exc:
+        raise APIError(
+            message=f"unmarshal video poll for file hop: {exc}", status_code=0
+        ) from exc
+    file_id = _video_file_id(poll.get("file_id") if isinstance(poll, dict) else None)
+    if not file_id:
+        raise APIError(
+            message="video file hop: terminal poll carried no file_id", status_code=0
+        )
+    file_url = base + vg_cfg.file_endpoint.replace("{file_id}", file_id)
+    file_body = do_get(file_url, headers)
+    try:
+        file_raw = json.loads(file_body)
+    except ValueError as exc:
+        raise APIError(
+            message=f"unmarshal video file response: {exc}", status_code=0
+        ) from exc
+    return _video_result_from_minimax_file(vg_cfg, file_raw)
+
+
+def _video_file_id(v: Any) -> str:
+    """
+"""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, int):
+        return str(v)
+    return ""
+
+
+def _video_result_from_minimax_file(
+    vg_cfg: VideoGenDef, raw: dict[str, Any]
+) -> VideoResponse:
+    """
+
+"""
+    mime = _video_fallback_mime(vg_cfg)
+    file_obj = raw.get("file") if isinstance(raw, dict) else None
+    if not isinstance(file_obj, dict):
+        return VideoResponse()
+    url = file_obj.get("download_url")
     return VideoResponse(
         videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
     )
