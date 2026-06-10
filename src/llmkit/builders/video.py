@@ -202,22 +202,35 @@ def _dispatch_video_submit(
     """POST the submit body per wire shape (never by provider name) and
     return the provider-assigned poll handle id.
 
-      - VideoGrok (xAI) and VideoZhipu (CogVideoX) share the simple
-        {model, prompt} submit body. They differ only in which response
-        field carries the poll handle: Grok returns it as request_id, Zhipu
-        as the top-level id (alongside its own request_id, which is NOT the
-        poll key). A future shape with a different submit body adds an arm
-        that builds its own body.
+      - VideoGrok (xAI), VideoZhipu (CogVideoX), and VideoTogether share the
+        simple {model, prompt} submit body. They differ only in which
+        response field carries the poll handle: Grok returns it as
+        request_id, Zhipu and Together as the top-level id.
+      - VideoQwen (DashScope) nests the prompt under an ``input`` object
+        ({model, input:{prompt}}) and requires the X-DashScope-Async: enable
+        header.
+
+    The body and any per-shape headers are selected by wire shape; the poll
+    handle id is always read from the config-declared dotted path (OQ7).
     """
-    # Submit endpoint from config (absolute when the video host differs from
-    # the chat base); handle id from the config-declared dotted path (OQ7) --
-    # both are A-Box facts, not per-wire-shape code branches.
-    body = {"model": model, "prompt": _join_prompt_text(parts)}
+    # Submit endpoint from the config-declared base + relative path (Option D);
+    # handle id from the config-declared dotted path (OQ7).
+    post_headers = headers
+    if vg_cfg.wire_shape == "VideoQwen":
+        body: dict[str, Any] = {
+            "model": model,
+            "input": {"prompt": _join_prompt_text(parts)},
+        }
+        # DashScope's async submit requires this header; set per-request only so
+        # it never leaks into the shared auth-header map.
+        post_headers = {**headers, "X-DashScope-Async": "enable"}
+    else:
+        body = {"model": model, "prompt": _join_prompt_text(parts)}
     json_body = json.dumps(body).encode("utf-8")
     resp_body = do_post(
         base_url + vg_cfg.gen_endpoint,
         json_body,
-        {**headers, "content-type": "application/json"},
+        {**post_headers, "content-type": "application/json"},
     )
     try:
         raw = json.loads(resp_body)
@@ -327,6 +340,8 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
     "video_result": [{"url"}]}.
     VideoTogether: {"status": "completed"|"failed"|"cancelled"|"queued"|
     "in_progress", "outputs": {"video_url"}}.
+    VideoQwen: {"output": {"task_status": "SUCCEEDED"|"FAILED"|"CANCELED"|
+    "PENDING"|"RUNNING"|"UNKNOWN", "video_url"}}.
     """
     try:
         raw = json.loads(body)
@@ -334,6 +349,16 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         raise APIError(
             message=f"unmarshal video poll response: {exc}", status_code=0
         ) from exc
+
+    if vg_cfg.wire_shape == "VideoQwen":
+        output = raw.get("output") if isinstance(raw, dict) else None
+        status = output.get("task_status") if isinstance(output, dict) else None
+        if status == "SUCCEEDED":
+            return _video_result_from_qwen(vg_cfg, raw), True
+        if status in ("FAILED", "CANCELED"):
+            raise APIError(message=f"video generation {status}", status_code=0)
+        # PENDING, RUNNING, UNKNOWN (or any non-terminal status)
+        return VideoResponse(), False
 
     if vg_cfg.wire_shape == "VideoTogether":
         status = raw.get("status") if isinstance(raw, dict) else None
@@ -422,6 +447,23 @@ def _video_result_from_together(
     if not isinstance(outputs, dict):
         return VideoResponse()
     url = outputs.get("video_url")
+    return VideoResponse(
+        videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
+    )
+
+
+def _video_result_from_qwen(
+    vg_cfg: VideoGenDef, raw: dict[str, Any]
+) -> VideoResponse:
+    """Extract the finished video from a DashScope (Qwen) poll response. Qwen
+    uses url delivery: the finished video sits at output.video_url, so
+    VideoData.url carries the temporary DashScope-hosted URL and bytes stays
+    empty."""
+    mime = _video_fallback_mime(vg_cfg)
+    output = raw.get("output") if isinstance(raw, dict) else None
+    if not isinstance(output, dict):
+        return VideoResponse()
+    url = output.get("video_url")
     return VideoResponse(
         videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
     )
