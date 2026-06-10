@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import llmkit
-from llmkit import anthropic, google, grok, openai, together, zhipu
+from llmkit import anthropic, google, grok, openai, qwen, together, zhipu
 from llmkit.types import SafetySetting
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
@@ -93,6 +93,7 @@ class _CaptureServer:
 _CANNED_RESP = {
     "id": "msgbatch_test",
     "request_id": "vid_test",  # VID-007: Grok video-submit handle id
+    "output": {"task_id": "vid_test", "task_status": "PENDING"},  # VideoQwen: output.task_id submit handle
     "candidates": [
         {
             "content": {
@@ -446,3 +447,19 @@ def test_video_together_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("video-together", server.last_body)
+
+
+def test_video_qwen_matches_shared_golden() -> None:
+    # Qwen (DashScope) video-submit body is the NESTED {model, input:{prompt}}
+    # shape — the first divergent submit body. Also asserts the load-bearing
+    # X-DashScope-Async: enable header in-driver (mirrors the Anthropic
+    # beta-header assert).
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = qwen("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.video.model(wi.WIRE_VIDEO_QWEN_MODEL).submit(wi.WIRE_VIDEO_QWEN_PROMPT)
+        )
+        assert server.last_body is not None
+        assert server.last_headers.get("x-dashscope-async") == "enable"
+        _assert_wire_golden("video-qwen", server.last_body)
