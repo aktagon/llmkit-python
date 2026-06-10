@@ -19,7 +19,7 @@ class VideoModelDef:
 
 @dataclass(frozen=True)
 class VideoGenDef:
-    # wire_shape is VideoGrok | VideoZhipu | VideoTogether.
+    # wire_shape is VideoGrok | VideoZhipu | VideoTogether | VideoQwen.
     wire_shape: str
     # output_delivery is DeliveryDownload | DeliveryURL | DeliveryOutputURI.
     output_delivery: str
@@ -52,6 +52,25 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=15,
                 output_mime="video/mp4",
                 resolutions=("480p", "720p"),
+            ),
+        ),
+    ),
+    ProviderName.QWEN: VideoGenDef(
+        wire_shape="VideoQwen",
+        output_delivery="DeliveryURL",
+        video_base_url="https://dashscope-intl.aliyuncs.com",
+        gen_endpoint="/api/v1/services/aigc/video-generation/video-synthesis",
+        poll_endpoint="/api/v1/tasks/{id}",
+        submit_handle_field="output.task_id",
+        requires_output_uri=False,
+        models=(
+            VideoModelDef(
+                model_id="wan2.2-t2v-plus",
+                label="Wan 2.2 T2V Plus",
+                supports_image_to_video=True,
+                max_duration_seconds=5,
+                output_mime="video/mp4",
+                resolutions=("720p",),
             ),
         ),
     ),
