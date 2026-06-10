@@ -457,6 +457,112 @@ def test_video_wait_failed_qwen_raises() -> None:
             asyncio.run(h.wait(**_FAST))
 
 
+MINIMAX_VIDEO_MODEL = "MiniMax-Hailuo-2.3"
+
+
+class _MinimaxVideoServer:
+    """Serves the MiniMax two-hop flow: submit -> {task_id}; query poll returns
+    ``status: Processing`` for the first ``pending_polls`` GET calls, then
+    ``{status: Success, file_id}``; the file-retrieve hop returns the download
+    URL. file_id is served as a JSON number (minimax encodes it as an integer).
+    When ``fail`` is set the poll returns ``status: Fail``."""
+
+    def __init__(self, pending_polls: int, download_url: str, fail: bool = False) -> None:
+        self.pending_polls = pending_polls
+        self.download_url = download_url
+        self.fail = fail
+        self.polls = 0
+        self.submit_body: dict[str, Any] | None = None
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a, **_k):
+                pass
+
+            def _send(self, body: dict[str, Any]) -> None:
+                payload = json.dumps(body).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def do_POST(self):
+                path = urlparse(self.path).path
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                outer.submit_body = json.loads(raw.decode("utf-8"))
+                if path.endswith("/v1/video_generation"):
+                    return self._send(
+                        {"task_id": "mmtask-1", "base_resp": {"status_code": 0}}
+                    )
+                self.send_response(404)
+                self.end_headers()
+
+            def do_GET(self):
+                path = urlparse(self.path).path
+                if "/v1/query/video_generation" in path:
+                    if outer.fail:
+                        return self._send({"status": "Fail"})
+                    outer.polls += 1
+                    if outer.polls <= outer.pending_polls:
+                        return self._send({"status": "Processing"})
+                    return self._send({"status": "Success", "file_id": 99887766})
+                if "/v1/files/retrieve" in path:
+                    return self._send({"file": {"download_url": outer.download_url}})
+                self.send_response(404)
+                self.end_headers()
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+
+    def __enter__(self) -> "_MinimaxVideoServer":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join(timeout=2)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_port}"
+
+
+def test_video_submit_and_wait_minimax_two_hop() -> None:
+    with _MinimaxVideoServer(
+        pending_polls=2, download_url="https://files.minimax.io/abc/v.mp4"
+    ) as server:
+        c = new_client("minimax", "test-token")
+        c.provider.base_url = server.url  # override wins (Option D)
+        h = asyncio.run(
+            c.video.model(MINIMAX_VIDEO_MODEL).submit("a drone shot over the alps")
+        )
+        assert isinstance(h, VideoHandle)
+        assert h.id == "mmtask-1"
+
+        resp = asyncio.run(h.wait(**_FAST))
+
+    assert server.submit_body == {
+        "model": MINIMAX_VIDEO_MODEL,
+        "prompt": "a drone shot over the alps",
+    }
+    assert len(resp.videos) == 1
+    # The URL came from the second (file-retrieve) hop, not the poll body.
+    assert resp.videos[0].url == "https://files.minimax.io/abc/v.mp4"
+    assert resp.videos[0].bytes == b""  # url delivery must not download bytes
+
+
+def test_video_wait_failed_minimax_raises() -> None:
+    with _MinimaxVideoServer(pending_polls=0, download_url="", fail=True) as server:
+        c = new_client("minimax", "test-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(c.video.model(MINIMAX_VIDEO_MODEL).submit("blocked prompt"))
+        with pytest.raises(APIError):
+            asyncio.run(h.wait(**_FAST))
+
+
 def test_video_text_chain_method() -> None:
     done = _done_body("https://vidgen.x.ai/t.mp4")
     with _GrokVideoServer(pending_polls=0, done_body=done) as server:
