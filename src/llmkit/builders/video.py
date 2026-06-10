@@ -208,16 +208,29 @@ def _dispatch_video_submit(
 
 
 
+
+
+
+
 """
     #
     #
-    #
-    body = {"model": model, "prompt": _join_prompt_text(parts)}
+    post_headers = headers
+    if vg_cfg.wire_shape == "VideoQwen":
+        body: dict[str, Any] = {
+            "model": model,
+            "input": {"prompt": _join_prompt_text(parts)},
+        }
+        #
+        #
+        post_headers = {**headers, "X-DashScope-Async": "enable"}
+    else:
+        body = {"model": model, "prompt": _join_prompt_text(parts)}
     json_body = json.dumps(body).encode("utf-8")
     resp_body = do_post(
         base_url + vg_cfg.gen_endpoint,
         json_body,
-        {**headers, "content-type": "application/json"},
+        {**post_headers, "content-type": "application/json"},
     )
     try:
         raw = json.loads(resp_body)
@@ -327,6 +340,8 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
 
 
 
+
+
 """
     try:
         raw = json.loads(body)
@@ -334,6 +349,16 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         raise APIError(
             message=f"unmarshal video poll response: {exc}", status_code=0
         ) from exc
+
+    if vg_cfg.wire_shape == "VideoQwen":
+        output = raw.get("output") if isinstance(raw, dict) else None
+        status = output.get("task_status") if isinstance(output, dict) else None
+        if status == "SUCCEEDED":
+            return _video_result_from_qwen(vg_cfg, raw), True
+        if status in ("FAILED", "CANCELED"):
+            raise APIError(message=f"video generation {status}", status_code=0)
+        #
+        return VideoResponse(), False
 
     if vg_cfg.wire_shape == "VideoTogether":
         status = raw.get("status") if isinstance(raw, dict) else None
@@ -422,6 +447,23 @@ def _video_result_from_together(
     if not isinstance(outputs, dict):
         return VideoResponse()
     url = outputs.get("video_url")
+    return VideoResponse(
+        videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
+    )
+
+
+def _video_result_from_qwen(
+    vg_cfg: VideoGenDef, raw: dict[str, Any]
+) -> VideoResponse:
+    """
+
+
+"""
+    mime = _video_fallback_mime(vg_cfg)
+    output = raw.get("output") if isinstance(raw, dict) else None
+    if not isinstance(output, dict):
+        return VideoResponse()
+    url = output.get("video_url")
     return VideoResponse(
         videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
     )
