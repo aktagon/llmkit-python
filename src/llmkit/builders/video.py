@@ -288,6 +288,11 @@ def _wait_video(
         resp_body = do_get(poll_url, headers)
         resp, done = _parse_video_poll(vg_cfg, resp_body)
         if done:
+            # Two-hop providers (vg_cfg.file_endpoint set, e.g. minimax): the
+            # terminal poll carried a file reference, not a video URL — resolve
+            # it with one more GET before returning.
+            if vg_cfg.file_endpoint:
+                resp = _resolve_video_file(base, vg_cfg, resp_body, headers)
             if raw:
                 try:
                     resp.raw = json.loads(resp_body)
@@ -378,6 +383,18 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         # PROCESSING (or any non-terminal status)
         return VideoResponse(), False
 
+    if vg_cfg.wire_shape == "VideoMinimax":
+        # Two-hop: terminal-success yields a file_id, not a URL. Report done
+        # with an empty result; _wait_video performs the file-retrieve hop
+        # (gated on vg_cfg.file_endpoint) and fills the URL.
+        status = raw.get("status") if isinstance(raw, dict) else None
+        if status == "Success":
+            return VideoResponse(), True
+        if status == "Fail":
+            raise APIError(message="video generation failed", status_code=0)
+        # Queueing, Preparing, Processing (or any non-terminal status)
+        return VideoResponse(), False
+
     if vg_cfg.wire_shape == "VideoGrok":
         status = raw.get("status") if isinstance(raw, dict) else None
         if status == "done":
@@ -464,6 +481,63 @@ def _video_result_from_qwen(
     if not isinstance(output, dict):
         return VideoResponse()
     url = output.get("video_url")
+    return VideoResponse(
+        videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
+    )
+
+
+def _resolve_video_file(
+    base: str, vg_cfg: VideoGenDef, poll_body: bytes, headers: dict[str, str]
+) -> VideoResponse:
+    """Perform the two-hop file-retrieve step for providers whose terminal poll
+    yields a file reference rather than a finished video URL (vg_cfg.file_endpoint
+    set, e.g. minimax): extract the file id from the terminal poll body, GET the
+    file endpoint (joined to the resolved video base), and extract the finished
+    reference. file-id and result locations are wire-shape-keyed (the transform);
+    the endpoint is config."""
+    try:
+        poll = json.loads(poll_body)
+    except ValueError as exc:
+        raise APIError(
+            message=f"unmarshal video poll for file hop: {exc}", status_code=0
+        ) from exc
+    file_id = _video_file_id(poll.get("file_id") if isinstance(poll, dict) else None)
+    if not file_id:
+        raise APIError(
+            message="video file hop: terminal poll carried no file_id", status_code=0
+        )
+    file_url = base + vg_cfg.file_endpoint.replace("{file_id}", file_id)
+    file_body = do_get(file_url, headers)
+    try:
+        file_raw = json.loads(file_body)
+    except ValueError as exc:
+        raise APIError(
+            message=f"unmarshal video file response: {exc}", status_code=0
+        ) from exc
+    return _video_result_from_minimax_file(vg_cfg, file_raw)
+
+
+def _video_file_id(v: Any) -> str:
+    """Read the minimax terminal poll's file_id, which the API may encode as a
+    string or a (large) integer."""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, int):
+        return str(v)
+    return ""
+
+
+def _video_result_from_minimax_file(
+    vg_cfg: VideoGenDef, raw: dict[str, Any]
+) -> VideoResponse:
+    """Extract the finished video from a minimax file-retrieve response. minimax
+    uses url delivery: the download URL sits at file.download_url, so
+    VideoData.url carries it and bytes stays empty."""
+    mime = _video_fallback_mime(vg_cfg)
+    file_obj = raw.get("file") if isinstance(raw, dict) else None
+    if not isinstance(file_obj, dict):
+        return VideoResponse()
+    url = file_obj.get("download_url")
     return VideoResponse(
         videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
     )
