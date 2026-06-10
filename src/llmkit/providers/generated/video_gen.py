@@ -24,6 +24,8 @@ class VideoGenDef:
     #
     output_delivery: str
     #
+    video_base_url: str = ""
+    #
     gen_endpoint: str = ""
     #
     poll_endpoint: str = ""
@@ -37,6 +39,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
     ProviderName.GROK: VideoGenDef(
         wire_shape="VideoGrok",
         output_delivery="DeliveryURL",
+        video_base_url="",
         gen_endpoint="/v1/videos/generations",
         poll_endpoint="/v1/videos/{id}",
         submit_handle_field="request_id",
@@ -55,6 +58,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
     ProviderName.TOGETHER: VideoGenDef(
         wire_shape="VideoTogether",
         output_delivery="DeliveryURL",
+        video_base_url="",
         gen_endpoint="/v2/videos",
         poll_endpoint="/v2/videos/{id}",
         submit_handle_field="id",
@@ -73,6 +77,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
     ProviderName.ZHIPU: VideoGenDef(
         wire_shape="VideoZhipu",
         output_delivery="DeliveryURL",
+        video_base_url="",
         gen_endpoint="/v4/videos/generations",
         poll_endpoint="/v4/async-result/{id}",
         submit_handle_field="id",
