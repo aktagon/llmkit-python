@@ -23,9 +23,11 @@ class VideoGenDef:
     wire_shape: str
     # output_delivery is DeliveryDownload | DeliveryURL | DeliveryOutputURI.
     output_delivery: str
-    # gen_endpoint is the submit endpoint path (relative or absolute).
+    # video_base_url is the video API base when it differs from the chat base; "" = use chat base.
+    video_base_url: str = ""
+    # gen_endpoint is the submit endpoint path, relative to the resolved video base.
     gen_endpoint: str = ""
-    # poll_endpoint is the poll template with an {id} placeholder.
+    # poll_endpoint is the poll template with an {id}, relative to the resolved video base.
     poll_endpoint: str = ""
     # submit_handle_field is a dotted path to the poll handle id.
     submit_handle_field: str = ""
@@ -37,6 +39,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
     ProviderName.GROK: VideoGenDef(
         wire_shape="VideoGrok",
         output_delivery="DeliveryURL",
+        video_base_url="",
         gen_endpoint="/v1/videos/generations",
         poll_endpoint="/v1/videos/{id}",
         submit_handle_field="request_id",
@@ -55,6 +58,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
     ProviderName.TOGETHER: VideoGenDef(
         wire_shape="VideoTogether",
         output_delivery="DeliveryURL",
+        video_base_url="",
         gen_endpoint="/v2/videos",
         poll_endpoint="/v2/videos/{id}",
         submit_handle_field="id",
@@ -73,6 +77,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
     ProviderName.ZHIPU: VideoGenDef(
         wire_shape="VideoZhipu",
         output_delivery="DeliveryURL",
+        video_base_url="",
         gen_endpoint="/v4/videos/generations",
         poll_endpoint="/v4/async-result/{id}",
         submit_handle_field="id",
