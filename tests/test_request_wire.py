@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import llmkit
-from llmkit import anthropic, google, grok, openai, qwen, together, zhipu
+from llmkit import anthropic, google, grok, minimax, openai, qwen, together, zhipu
 from llmkit.types import SafetySetting
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
@@ -93,6 +93,7 @@ class _CaptureServer:
 _CANNED_RESP = {
     "id": "msgbatch_test",
     "request_id": "vid_test",  # VID-007: Grok video-submit handle id
+    "task_id": "vid_test",  # VideoMinimax: top-level task_id submit handle
     "output": {"task_id": "vid_test", "task_status": "PENDING"},  # VideoQwen: output.task_id submit handle
     "candidates": [
         {
@@ -463,3 +464,19 @@ def test_video_qwen_matches_shared_golden() -> None:
         assert server.last_body is not None
         assert server.last_headers.get("x-dashscope-async") == "enable"
         _assert_wire_golden("video-qwen", server.last_body)
+
+
+def test_video_minimax_matches_shared_golden() -> None:
+    # MiniMax video-submit body is the shared {model, prompt}. The two-hop
+    # result (poll file_id -> file-retrieve download_url) is delivery-side,
+    # covered by the unit tests.
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = minimax("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.video.model(wi.WIRE_VIDEO_MINIMAX_MODEL).submit(
+                wi.WIRE_VIDEO_MINIMAX_PROMPT
+            )
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("video-minimax", server.last_body)
