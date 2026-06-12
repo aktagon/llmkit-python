@@ -16,7 +16,7 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -561,6 +561,164 @@ def test_video_wait_failed_minimax_raises() -> None:
         h = asyncio.run(c.video.model(MINIMAX_VIDEO_MODEL).submit("blocked prompt"))
         with pytest.raises(APIError):
             asyncio.run(h.wait(**_FAST))
+
+
+VEO_VIDEO_MODEL = "veo-3.1-generate-preview"
+
+
+class _VeoVideoServer:
+    """Serves the Google Veo LRO flow: submit ->
+    {name:"models/.../operations/op-1"}; operation poll returns {done:false}
+    for the first ``pending_polls`` GET calls, then a done op whose response
+    carries the Files-API video.uri (download delivery). The download hop GETs
+    that uri and returns raw mp4 bytes. Every hop must carry the ?key= query-
+    param auth (Google is the first video provider that is NOT bearer-header).
+    The download uri is served with a pre-existing ?alt=media query so the test
+    also witnesses the ?->& auth-append branch. When ``fail`` is set the done op
+    carries an error."""
+
+    def __init__(self, pending_polls: int, video_bytes: bytes, fail: bool = False) -> None:
+        self.pending_polls = pending_polls
+        self.video_bytes = video_bytes
+        self.fail = fail
+        self.polls = 0
+        self.submit_body: dict[str, Any] | None = None
+        self.seen_keys: list[str] = []
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a, **_k):
+                pass
+
+            def _send_json(self, body: dict[str, Any]) -> None:
+                payload = json.dumps(body).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def _record_key(self) -> dict[str, str]:
+                parsed = urlparse(self.path)
+                query = parse_qs(parsed.query)
+                outer.seen_keys.append(query.get("key", [""])[0])
+                return query
+
+            def do_POST(self):
+                self._record_key()
+                path = urlparse(self.path).path
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                outer.submit_body = json.loads(raw.decode("utf-8"))
+                if path.endswith(":predictLongRunning"):
+                    return self._send_json(
+                        {"name": "models/veo-3.1-generate-preview/operations/op-1"}
+                    )
+                self.send_response(404)
+                self.end_headers()
+
+            def do_GET(self):
+                query = self._record_key()
+                path = urlparse(self.path).path
+                if path.endswith("/operations/op-1"):
+                    if outer.fail:
+                        return self._send_json(
+                            {
+                                "done": True,
+                                "error": {
+                                    "code": 3,
+                                    "message": "prompt blocked by safety filter",
+                                },
+                            }
+                        )
+                    outer.polls += 1
+                    if outer.polls <= outer.pending_polls:
+                        return self._send_json({"done": False})
+                    return self._send_json(
+                        {
+                            "done": True,
+                            "response": {
+                                "generateVideoResponse": {
+                                    "generatedSamples": [
+                                        {
+                                            "video": {
+                                                "uri": outer.url
+                                                + "/v1beta/files/vid-file:download?alt=media"
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                        }
+                    )
+                if path.endswith("/files/vid-file:download"):
+                    if query.get("alt", [""])[0] != "media":
+                        self.send_response(400)
+                        self.end_headers()
+                        return
+                    self.send_response(200)
+                    self.send_header("Content-Type", "video/mp4")
+                    self.send_header("Content-Length", str(len(outer.video_bytes)))
+                    self.end_headers()
+                    self.wfile.write(outer.video_bytes)
+                    return
+                self.send_response(404)
+                self.end_headers()
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+
+    def __enter__(self) -> "_VeoVideoServer":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join(timeout=2)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_port}"
+
+
+def test_video_submit_and_wait_veo_download_delivery() -> None:
+    want_bytes = b"\x00\x00\x00\x18ftypmp42 fake mp4 payload"
+    with _VeoVideoServer(pending_polls=2, video_bytes=want_bytes) as server:
+        c = new_client("google", "test-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(
+            c.video.model(VEO_VIDEO_MODEL).submit(
+                "a drone shot over the alps at sunrise"
+            )
+        )
+        assert isinstance(h, VideoHandle)
+        assert h.id == "models/veo-3.1-generate-preview/operations/op-1"
+
+        resp = asyncio.run(h.wait(**_FAST))
+
+    # Veo submit body has instances[0].prompt and NO model field.
+    assert server.submit_body == {
+        "instances": [{"prompt": "a drone shot over the alps at sunrise"}]
+    }
+    assert len(resp.videos) == 1
+    # Download delivery filled bytes and cleared url (source-XOR, VID-004).
+    assert resp.videos[0].bytes == want_bytes
+    assert resp.videos[0].url == ""
+    assert resp.videos[0].mime_type == "video/mp4"
+    # ?key=test-token on submit, every poll, and the download hop.
+    assert server.seen_keys
+    assert all(k == "test-token" for k in server.seen_keys)
+
+
+def test_video_wait_failed_veo_raises() -> None:
+    with _VeoVideoServer(pending_polls=0, video_bytes=b"", fail=True) as server:
+        c = new_client("google", "test-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(c.video.model(VEO_VIDEO_MODEL).submit("blocked prompt"))
+        with pytest.raises(APIError) as exc_info:
+            asyncio.run(h.wait(**_FAST))
+        assert "prompt blocked by safety filter" in str(exc_info.value)
 
 
 def test_video_text_chain_method() -> None:
