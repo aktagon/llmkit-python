@@ -38,6 +38,26 @@ class VideoGenDef:
 
 
 _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
+    ProviderName.BEDROCK: VideoGenDef(
+        wire_shape="VideoBedrock",
+        output_delivery="DeliveryOutputURI",
+        video_base_url="",
+        gen_endpoint="/async-invoke",
+        poll_endpoint="/async-invoke/{id}",
+        file_endpoint="",
+        submit_handle_field="invocationArn",
+        requires_output_uri=True,
+        models=(
+            VideoModelDef(
+                model_id="amazon.nova-reel-v1:0",
+                label="Nova Reel",
+                supports_image_to_video=True,
+                max_duration_seconds=6,
+                output_mime="video/mp4",
+                resolutions=("720p",),
+            ),
+        ),
+    ),
     ProviderName.GOOGLE: VideoGenDef(
         wire_shape="VideoVeo",
         output_delivery="DeliveryDownload",

@@ -16,8 +16,17 @@ def sign_sigv4(
     session_token: str,
     region: str,
     service: str,
+    method: str = "POST",
 ) -> dict[str, str]:
-    """"""
+    """
+
+
+
+
+
+
+
+"""
     now = _dt.datetime.now(_dt.timezone.utc)
     datestamp = now.strftime("%Y%m%d")
     amzdate = now.strftime("%Y%m%dT%H%M%SZ")
@@ -26,6 +35,8 @@ def sign_sigv4(
     host = parsed.hostname or ""
     if parsed.port:
         host = f"{host}:{parsed.port}"
+    #
+    #
     path = parsed.path or "/"
 
     payload_hash = _sha256_hex(body)
@@ -43,7 +54,7 @@ def sign_sigv4(
 
     canonical_request = "\n".join(
         [
-            "POST",
+            method,
             path,
             _canonical_query_string(parsed.query),
             canonical_headers,
