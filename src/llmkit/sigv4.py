@@ -16,8 +16,17 @@ def sign_sigv4(
     session_token: str,
     region: str,
     service: str,
+    method: str = "POST",
 ) -> dict[str, str]:
-    """Return the SigV4 headers for a POST request, matching Go sigv4.go output."""
+    """Return the SigV4 headers for a request, matching Go sigv4.go output.
+
+    ``method`` defaults to POST (the chat path); the Bedrock video poll signs a
+    GET with an empty body. The canonical path is the ESCAPED path (what goes on
+    the wire) — mirroring go canonicalURI — so a percent-encoded path segment
+    (e.g. the GetAsyncInvoke ARN encoded as one segment) canonicalizes to the
+    same bytes the server receives. A no-op for the chat Converse path: its model
+    id's ':' is not escaped, so the escaped path equals the decoded path there.
+    """
     now = _dt.datetime.now(_dt.timezone.utc)
     datestamp = now.strftime("%Y%m%d")
     amzdate = now.strftime("%Y%m%dT%H%M%SZ")
@@ -26,6 +35,8 @@ def sign_sigv4(
     host = parsed.hostname or ""
     if parsed.port:
         host = f"{host}:{parsed.port}"
+    # urlsplit/urlparse leaves percent-encoding intact in .path, so .path is the
+    # escaped (wire) path — exactly what AWS canonicalizes.
     path = parsed.path or "/"
 
     payload_hash = _sha256_hex(body)
@@ -43,7 +54,7 @@ def sign_sigv4(
 
     canonical_request = "\n".join(
         [
-            "POST",
+            method,
             path,
             _canonical_query_string(parsed.query),
             canonical_headers,

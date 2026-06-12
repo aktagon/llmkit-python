@@ -352,6 +352,7 @@ class Video:
         self.client = client
         self._middleware: list[MiddlewareFn] = []
         self._model: str = ""
+        self._output_uri: str = ""
         self._raw: bool = False
         self._parts: list[Part] = []
 
@@ -363,6 +364,11 @@ class Video:
     def model(self, name: str) -> "Video":
         out = copy.copy(self)
         out._model = name
+        return out
+
+    def output_uri(self, uri: str) -> "Video":
+        out = copy.copy(self)
+        out._output_uri = uri
         return out
 
     def raw(self) -> "Video":
