@@ -16,7 +16,7 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 import pytest
 
@@ -719,6 +719,189 @@ def test_video_wait_failed_veo_raises() -> None:
         with pytest.raises(APIError) as exc_info:
             asyncio.run(h.wait(**_FAST))
         assert "prompt blocked by safety filter" in str(exc_info.value)
+
+
+NOVA_REEL_MODEL = "amazon.nova-reel-v1:0"
+NOVA_REEL_ARN = "arn:aws:bedrock:us-east-1:123456789012:async-invoke/abc123def456"
+NOVA_REEL_OUTPUT_URI = "s3://my-bucket/out/"
+
+
+class _BedrockVideoServer:
+    """Serves the Nova Reel start-async-invoke + get-async-invoke endpoints.
+    Bedrock is the FIRST SigV4-signed video provider (every other is a bearer
+    header) and the FIRST output-uri delivery (the provider writes the mp4 to
+    the caller's S3 bucket; the SDK never downloads). Submit returns the poll
+    handle as the top-level ``invocationArn``; the poll returns
+    ``status: InProgress`` for the first ``pending_polls`` GET calls, then the
+    supplied done body. When ``fail_msg`` is non-empty the poll returns a Failed
+    status carrying it. Captures the submit body, the Authorization header, and
+    the round-tripped poll path."""
+
+    def __init__(
+        self,
+        pending_polls: int,
+        done_body: dict[str, Any],
+        fail_msg: str = "",
+    ) -> None:
+        self.pending_polls = pending_polls
+        self.done_body = done_body
+        self.fail_msg = fail_msg
+        self.polls = 0
+        self.submit_body: dict[str, Any] | None = None
+        self.submit_auth: str | None = None
+        self.poll_auth: str | None = None
+        self.poll_path: str | None = None
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a, **_k):
+                pass
+
+            def _send(self, body: dict[str, Any]) -> None:
+                payload = json.dumps(body).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def do_POST(self):
+                path = urlparse(self.path).path
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                outer.submit_body = json.loads(raw.decode("utf-8"))
+                outer.submit_auth = self.headers.get("Authorization")
+                if path.endswith("/async-invoke"):
+                    return self._send({"invocationArn": NOVA_REEL_ARN})
+                self.send_response(404)
+                self.end_headers()
+
+            def do_GET(self):
+                # The ARN is percent-encoded as one path segment on the wire; the
+                # server's decoded Path restores the ':' and '/'. Witness that the
+                # full ARN round-trips so the encoding is not lossy.
+                outer.poll_path = urlparse(self.path).path
+                outer.poll_auth = self.headers.get("Authorization")
+                if "/async-invoke/" in outer.poll_path:
+                    if outer.fail_msg:
+                        return self._send(
+                            {"status": "Failed", "failureMessage": outer.fail_msg}
+                        )
+                    outer.polls += 1
+                    if outer.polls <= outer.pending_polls:
+                        return self._send({"status": "InProgress"})
+                    return self._send(outer.done_body)
+                self.send_response(404)
+                self.end_headers()
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+
+    def __enter__(self) -> "_BedrockVideoServer":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join(timeout=2)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_port}"
+
+
+def test_video_submit_and_wait_bedrock_output_uri() -> None:
+    done = {
+        "status": "Completed",
+        "outputDataConfig": {
+            "s3OutputDataConfig": {"s3Uri": NOVA_REEL_OUTPUT_URI},
+        },
+    }
+    with _BedrockVideoServer(pending_polls=2, done_body=done) as server:
+        c = new_client("bedrock", "test-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(
+            c.video.model(NOVA_REEL_MODEL)
+            .output_uri(NOVA_REEL_OUTPUT_URI)
+            .submit("a drone shot over the alps, 6s")
+        )
+        assert isinstance(h, VideoHandle)
+        assert h.id == NOVA_REEL_ARN  # the invocationArn
+
+        resp = asyncio.run(h.wait(**_FAST))
+
+    # SigV4 auth, not bearer, on both the submit and the poll.
+    assert server.submit_auth is not None
+    assert server.submit_auth.startswith("AWS4-HMAC-SHA256")
+    assert server.poll_auth is not None
+    assert server.poll_auth.startswith("AWS4-HMAC-SHA256")
+    # The full ARN round-trips in the poll path: the ':' is signed literally and
+    # the '/' is percent-encoded as one path segment (%2F), so unquoting the wire
+    # path restores the exact ARN (Go's r.URL.Path auto-decodes; Python's
+    # BaseHTTPRequestHandler leaves %2F raw, so unquote here).
+    assert server.poll_path is not None
+    assert NOVA_REEL_ARN in unquote(server.poll_path)
+    # Nova Reel carries the model in the body, prompt under modelInput, and the
+    # caller S3 URI under outputDataConfig.
+    assert server.submit_body == {
+        "modelId": NOVA_REEL_MODEL,
+        "modelInput": {
+            "taskType": "TEXT_VIDEO",
+            "textToVideoParams": {"text": "a drone shot over the alps, 6s"},
+        },
+        "outputDataConfig": {"s3OutputDataConfig": {"s3Uri": NOVA_REEL_OUTPUT_URI}},
+    }
+    assert len(resp.videos) == 1
+    # Output-uri delivery: the caller S3 URI in url, no bytes (the provider wrote
+    # to the caller's bucket; the SDK never downloads).
+    assert resp.videos[0].url == NOVA_REEL_OUTPUT_URI
+    assert resp.videos[0].bytes == b""
+    assert resp.videos[0].mime_type == "video/mp4"
+
+
+def test_video_bedrock_requires_output_uri() -> None:
+    # VID-005: an output-uri provider must reject a submit that omits the caller
+    # S3 URI before any HTTP call. No server: validation fails pre-flight.
+    c = new_client("bedrock", "test-token")
+    c.provider.base_url = "http://unused"
+    with pytest.raises(ValidationError) as exc_info:
+        asyncio.run(c.video.model(NOVA_REEL_MODEL).submit("a drone shot over the alps"))
+    assert exc_info.value.field == "output_uri"
+
+
+def test_video_wait_failed_bedrock_raises() -> None:
+    with _BedrockVideoServer(
+        pending_polls=0,
+        done_body={},
+        fail_msg="S3 bucket not writable by the service role",
+    ) as server:
+        c = new_client("bedrock", "test-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(
+            c.video.model(NOVA_REEL_MODEL)
+            .output_uri(NOVA_REEL_OUTPUT_URI)
+            .submit("a drone shot over the alps")
+        )
+        with pytest.raises(APIError) as exc_info:
+            asyncio.run(h.wait(**_FAST))
+    assert "S3 bucket not writable by the service role" in exc_info.value.message
+
+
+def test_video_bedrock_completed_no_uri_raises() -> None:
+    # A Completed invocation that echoes no output s3 uri must error, not return
+    # a silent empty success (mirrors the Veo done+no-uri guard).
+    with _BedrockVideoServer(pending_polls=0, done_body={"status": "Completed"}) as server:
+        c = new_client("bedrock", "test-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(
+            c.video.model(NOVA_REEL_MODEL)
+            .output_uri(NOVA_REEL_OUTPUT_URI)
+            .submit("a drone shot")
+        )
+        with pytest.raises(APIError) as exc_info:
+            asyncio.run(h.wait(**_FAST))
+    assert "no output s3 uri" in exc_info.value.message
 
 
 def test_video_text_chain_method() -> None:
