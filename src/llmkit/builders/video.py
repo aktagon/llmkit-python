@@ -25,6 +25,7 @@ from ..image import Part, _image_auth_headers
 from ..middleware import fire_post, fire_pre
 from ..providers.generated.middleware import Event, MiddlewareFn, MiddlewareOp
 from ..providers.generated.providers import PROVIDERS, ProviderName
+from ..providers.generated.request import AuthScheme, auth_scheme
 from ..providers.generated.video_gen import (
     VideoGenDef,
     VideoModelDef,
@@ -173,7 +174,7 @@ def _submit_video(
         headers = _image_auth_headers(provider, cfg, pname)
         base_url = _video_base_url(provider, cfg, vg_cfg)
         request_id = _dispatch_video_submit(
-            cfg, vg_cfg, request.model, parts, base_url, headers
+            provider, pname, cfg, vg_cfg, request.model, parts, base_url, headers
         )
     except Exception as exc:
         fire_post(
@@ -192,6 +193,8 @@ def _submit_video(
 
 
 def _dispatch_video_submit(
+    provider: Provider,
+    pname: ProviderName,
     cfg: Any,
     vg_cfg: VideoGenDef,
     model: str,
@@ -224,11 +227,23 @@ def _dispatch_video_submit(
         # DashScope's async submit requires this header; set per-request only so
         # it never leaks into the shared auth-header map.
         post_headers = {**headers, "X-DashScope-Async": "enable"}
+    elif vg_cfg.wire_shape == "VideoVeo":
+        # Veo carries the model in the submit PATH (:predictLongRunning), not the
+        # body — so the body has no model field. The prompt nests under
+        # instances[]; the optional parameters object is omitted on the
+        # prompt-only hot path.
+        body = {"instances": [{"prompt": _join_prompt_text(parts)}]}
     else:
         body = {"model": model, "prompt": _join_prompt_text(parts)}
     json_body = json.dumps(body).encode("utf-8")
+    # {model} in the submit endpoint is substituted with the per-call model
+    # (Veo's :predictLongRunning path); a no-op for providers that carry the
+    # model in the body. Query-param auth (Google ?key=) is appended last.
+    submit_url = _append_video_auth(
+        base_url + vg_cfg.gen_endpoint.replace("{model}", model), provider, pname, cfg
+    )
     resp_body = do_post(
-        base_url + vg_cfg.gen_endpoint,
+        submit_url,
         json_body,
         {**post_headers, "content-type": "application/json"},
     )
@@ -272,7 +287,9 @@ def _wait_video(
 
     base = _video_base_url(p, cfg, vg_cfg)
     headers = _image_auth_headers(p, cfg, pname)
-    poll_url = _video_poll_url(vg_cfg.poll_endpoint, base, handle.id)
+    poll_url = _append_video_auth(
+        _video_poll_url(vg_cfg.poll_endpoint, base, handle.id), p, pname, cfg
+    )
 
     # ADR-014 cross-process resume: a handle that remembers raw takes effect
     # at wait time even if the raw kwarg was not passed.
@@ -293,6 +310,12 @@ def _wait_video(
             # it with one more GET before returning.
             if vg_cfg.file_endpoint:
                 resp = _resolve_video_file(base, vg_cfg, resp_body, headers)
+            # Delivery dispatch (VID-005). Download-delivery providers (Veo)
+            # returned a temporary fetch URI in VideoData.url; GET it and fill
+            # VideoData.bytes (clearing url, per the source-XOR contract). Url-
+            # and output-uri-delivery providers leave the url.
+            if vg_cfg.output_delivery == "DeliveryDownload":
+                resp = _download_video_bytes(p, pname, cfg, resp, headers)
             if raw:
                 try:
                     resp.raw = json.loads(resp_body)
@@ -394,6 +417,32 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
             raise APIError(message="video generation failed", status_code=0)
         # Queueing, Preparing, Processing (or any non-terminal status)
         return VideoResponse(), False
+
+    if vg_cfg.wire_shape == "VideoVeo":
+        # Operation-based LRO: poll until done=True (the long-running-operation
+        # done flag, not a status string). A done op carrying an error object is
+        # a terminal failure; otherwise the response holds the finished video.
+        done = raw.get("done") if isinstance(raw, dict) else None
+        if done is not True:
+            return VideoResponse(), False
+        err_obj = raw.get("error") if isinstance(raw, dict) else None
+        if isinstance(err_obj, dict):
+            msg = err_obj.get("message")
+            if not isinstance(msg, str) or not msg:
+                msg = "operation failed"
+            raise APIError(
+                message=f"video generation failed: {msg}", status_code=0
+            )
+        # A done op with neither error nor a usable uri must surface as an error,
+        # not a silent zero-byte success: download delivery would otherwise GET
+        # nothing and return a VideoData with empty bytes and empty url.
+        result = _video_result_from_veo(vg_cfg, raw)
+        if not result.videos or not result.videos[0].url:
+            raise APIError(
+                message="video generation: operation done but carried no video uri",
+                status_code=0,
+            )
+        return result, True
 
     if vg_cfg.wire_shape == "VideoGrok":
         status = raw.get("status") if isinstance(raw, dict) else None
@@ -541,6 +590,65 @@ def _video_result_from_minimax_file(
     return VideoResponse(
         videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
     )
+
+
+def _video_result_from_veo(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoResponse:
+    """Extract the finished video reference from a Veo LRO poll response. Veo
+    uses download delivery: the response carries a temporary Files-API download
+    URI at response.generateVideoResponse.generatedSamples[0].video.uri. This
+    places it in VideoData.url; the _wait_video download step
+    (output_delivery=DeliveryDownload) then fetches the bytes into
+    VideoData.bytes and clears url."""
+    mime = _video_fallback_mime(vg_cfg)
+    response = raw.get("response") if isinstance(raw, dict) else None
+    gvr = response.get("generateVideoResponse") if isinstance(response, dict) else None
+    samples = gvr.get("generatedSamples") if isinstance(gvr, dict) else None
+    if not isinstance(samples, list) or not samples:
+        return VideoResponse()
+    first = samples[0]
+    if not isinstance(first, dict):
+        return VideoResponse()
+    video = first.get("video")
+    uri = video.get("uri") if isinstance(video, dict) else None
+    return VideoResponse(
+        videos=[VideoData(mime_type=mime, url=uri if isinstance(uri, str) else "")]
+    )
+
+
+def _append_video_auth(
+    url: str, provider: Provider, pname: ProviderName, cfg: Any
+) -> str:
+    """Append the provider's query-param API key to a video URL when the
+    provider authenticates that way (Google ?key=); a no-op for bearer-header
+    providers (every other video provider). Picks ? or & based on whether the
+    URL already carries a query string (the Files-API download URI arrives with
+    ?alt=media)."""
+    if auth_scheme(pname) != AuthScheme.QUERY_PARAM_KEY or not cfg.auth_query_param:
+        return url
+    sep = "&" if "?" in url else "?"
+    return url + sep + cfg.auth_query_param + "=" + provider.api_key
+
+
+def _download_video_bytes(
+    provider: Provider,
+    pname: ProviderName,
+    cfg: Any,
+    resp: VideoResponse,
+    headers: dict[str, str],
+) -> VideoResponse:
+    """Fetch the finished video for download-delivery providers
+    (vg_cfg.output_delivery == DeliveryDownload, e.g. Veo). The poll result
+    placed the temporary fetch URI in VideoData.url; this GETs each one
+    (carrying the provider's query-param auth when applicable) and moves the
+    payload into VideoData.bytes, clearing url so the source-XOR contract holds
+    (VID-004): download delivery returns bytes, never a url."""
+    for video in resp.videos:
+        if not video.url:
+            continue
+        fetch_url = _append_video_auth(video.url, provider, pname, cfg)
+        video.bytes = do_get(fetch_url, headers)
+        video.url = ""
+    return resp
 
 
 def _video_fallback_mime(vg_cfg: VideoGenDef) -> str:

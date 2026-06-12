@@ -19,7 +19,7 @@ class VideoModelDef:
 
 @dataclass(frozen=True)
 class VideoGenDef:
-    # wire_shape is VideoGrok | VideoZhipu | VideoTogether | VideoQwen | VideoMinimax.
+    # wire_shape is VideoGrok | VideoZhipu | VideoTogether | VideoQwen | VideoMinimax | VideoVeo.
     wire_shape: str
     # output_delivery is DeliveryDownload | DeliveryURL | DeliveryOutputURI.
     output_delivery: str
@@ -38,6 +38,26 @@ class VideoGenDef:
 
 
 _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
+    ProviderName.GOOGLE: VideoGenDef(
+        wire_shape="VideoVeo",
+        output_delivery="DeliveryDownload",
+        video_base_url="",
+        gen_endpoint="/v1beta/models/{model}:predictLongRunning",
+        poll_endpoint="/v1beta/{id}",
+        file_endpoint="",
+        submit_handle_field="name",
+        requires_output_uri=False,
+        models=(
+            VideoModelDef(
+                model_id="veo-3.1-generate-preview",
+                label="Veo 3.1",
+                supports_image_to_video=True,
+                max_duration_seconds=8,
+                output_mime="video/mp4",
+                resolutions=("1080p", "720p"),
+            ),
+        ),
+    ),
     ProviderName.GROK: VideoGenDef(
         wire_shape="VideoGrok",
         output_delivery="DeliveryURL",
