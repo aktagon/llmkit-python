@@ -137,6 +137,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_output_u_r_i",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_path",
         sub_options=(
         ),

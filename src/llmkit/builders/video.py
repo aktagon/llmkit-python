@@ -16,11 +16,13 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+import os
 import time
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 from ..errors import APIError, ValidationError
-from ..http import do_get, do_post
+from ..http import do_get, do_post, do_sigv4_get, do_sigv4_post
 from ..image import Part, _image_auth_headers
 from ..middleware import fire_post, fire_pre
 from ..providers.generated.middleware import Event, MiddlewareFn, MiddlewareOp
@@ -64,6 +66,11 @@ class VideoRequest:
     model: str = ""
     prompt: str = ""
     parts: list[Part] = dataclasses.field(default_factory=list)
+    #
+    #
+    #
+    #
+    output_uri: str = ""
 
 
 class VideoHandle(_VideoHandleData):
@@ -97,7 +104,7 @@ async def video_submit(b: "Video", msg: str) -> VideoHandle:
 
     #
     #
-    request = VideoRequest(model=b._model)
+    request = VideoRequest(model=b._model, output_uri=b._output_uri)
     if b._parts:
         if msg:
             request.parts = [*b._parts, Part(text=msg)]
@@ -160,6 +167,14 @@ def _submit_video(
             field="model",
             message=f"{request.model} is not a known video-generation model for {provider.name}",
         )
+    #
+    #
+    #
+    if vg_cfg.requires_output_uri and not request.output_uri:
+        raise ValidationError(
+            field="output_uri",
+            message=f"{provider.name} requires a caller output S3 URI; set output_uri on the request",
+        )
 
     mws = list(middleware)
     base_event = Event(
@@ -174,7 +189,15 @@ def _submit_video(
         headers = _image_auth_headers(provider, cfg, pname)
         base_url = _video_base_url(provider, cfg, vg_cfg)
         request_id = _dispatch_video_submit(
-            provider, pname, cfg, vg_cfg, request.model, parts, base_url, headers
+            provider,
+            pname,
+            cfg,
+            vg_cfg,
+            request.model,
+            request.output_uri,
+            parts,
+            base_url,
+            headers,
         )
     except Exception as exc:
         fire_post(
@@ -198,11 +221,16 @@ def _dispatch_video_submit(
     cfg: Any,
     vg_cfg: VideoGenDef,
     model: str,
+    output_uri: str,
     parts: list[Part],
     base_url: str,
     headers: dict[str, str],
 ) -> str:
     """
+
+
+
+
 
 
 
@@ -233,6 +261,19 @@ def _dispatch_video_submit(
         #
         #
         body = {"instances": [{"prompt": _join_prompt_text(parts)}]}
+    elif vg_cfg.wire_shape == "VideoBedrock":
+        #
+        #
+        #
+        #
+        body = {
+            "modelId": model,
+            "modelInput": {
+                "taskType": "TEXT_VIDEO",
+                "textToVideoParams": {"text": _join_prompt_text(parts)},
+            },
+            "outputDataConfig": {"s3OutputDataConfig": {"s3Uri": output_uri}},
+        }
     else:
         body = {"model": model, "prompt": _join_prompt_text(parts)}
     json_body = json.dumps(body).encode("utf-8")
@@ -242,11 +283,27 @@ def _dispatch_video_submit(
     submit_url = _append_video_auth(
         base_url + vg_cfg.gen_endpoint.replace("{model}", model), provider, pname, cfg
     )
-    resp_body = do_post(
-        submit_url,
-        json_body,
-        {**post_headers, "content-type": "application/json"},
-    )
+    if auth_scheme(pname) == AuthScheme.SIG_V4:
+        #
+        #
+        region = os.environ.get(cfg.region_env_var, "")
+        secret_key = os.environ.get(cfg.secret_key_env_var, "")
+        session_token = os.environ.get(cfg.session_token_env_var, "")
+        resp_body = do_sigv4_post(
+            submit_url,
+            json_body,
+            provider.api_key,
+            secret_key,
+            session_token,
+            region,
+            cfg.service_name,
+        )
+    else:
+        resp_body = do_post(
+            submit_url,
+            json_body,
+            {**post_headers, "content-type": "application/json"},
+        )
     try:
         raw = json.loads(resp_body)
     except ValueError as exc:
@@ -287,9 +344,26 @@ def _wait_video(
 
     base = _video_base_url(p, cfg, vg_cfg)
     headers = _image_auth_headers(p, cfg, pname)
-    poll_url = _append_video_auth(
-        _video_poll_url(vg_cfg.poll_endpoint, base, handle.id), p, pname, cfg
-    )
+
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    sig_v4 = auth_scheme(pname) == AuthScheme.SIG_V4
+    region = secret_key = session_token = ""
+    if sig_v4:
+        poll_url = base + vg_cfg.poll_endpoint.replace("{id}", quote(handle.id, safe=":"))
+        region = os.environ.get(cfg.region_env_var, "")
+        secret_key = os.environ.get(cfg.secret_key_env_var, "")
+        session_token = os.environ.get(cfg.session_token_env_var, "")
+    else:
+        poll_url = _append_video_auth(
+            _video_poll_url(vg_cfg.poll_endpoint, base, handle.id), p, pname, cfg
+        )
 
     #
     #
@@ -302,7 +376,17 @@ def _wait_video(
                 message=f"video poll: timed out after {request_timeout}s waiting for {handle.id}",
                 status_code=0,
             )
-        resp_body = do_get(poll_url, headers)
+        if sig_v4:
+            resp_body = do_sigv4_get(
+                poll_url,
+                p.api_key,
+                secret_key,
+                session_token,
+                region,
+                cfg.service_name,
+            )
+        else:
+            resp_body = do_get(poll_url, headers)
         resp, done = _parse_video_poll(vg_cfg, resp_body)
         if done:
             #
@@ -331,7 +415,15 @@ def _video_base_url(provider: Provider, cfg: Any, vg_cfg: VideoGenDef) -> str:
 
 
 """
-    return provider.base_url or vg_cfg.video_base_url or cfg.base_url
+    if provider.base_url:
+        return provider.base_url
+    base = vg_cfg.video_base_url or cfg.base_url
+    #
+    #
+    #
+    if cfg.region_env_var:
+        base = base.replace("{region}", os.environ.get(cfg.region_env_var, ""))
+    return base
 
 
 def _video_poll_url(poll_endpoint: str, base: str, id: str) -> str:
@@ -443,6 +535,33 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
                 status_code=0,
             )
         return result, True
+
+    if vg_cfg.wire_shape == "VideoBedrock":
+        #
+        #
+        #
+        status = raw.get("status") if isinstance(raw, dict) else None
+        if status == "Completed":
+            #
+            #
+            #
+            #
+            result = _video_result_from_bedrock(vg_cfg, raw)
+            if not result.videos or not result.videos[0].url:
+                raise APIError(
+                    message="video generation: completed but carried no output s3 uri",
+                    status_code=0,
+                )
+            return result, True
+        if status == "Failed":
+            msg = raw.get("failureMessage") if isinstance(raw, dict) else None
+            if not isinstance(msg, str) or not msg:
+                msg = "operation failed"
+            raise APIError(
+                message=f"video generation failed: {msg}", status_code=0
+            )
+        #
+        return VideoResponse(), False
 
     if vg_cfg.wire_shape == "VideoGrok":
         status = raw.get("status") if isinstance(raw, dict) else None
@@ -610,6 +729,25 @@ def _video_result_from_veo(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoRes
         return VideoResponse()
     video = first.get("video")
     uri = video.get("uri") if isinstance(video, dict) else None
+    return VideoResponse(
+        videos=[VideoData(mime_type=mime, url=uri if isinstance(uri, str) else "")]
+    )
+
+
+def _video_result_from_bedrock(
+    vg_cfg: VideoGenDef, raw: dict[str, Any]
+) -> VideoResponse:
+    """
+
+
+
+
+
+"""
+    mime = _video_fallback_mime(vg_cfg)
+    odc = raw.get("outputDataConfig") if isinstance(raw, dict) else None
+    s3 = odc.get("s3OutputDataConfig") if isinstance(odc, dict) else None
+    uri = s3.get("s3Uri") if isinstance(s3, dict) else None
     return VideoResponse(
         videos=[VideoData(mime_type=mime, url=uri if isinstance(uri, str) else "")]
     )
