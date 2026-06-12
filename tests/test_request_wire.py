@@ -94,6 +94,7 @@ _CANNED_RESP = {
     "id": "msgbatch_test",
     "request_id": "vid_test",  # VID-007: Grok video-submit handle id
     "task_id": "vid_test",  # VideoMinimax: top-level task_id submit handle
+    "name": "models/veo-test/operations/op_test",  # VideoVeo: operation-name submit handle
     "output": {"task_id": "vid_test", "task_status": "PENDING"},  # VideoQwen: output.task_id submit handle
     "candidates": [
         {
@@ -480,3 +481,21 @@ def test_video_minimax_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("video-minimax", server.last_body)
+
+
+def test_video_veo_matches_shared_golden() -> None:
+    # Google Veo video-submit body is the nested {instances:[{prompt}]} shape —
+    # the first video-submit body with NO model field, because Veo carries the
+    # model in the submit PATH (/v1beta/models/{model}:predictLongRunning). The
+    # LRO lifecycle and ?key= query-param auth are delivery-side, covered by the
+    # unit tests.
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = google("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.video.model(wi.WIRE_VIDEO_GOOGLE_MODEL).submit(
+                wi.WIRE_VIDEO_GOOGLE_PROMPT
+            )
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("video-google", server.last_body)
