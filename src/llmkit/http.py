@@ -112,6 +112,39 @@ def do_sigv4_post(
         ) from exc
 
 
+def do_sigv4_get(
+    url: str,
+    access_key: str,
+    secret_key: str,
+    session_token: str,
+    region: str,
+    service: str,
+    timeout: float = 600.0,
+) -> bytes:
+    """GET signed with AWS SigV4 (empty body). Raises APIError on 4xx/5xx.
+
+    Used by the Bedrock video poll: the handle ARN is carried as one percent-
+    encoded path segment so its ':' and '/' do not split into extra segments,
+    and the signer canonicalizes the escaped path so the signed path equals the
+    wire path."""
+    from .sigv4 import sign_sigv4
+
+    req = urllib.request.Request(url, method="GET")
+    headers = sign_sigv4(url, b"", access_key, secret_key, session_token, region, service, method="GET")
+    for key, value in headers.items():
+        req.add_header(key, value)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read()
+    except urllib.error.HTTPError as exc:
+        data = exc.read()
+        raise APIError(
+            status_code=exc.code,
+            message=data.decode("utf-8", errors="replace"),
+            retryable=exc.code == 429 or exc.code >= 500,
+        ) from exc
+
+
 def do_multipart_post(
     url: str,
     field_name: str,
