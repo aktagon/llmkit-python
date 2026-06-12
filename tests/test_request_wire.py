@@ -18,7 +18,17 @@ from pathlib import Path
 from typing import Any
 
 import llmkit
-from llmkit import anthropic, google, grok, minimax, openai, qwen, together, zhipu
+from llmkit import (
+    anthropic,
+    bedrock,
+    google,
+    grok,
+    minimax,
+    openai,
+    qwen,
+    together,
+    zhipu,
+)
 from llmkit.types import SafetySetting
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
@@ -95,6 +105,7 @@ _CANNED_RESP = {
     "request_id": "vid_test",  # VID-007: Grok video-submit handle id
     "task_id": "vid_test",  # VideoMinimax: top-level task_id submit handle
     "name": "models/veo-test/operations/op_test",  # VideoVeo: operation-name submit handle
+    "invocationArn": "arn:aws:bedrock:us-east-1:0:async-invoke/vid_test",  # VideoBedrock: invocationArn submit handle
     "output": {"task_id": "vid_test", "task_status": "PENDING"},  # VideoQwen: output.task_id submit handle
     "candidates": [
         {
@@ -499,3 +510,21 @@ def test_video_veo_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("video-google", server.last_body)
+
+
+def test_video_bedrock_matches_shared_golden() -> None:
+    # Bedrock Nova Reel video-submit body is the nested {modelId, modelInput:
+    # {taskType, textToVideoParams:{text}}, outputDataConfig:{s3OutputDataConfig:
+    # {s3Uri}}} shape — the first video-submit body that carries the model in the
+    # body AND a caller output S3 URI, and the first SigV4-signed video submit.
+    # The ARN-signing/poll lifecycle is delivery-side, covered by the unit tests.
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = bedrock("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.video.model(wi.WIRE_VIDEO_BEDROCK_MODEL)
+            .output_uri("s3://llmkit-wire-fixtures/out/")
+            .submit(wi.WIRE_VIDEO_BEDROCK_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("video-bedrock", server.last_body)
