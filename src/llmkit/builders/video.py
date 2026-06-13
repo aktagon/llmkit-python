@@ -14,6 +14,7 @@ Slice 1 wires VideoGrok (xAI) only: {model, prompt} submit, url delivery.
 from __future__ import annotations
 
 import asyncio
+import base64
 import dataclasses
 import json
 import os
@@ -212,7 +213,7 @@ def _submit_video(
         mws,
         dataclasses.replace(base_event, duration=time.monotonic() - start),
     )
-    return VideoHandle(id=request_id, provider=provider, raw=raw)
+    return VideoHandle(id=request_id, provider=provider, raw=raw, model=request.model)
 
 
 def _dispatch_video_submit(
@@ -236,7 +237,8 @@ def _dispatch_video_submit(
       - VideoQwen (DashScope) nests the prompt under an ``input`` object
         ({model, input:{prompt}}) and requires the X-DashScope-Async: enable
         header.
-      - VideoVeo carries the model in the submit PATH; body has no model field.
+      - VideoVeo and VideoVertexVeo carry the model in the submit PATH
+        (:predictLongRunning); the body has no model field.
       - VideoBedrock (Nova Reel) nests the prompt under modelInput, carries the
         caller S3 URI under outputDataConfig, and is signed with SigV4 (not the
         bearer/query-param header map).
@@ -255,11 +257,12 @@ def _dispatch_video_submit(
         # DashScope's async submit requires this header; set per-request only so
         # it never leaks into the shared auth-header map.
         post_headers = {**headers, "X-DashScope-Async": "enable"}
-    elif vg_cfg.wire_shape == "VideoVeo":
-        # Veo carries the model in the submit PATH (:predictLongRunning), not the
-        # body — so the body has no model field. The prompt nests under
-        # instances[]; the optional parameters object is omitted on the
-        # prompt-only hot path.
+    elif vg_cfg.wire_shape in ("VideoVeo", "VideoVertexVeo"):
+        # Veo (Gemini API) and Vertex Veo share the submit body: the model is in
+        # the PATH (:predictLongRunning), not the body, so the body has no model
+        # field. The prompt nests under instances[]; the optional parameters
+        # object ({aspectRatio, resolution} for Gemini; {sampleCount, storageUri}
+        # for Vertex) is omitted on the prompt-only hot path.
         body = {"instances": [{"prompt": _join_prompt_text(parts)}]}
     elif vg_cfg.wire_shape == "VideoBedrock":
         # Nova Reel carries the model in the BODY (modelId, unlike the Converse
@@ -345,21 +348,39 @@ def _wait_video(
     base = _video_base_url(p, cfg, vg_cfg)
     headers = _image_auth_headers(p, cfg, pname)
 
-    # Bedrock (SigV4) signs the poll GET and carries the handle ARN as a single
-    # percent-encoded path segment (its ':' and '/' must not split into extra
-    # segments). url.PathEscape's Python twin is quote(arn, safe=":"): it encodes
-    # '/' to %2F (keeping one path segment) but leaves ':' literal, matching how
-    # Bedrock's SigV4 canonicalizes the Converse model id's ':'. The signer
-    # canonicalizes the escaped path, so the signed path equals the wire path.
-    # Every other provider uses the verbatim {id} substitution and the bearer/
-    # query-param auth path.
+    # Poll dispatch has three arms, selected here once before the loop:
+    #   - sig_v4 (Bedrock): signs the poll GET and carries the handle ARN as a
+    #     single percent-encoded path segment (its ':' and '/' must not split
+    #     into extra segments). url.PathEscape's Python twin is
+    #     quote(arn, safe=":"): it encodes '/' to %2F (keeping one path segment)
+    #     but leaves ':' literal, matching how Bedrock's SigV4 canonicalizes the
+    #     Converse model id's ':'. The signer canonicalizes the escaped path, so
+    #     the signed path equals the wire path.
+    #   - vertex_poll (Vertex Veo): the ONLY POST-poll shape — fetches the
+    #     operation with a POST to {model}:fetchPredictOperation carrying
+    #     {operationName}. The model is templated from the handle; the operation
+    #     name goes in the body, not the URL. Bearer auth + the caller-set base.
+    #   - default: the verbatim {id} substitution and a GET on the bearer/
+    #     query-param auth path (every other provider).
+    #
+    # The arms are config-disjoint by design: sig_v4 keys off the auth scheme and
+    # vertex_poll off the wire shape, and no A-Box pairs SigV4 with VideoVertexVeo
+    # (Bedrock is SigV4+VideoBedrock; Vertex is bearer+VideoVertexVeo). sig_v4 is
+    # matched first so a hypothetical both-true misconfig would poll as SigV4.
     sig_v4 = auth_scheme(pname) == AuthScheme.SIG_V4
+    vertex_poll = vg_cfg.wire_shape == "VideoVertexVeo"
     region = secret_key = session_token = ""
+    vertex_poll_body = b""
     if sig_v4:
         poll_url = base + vg_cfg.poll_endpoint.replace("{id}", quote(handle.id, safe=":"))
         region = os.environ.get(cfg.region_env_var, "")
         secret_key = os.environ.get(cfg.secret_key_env_var, "")
         session_token = os.environ.get(cfg.session_token_env_var, "")
+    elif vertex_poll:
+        poll_url = _append_video_auth(
+            base + vg_cfg.poll_endpoint.replace("{model}", handle.model), p, pname, cfg
+        )
+        vertex_poll_body = json.dumps({"operationName": handle.id}).encode("utf-8")
     else:
         poll_url = _append_video_auth(
             _video_poll_url(vg_cfg.poll_endpoint, base, handle.id), p, pname, cfg
@@ -384,6 +405,12 @@ def _wait_video(
                 session_token,
                 region,
                 cfg.service_name,
+            )
+        elif vertex_poll:
+            resp_body = do_post(
+                poll_url,
+                vertex_poll_body,
+                {**headers, "content-type": "application/json"},
             )
         else:
             resp_body = do_get(poll_url, headers)
@@ -532,6 +559,31 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         if not result.videos or not result.videos[0].url:
             raise APIError(
                 message="video generation: operation done but carried no video uri",
+                status_code=0,
+            )
+        return result, True
+
+    if vg_cfg.wire_shape == "VideoVertexVeo":
+        # Vertex Veo operation poll (fetchPredictOperation): same done/error LRO
+        # shape as Gemini Veo, but the finished video arrives as inline base64 in
+        # the poll body (response.videos[0].bytesBase64Encoded), not a fetch URI.
+        done = raw.get("done") if isinstance(raw, dict) else None
+        if done is not True:
+            return VideoResponse(), False
+        err_obj = raw.get("error") if isinstance(raw, dict) else None
+        if isinstance(err_obj, dict):
+            msg = err_obj.get("message")
+            if not isinstance(msg, str) or not msg:
+                msg = "operation failed"
+            raise APIError(
+                message=f"video generation failed: {msg}", status_code=0
+            )
+        result = _video_result_from_vertex_veo(vg_cfg, raw)
+        # Mirror the Veo done+no-uri guard: a done op carrying no decodable bytes
+        # must surface as an error, not a silent zero-byte success.
+        if not result.videos or not result.videos[0].bytes:
+            raise APIError(
+                message="video generation: operation done but carried no video bytes",
                 status_code=0,
             )
         return result, True
@@ -732,6 +784,35 @@ def _video_result_from_veo(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoRes
     return VideoResponse(
         videos=[VideoData(mime_type=mime, url=uri if isinstance(uri, str) else "")]
     )
+
+
+def _video_result_from_vertex_veo(
+    vg_cfg: VideoGenDef, raw: dict[str, Any]
+) -> VideoResponse:
+    """Extract the finished video from a Vertex Veo fetchPredictOperation poll
+    response. Unlike Gemini Veo (which returns a fetch URI), Vertex Veo returns
+    the bytes inline as base64 at response.videos[0].bytesBase64Encoded with the
+    mime at .mimeType. This is download delivery with NO fetch hop: the bytes are
+    decoded straight into VideoData.bytes here and VideoData.url stays empty, so
+    the _wait_video download step (_download_video_bytes) finds no url and no-ops
+    — the source-XOR contract holds (VID-004: download delivery returns bytes,
+    never a url)."""
+    mime = _video_fallback_mime(vg_cfg)
+    response = raw.get("response") if isinstance(raw, dict) else None
+    videos = response.get("videos") if isinstance(response, dict) else None
+    if not isinstance(videos, list) or not videos:
+        return VideoResponse()
+    first = videos[0]
+    if not isinstance(first, dict):
+        return VideoResponse()
+    m = first.get("mimeType")
+    if isinstance(m, str) and m:
+        mime = m
+    b64 = first.get("bytesBase64Encoded")
+    if not isinstance(b64, str) or not b64:
+        return VideoResponse()
+    decoded = base64.b64decode(b64)
+    return VideoResponse(videos=[VideoData(mime_type=mime, bytes=decoded)])
 
 
 def _video_result_from_bedrock(
