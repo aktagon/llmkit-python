@@ -138,19 +138,6 @@ def _submit_video(
         raise ValidationError(field="model", message="required for video generation")
 
     parts = _normalize_video_parts(request)
-    for i, part in enumerate(parts):
-        if part.lyrics:
-            raise ValidationError(
-                field=f"parts[{i}]",
-                message="video generation does not accept lyrics parts",
-            )
-        if part.image is not None:
-            raise ValidationError(
-                field=f"parts[{i}]",
-                message="image-to-video is not yet wired (slice 1 is text-to-video)",
-            )
-        if not part.text:
-            raise ValidationError(field=f"parts[{i}]", message="must have Text set")
 
     cfg = PROVIDERS.get(provider.name)
     if cfg is None:
@@ -163,11 +150,31 @@ def _submit_video(
             field="provider",
             message=f"{provider.name} does not support video generation",
         )
-    if _find_video_model(vg_cfg, request.model) is None:
+    model = _find_video_model(vg_cfg, request.model)
+    if model is None:
         raise ValidationError(
             field="model",
             message=f"{request.model} is not a known video-generation model for {provider.name}",
         )
+
+    for i, part in enumerate(parts):
+        if part.lyrics:
+            raise ValidationError(
+                field=f"parts[{i}]",
+                message="video generation does not accept lyrics parts",
+            )
+        if part.image is not None:
+            # Image-to-video seed frame (BUG-010): accepted only by models whose
+            # VideoModelDef sets supports_image_to_video; text-to-video-only
+            # models reject it pre-flight rather than silently dropping it.
+            if not model.supports_image_to_video:
+                raise ValidationError(
+                    field=f"parts[{i}]",
+                    message=f"{request.model} is a text-to-video-only model and does not accept image parts",
+                )
+            continue
+        if not part.text:
+            raise ValidationError(field=f"parts[{i}]", message="must have Text set")
     # VID-005: output-uri providers (Bedrock Nova Reel) write the video to the
     # caller's own S3 bucket, so the submit MUST carry a destination URI. Reject
     # pre-flight rather than letting the provider 400.
@@ -279,6 +286,14 @@ def _dispatch_video_submit(
         }
     else:
         body = {"model": model, "prompt": _join_prompt_text(parts)}
+        # Image-to-video (BUG-010): when a seed frame is present (only reachable
+        # for grok-imagine-video, the lone supports_image_to_video model this
+        # slice), inline it as a data URL in xAI's image.url field — the same
+        # encoding the Grok image-edit path uses. Absent on the text-to-video
+        # hot path, so the existing video-grok golden is unchanged.
+        seed = _video_seed_image_url(parts)
+        if seed:
+            body["image"] = {"url": seed}
     json_body = json.dumps(body).encode("utf-8")
     # {model} in the submit endpoint is substituted with the per-call model
     # (Veo's :predictLongRunning path); a no-op for providers that carry the
@@ -900,3 +915,28 @@ def _find_video_model(cfg: VideoGenDef, model_id: str) -> VideoModelDef | None:
 
 def _join_prompt_text(parts: list[Part]) -> str:
     return "\n".join(p.text for p in parts if p.text)
+
+
+def _video_seed_image_url(parts: list[Part]) -> str:
+    """Build the image-to-video seed-frame data URL for wire shapes that
+    condition on a single reference frame (Grok Imagine, BUG-010). The image
+    Part's bytes are inlined as a data URL carried in xAI's image.url field,
+    mirroring the Grok image-edit encoding in image.py. Returns "" when no image
+    part is present (the text-to-video hot path). Raises on more than one image
+    part: Grok animates a single seed frame, so multi-image conditioning is a
+    separate slice — rejecting is honest where silently using the first would
+    reintroduce the silent-drop bug."""
+    seed = None
+    for part in parts:
+        if part.image is None:
+            continue
+        if seed is not None:
+            raise ValidationError(
+                field="parts",
+                message="image-to-video conditions on a single seed frame; pass one image part",
+            )
+        seed = part.image
+    if seed is None:
+        return ""
+    mime = seed.mime_type or "image/png"
+    return f"data:{mime};base64,{base64.b64encode(seed.bytes).decode('ascii')}"
