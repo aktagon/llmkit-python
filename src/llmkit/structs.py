@@ -251,6 +251,9 @@ class VideoHandle:
     #
     raw: bool = False
 
+    #
+    model: str = ""
+
 
 @dataclass
 class VideoResponse:

@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import dataclasses
 import json
 import os
@@ -212,7 +213,7 @@ def _submit_video(
         mws,
         dataclasses.replace(base_event, duration=time.monotonic() - start),
     )
-    return VideoHandle(id=request_id, provider=provider, raw=raw)
+    return VideoHandle(id=request_id, provider=provider, raw=raw, model=request.model)
 
 
 def _dispatch_video_submit(
@@ -243,6 +244,7 @@ def _dispatch_video_submit(
 
 
 
+
 """
     #
     #
@@ -255,7 +257,8 @@ def _dispatch_video_submit(
         #
         #
         post_headers = {**headers, "X-DashScope-Async": "enable"}
-    elif vg_cfg.wire_shape == "VideoVeo":
+    elif vg_cfg.wire_shape in ("VideoVeo", "VideoVertexVeo"):
+        #
         #
         #
         #
@@ -353,13 +356,31 @@ def _wait_video(
     #
     #
     #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
     sig_v4 = auth_scheme(pname) == AuthScheme.SIG_V4
+    vertex_poll = vg_cfg.wire_shape == "VideoVertexVeo"
     region = secret_key = session_token = ""
+    vertex_poll_body = b""
     if sig_v4:
         poll_url = base + vg_cfg.poll_endpoint.replace("{id}", quote(handle.id, safe=":"))
         region = os.environ.get(cfg.region_env_var, "")
         secret_key = os.environ.get(cfg.secret_key_env_var, "")
         session_token = os.environ.get(cfg.session_token_env_var, "")
+    elif vertex_poll:
+        poll_url = _append_video_auth(
+            base + vg_cfg.poll_endpoint.replace("{model}", handle.model), p, pname, cfg
+        )
+        vertex_poll_body = json.dumps({"operationName": handle.id}).encode("utf-8")
     else:
         poll_url = _append_video_auth(
             _video_poll_url(vg_cfg.poll_endpoint, base, handle.id), p, pname, cfg
@@ -384,6 +405,12 @@ def _wait_video(
                 session_token,
                 region,
                 cfg.service_name,
+            )
+        elif vertex_poll:
+            resp_body = do_post(
+                poll_url,
+                vertex_poll_body,
+                {**headers, "content-type": "application/json"},
             )
         else:
             resp_body = do_get(poll_url, headers)
@@ -532,6 +559,31 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         if not result.videos or not result.videos[0].url:
             raise APIError(
                 message="video generation: operation done but carried no video uri",
+                status_code=0,
+            )
+        return result, True
+
+    if vg_cfg.wire_shape == "VideoVertexVeo":
+        #
+        #
+        #
+        done = raw.get("done") if isinstance(raw, dict) else None
+        if done is not True:
+            return VideoResponse(), False
+        err_obj = raw.get("error") if isinstance(raw, dict) else None
+        if isinstance(err_obj, dict):
+            msg = err_obj.get("message")
+            if not isinstance(msg, str) or not msg:
+                msg = "operation failed"
+            raise APIError(
+                message=f"video generation failed: {msg}", status_code=0
+            )
+        result = _video_result_from_vertex_veo(vg_cfg, raw)
+        #
+        #
+        if not result.videos or not result.videos[0].bytes:
+            raise APIError(
+                message="video generation: operation done but carried no video bytes",
                 status_code=0,
             )
         return result, True
@@ -732,6 +784,35 @@ def _video_result_from_veo(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoRes
     return VideoResponse(
         videos=[VideoData(mime_type=mime, url=uri if isinstance(uri, str) else "")]
     )
+
+
+def _video_result_from_vertex_veo(
+    vg_cfg: VideoGenDef, raw: dict[str, Any]
+) -> VideoResponse:
+    """
+
+
+
+
+
+
+"""
+    mime = _video_fallback_mime(vg_cfg)
+    response = raw.get("response") if isinstance(raw, dict) else None
+    videos = response.get("videos") if isinstance(response, dict) else None
+    if not isinstance(videos, list) or not videos:
+        return VideoResponse()
+    first = videos[0]
+    if not isinstance(first, dict):
+        return VideoResponse()
+    m = first.get("mimeType")
+    if isinstance(m, str) and m:
+        mime = m
+    b64 = first.get("bytesBase64Encoded")
+    if not isinstance(b64, str) or not b64:
+        return VideoResponse()
+    decoded = base64.b64decode(b64)
+    return VideoResponse(videos=[VideoData(mime_type=mime, bytes=decoded)])
 
 
 def _video_result_from_bedrock(

@@ -158,6 +158,26 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
             ),
         ),
     ),
+    ProviderName.VERTEX: VideoGenDef(
+        wire_shape="VideoVertexVeo",
+        output_delivery="DeliveryDownload",
+        video_base_url="",
+        gen_endpoint="/{model}:predictLongRunning",
+        poll_endpoint="/{model}:fetchPredictOperation",
+        file_endpoint="",
+        submit_handle_field="name",
+        requires_output_uri=False,
+        models=(
+            VideoModelDef(
+                model_id="veo-3.1-generate-preview",
+                label="Veo 3.1",
+                supports_image_to_video=True,
+                max_duration_seconds=8,
+                output_mime="video/mp4",
+                resolutions=("1080p", "720p"),
+            ),
+        ),
+    ),
     ProviderName.ZHIPU: VideoGenDef(
         wire_shape="VideoZhipu",
         output_delivery="DeliveryURL",
