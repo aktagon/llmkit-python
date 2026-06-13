@@ -29,6 +29,7 @@ from llmkit import (
     together,
     zhipu,
 )
+from llmkit.builders import vertex  # not re-exported at top level (caller-base provider)
 from llmkit.types import SafetySetting
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
@@ -528,3 +529,20 @@ def test_video_bedrock_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("video-bedrock", server.last_body)
+
+
+def test_video_vertex_matches_shared_golden() -> None:
+    # Vertex Veo video-submit body is the nested {instances:[{prompt}]} shape —
+    # byte-identical to the Veo golden (model in the PATH, not the body). The
+    # POST-poll lifecycle (:fetchPredictOperation, inline-base64 download
+    # delivery) is delivery-side, covered by the unit tests.
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = vertex("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.video.model(wi.WIRE_VIDEO_VERTEX_MODEL).submit(
+                wi.WIRE_VIDEO_VERTEX_PROMPT
+            )
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("video-vertex", server.last_body)
