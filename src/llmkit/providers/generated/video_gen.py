@@ -51,7 +51,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
             VideoModelDef(
                 model_id="amazon.nova-reel-v1:0",
                 label="Nova Reel",
-                supports_image_to_video=True,
+                supports_image_to_video=False,
                 max_duration_seconds=6,
                 output_mime="video/mp4",
                 resolutions=("720p",),
@@ -71,7 +71,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
             VideoModelDef(
                 model_id="veo-3.1-generate-preview",
                 label="Veo 3.1",
-                supports_image_to_video=True,
+                supports_image_to_video=False,
                 max_duration_seconds=8,
                 output_mime="video/mp4",
                 resolutions=("1080p", "720p"),
@@ -111,7 +111,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
             VideoModelDef(
                 model_id="MiniMax-Hailuo-2.3",
                 label="MiniMax Hailuo 2.3",
-                supports_image_to_video=True,
+                supports_image_to_video=False,
                 max_duration_seconds=6,
                 output_mime="video/mp4",
                 resolutions=("1080p", "768p"),
@@ -131,7 +131,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
             VideoModelDef(
                 model_id="wan2.2-t2v-plus",
                 label="Wan 2.2 T2V Plus",
-                supports_image_to_video=True,
+                supports_image_to_video=False,
                 max_duration_seconds=5,
                 output_mime="video/mp4",
                 resolutions=("720p",),
@@ -151,7 +151,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
             VideoModelDef(
                 model_id="minimax/video-01-director",
                 label="MiniMax Video 01 Director (Together)",
-                supports_image_to_video=True,
+                supports_image_to_video=False,
                 max_duration_seconds=6,
                 output_mime="video/mp4",
                 resolutions=("720p",),
@@ -171,7 +171,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
             VideoModelDef(
                 model_id="veo-3.1-generate-preview",
                 label="Veo 3.1",
-                supports_image_to_video=True,
+                supports_image_to_video=False,
                 max_duration_seconds=8,
                 output_mime="video/mp4",
                 resolutions=("1080p", "720p"),
@@ -191,7 +191,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
             VideoModelDef(
                 model_id="cogvideox-3",
                 label="CogVideoX-3",
-                supports_image_to_video=True,
+                supports_image_to_video=False,
                 max_duration_seconds=10,
                 output_mime="video/mp4",
                 resolutions=("1080p", "4k", "720p"),
