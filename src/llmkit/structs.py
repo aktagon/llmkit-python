@@ -251,6 +251,9 @@ class VideoHandle:
     # raw is the ADR-014 opt-in: when true, the VideoResponse returned from Wait carries raw set to the parsed provider poll body. Submit propagates the chain's .raw() flag onto the handle; cross-process resume callers set it directly.
     raw: bool = False
 
+    # model is the submitted model id, carried so Wait can build a model-templated poll URL (Vertex Veo polls POST /{model}:fetchPredictOperation). Submit sets it from the request; empty for providers whose poll endpoint does not template the model.
+    model: str = ""
+
 
 @dataclass
 class VideoResponse:
