@@ -12,6 +12,7 @@ test_batch.py) so tests run fast.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -719,6 +720,174 @@ def test_video_wait_failed_veo_raises() -> None:
         with pytest.raises(APIError) as exc_info:
             asyncio.run(h.wait(**_FAST))
         assert "prompt blocked by safety filter" in str(exc_info.value)
+
+
+VERTEX_VEO_MODEL = "veo-3.1-generate-preview"
+
+
+class _VertexVeoVideoServer:
+    """Serves the Vertex AI Veo fetchPredictOperation flow: submit ->
+    {name:"projects/.../operations/op-7"}; the operation poll is a POST to
+    {model}:fetchPredictOperation carrying {"operationName": <id>} and returns
+    {done:false} for the first ``pending_polls`` calls, then a done op whose
+    response.videos[0].bytesBase64Encoded carries the inline mp4 (download
+    delivery with NO fetch hop — bytes arrive in the poll body). Vertex uses
+    bearer auth (no ?key= query param). When ``fail`` is set the done op carries
+    an error; when ``empty`` is set the done op carries no decodable bytes."""
+
+    def __init__(
+        self,
+        pending_polls: int,
+        video_bytes: bytes,
+        fail: bool = False,
+        empty: bool = False,
+    ) -> None:
+        self.pending_polls = pending_polls
+        self.video_bytes = video_bytes
+        self.fail = fail
+        self.empty = empty
+        self.polls = 0
+        self.submit_body: dict[str, Any] | None = None
+        self.poll_bodies: list[dict[str, Any]] = []
+        self.submit_auth: str | None = None
+        self.poll_auth: str | None = None
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a, **_k):
+                pass
+
+            def _send_json(self, body: dict[str, Any]) -> None:
+                payload = json.dumps(body).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def do_POST(self):
+                path = urlparse(self.path).path
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                parsed = json.loads(raw.decode("utf-8"))
+                if path.endswith(":predictLongRunning"):
+                    outer.submit_body = parsed
+                    outer.submit_auth = self.headers.get("Authorization")
+                    return self._send_json(
+                        {"name": "projects/p-1/locations/us-central1/operations/op-7"}
+                    )
+                if path.endswith(":fetchPredictOperation"):
+                    outer.poll_bodies.append(parsed)
+                    outer.poll_auth = self.headers.get("Authorization")
+                    if outer.fail:
+                        return self._send_json(
+                            {
+                                "done": True,
+                                "error": {
+                                    "code": 3,
+                                    "message": "prompt blocked by safety filter",
+                                },
+                            }
+                        )
+                    outer.polls += 1
+                    if outer.polls <= outer.pending_polls:
+                        return self._send_json({"done": False})
+                    if outer.empty:
+                        return self._send_json({"done": True, "response": {"videos": []}})
+                    return self._send_json(
+                        {
+                            "done": True,
+                            "response": {
+                                "videos": [
+                                    {
+                                        "bytesBase64Encoded": base64.b64encode(
+                                            outer.video_bytes
+                                        ).decode("ascii"),
+                                        "mimeType": "video/mp4",
+                                    }
+                                ]
+                            },
+                        }
+                    )
+                self.send_response(404)
+                self.end_headers()
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+
+    def __enter__(self) -> "_VertexVeoVideoServer":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join(timeout=2)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_port}"
+
+
+def test_video_submit_and_wait_vertex_veo_inline_bytes() -> None:
+    want_bytes = b"\x00\x00\x00\x18ftypmp42 vertex fake mp4 payload"
+    with _VertexVeoVideoServer(pending_polls=2, video_bytes=want_bytes) as server:
+        c = new_client("vertex", "ya29.bearer-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(
+            c.video.model(VERTEX_VEO_MODEL).submit(
+                "a drone shot over the alps at sunrise"
+            )
+        )
+        assert isinstance(h, VideoHandle)
+        assert h.id == "projects/p-1/locations/us-central1/operations/op-7"
+        # The handle carries the model so the POST poll can template
+        # {model}:fetchPredictOperation.
+        assert h.model == VERTEX_VEO_MODEL
+
+        resp = asyncio.run(h.wait(**_FAST))
+
+    # Vertex Veo submit body has instances[0].prompt and NO model field.
+    assert server.submit_body == {
+        "instances": [{"prompt": "a drone shot over the alps at sunrise"}]
+    }
+    # The poll is a POST carrying the operation name in the body, not the URL.
+    assert server.poll_bodies
+    assert all(
+        b == {"operationName": "projects/p-1/locations/us-central1/operations/op-7"}
+        for b in server.poll_bodies
+    )
+    assert len(resp.videos) == 1
+    # Inline base64 decoded straight into bytes; url stays empty (source-XOR,
+    # VID-004) — download delivery with no fetch hop.
+    assert resp.videos[0].bytes == want_bytes
+    assert resp.videos[0].url == ""
+    assert resp.videos[0].mime_type == "video/mp4"
+    # Bearer auth on submit and poll (Vertex is NOT a ?key= query-param provider).
+    assert server.submit_auth == "Bearer ya29.bearer-token"
+    assert server.poll_auth == "Bearer ya29.bearer-token"
+
+
+def test_video_wait_failed_vertex_veo_raises() -> None:
+    with _VertexVeoVideoServer(pending_polls=0, video_bytes=b"", fail=True) as server:
+        c = new_client("vertex", "ya29.bearer-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(c.video.model(VERTEX_VEO_MODEL).submit("blocked prompt"))
+        with pytest.raises(APIError) as exc_info:
+            asyncio.run(h.wait(**_FAST))
+        assert "prompt blocked by safety filter" in str(exc_info.value)
+
+
+def test_video_vertex_veo_done_no_bytes_raises() -> None:
+    # A done operation that carries no decodable bytes must error, not return a
+    # silent empty success (mirrors the Veo done+no-uri guard).
+    with _VertexVeoVideoServer(pending_polls=0, video_bytes=b"", empty=True) as server:
+        c = new_client("vertex", "ya29.bearer-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(c.video.model(VERTEX_VEO_MODEL).submit("a quiet forest"))
+        with pytest.raises(APIError) as exc_info:
+            asyncio.run(h.wait(**_FAST))
+    assert "no video bytes" in exc_info.value.message
 
 
 NOVA_REEL_MODEL = "amazon.nova-reel-v1:0"
