@@ -351,14 +351,19 @@ class Video:
     def __init__(self, client: "Client") -> None:
         self.client = client
         self._middleware: list[MiddlewareFn] = []
+        self._parts: list[Part] = []
         self._model: str = ""
         self._output_uri: str = ""
         self._raw: bool = False
-        self._parts: list[Part] = []
 
     def add_middleware(self, *fns: MiddlewareFn) -> "Video":
         out = copy.copy(self)
         out._middleware = [*self._middleware, *fns]
+        return out
+
+    def image(self, mime: str, data: bytes) -> "Video":  # ordered
+        out = copy.copy(self)
+        out._parts = [*self._parts, Part(image=MediaRef(mime_type=mime, bytes=data))]
         return out
 
     def model(self, name: str) -> "Video":

@@ -138,19 +138,6 @@ def _submit_video(
         raise ValidationError(field="model", message="required for video generation")
 
     parts = _normalize_video_parts(request)
-    for i, part in enumerate(parts):
-        if part.lyrics:
-            raise ValidationError(
-                field=f"parts[{i}]",
-                message="video generation does not accept lyrics parts",
-            )
-        if part.image is not None:
-            raise ValidationError(
-                field=f"parts[{i}]",
-                message="image-to-video is not yet wired (slice 1 is text-to-video)",
-            )
-        if not part.text:
-            raise ValidationError(field=f"parts[{i}]", message="must have Text set")
 
     cfg = PROVIDERS.get(provider.name)
     if cfg is None:
@@ -163,11 +150,31 @@ def _submit_video(
             field="provider",
             message=f"{provider.name} does not support video generation",
         )
-    if _find_video_model(vg_cfg, request.model) is None:
+    model = _find_video_model(vg_cfg, request.model)
+    if model is None:
         raise ValidationError(
             field="model",
             message=f"{request.model} is not a known video-generation model for {provider.name}",
         )
+
+    for i, part in enumerate(parts):
+        if part.lyrics:
+            raise ValidationError(
+                field=f"parts[{i}]",
+                message="video generation does not accept lyrics parts",
+            )
+        if part.image is not None:
+            #
+            #
+            #
+            if not model.supports_image_to_video:
+                raise ValidationError(
+                    field=f"parts[{i}]",
+                    message=f"{request.model} is a text-to-video-only model and does not accept image parts",
+                )
+            continue
+        if not part.text:
+            raise ValidationError(field=f"parts[{i}]", message="must have Text set")
     #
     #
     #
@@ -279,6 +286,14 @@ def _dispatch_video_submit(
         }
     else:
         body = {"model": model, "prompt": _join_prompt_text(parts)}
+        #
+        #
+        #
+        #
+        #
+        seed = _video_seed_image_url(parts)
+        if seed:
+            body["image"] = {"url": seed}
     json_body = json.dumps(body).encode("utf-8")
     #
     #
@@ -900,3 +915,28 @@ def _find_video_model(cfg: VideoGenDef, model_id: str) -> VideoModelDef | None:
 
 def _join_prompt_text(parts: list[Part]) -> str:
     return "\n".join(p.text for p in parts if p.text)
+
+
+def _video_seed_image_url(parts: list[Part]) -> str:
+    """
+
+
+
+
+
+
+"""
+    seed = None
+    for part in parts:
+        if part.image is None:
+            continue
+        if seed is not None:
+            raise ValidationError(
+                field="parts",
+                message="image-to-video conditions on a single seed frame; pass one image part",
+            )
+        seed = part.image
+    if seed is None:
+        return ""
+    mime = seed.mime_type or "image/png"
+    return f"data:{mime};base64,{base64.b64encode(seed.bytes).decode('ascii')}"
