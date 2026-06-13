@@ -15,8 +15,9 @@ class VideoModelDef:
     max_duration_seconds: int = 0
     output_mime: str = ""
     resolutions: tuple[str, ...] = field(default_factory=tuple)
-    # Advisory per-model max seed/reference images (BUG-011); 0 when
-    # unknown. Not enforced — the provider is the truth on volume.
+    # Images llmkit serializes when the wire shape fixes the count
+    # (e.g. Grok's single-seed slot); 0 = no llmkit limit, the provider
+    # decides volume (BUG-011).
     max_input_images: int = 0
 
 
