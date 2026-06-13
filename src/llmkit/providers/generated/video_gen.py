@@ -15,6 +15,9 @@ class VideoModelDef:
     max_duration_seconds: int = 0
     output_mime: str = ""
     resolutions: tuple[str, ...] = field(default_factory=tuple)
+    # Advisory per-model max seed/reference images (BUG-011); 0 when
+    # unknown. Not enforced — the provider is the truth on volume.
+    max_input_images: int = 0
 
 
 @dataclass(frozen=True)
@@ -55,6 +58,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=6,
                 output_mime="video/mp4",
                 resolutions=("720p",),
+                max_input_images=0,
             ),
         ),
     ),
@@ -75,6 +79,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=8,
                 output_mime="video/mp4",
                 resolutions=("1080p", "720p"),
+                max_input_images=0,
             ),
         ),
     ),
@@ -95,6 +100,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=15,
                 output_mime="video/mp4",
                 resolutions=("480p", "720p"),
+                max_input_images=1,
             ),
         ),
     ),
@@ -115,6 +121,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=6,
                 output_mime="video/mp4",
                 resolutions=("1080p", "768p"),
+                max_input_images=0,
             ),
         ),
     ),
@@ -135,6 +142,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=5,
                 output_mime="video/mp4",
                 resolutions=("720p",),
+                max_input_images=0,
             ),
         ),
     ),
@@ -155,6 +163,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=6,
                 output_mime="video/mp4",
                 resolutions=("720p",),
+                max_input_images=0,
             ),
         ),
     ),
@@ -175,6 +184,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=8,
                 output_mime="video/mp4",
                 resolutions=("1080p", "720p"),
+                max_input_images=0,
             ),
         ),
     ),
@@ -195,6 +205,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=10,
                 output_mime="video/mp4",
                 resolutions=("1080p", "4k", "720p"),
+                max_input_images=0,
             ),
         ),
     ),
