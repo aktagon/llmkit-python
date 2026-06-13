@@ -17,6 +17,7 @@ class VideoModelDef:
     resolutions: tuple[str, ...] = field(default_factory=tuple)
     #
     #
+    #
     max_input_images: int = 0
 
 
