@@ -132,6 +132,62 @@ def test_video_submit_and_wait_grok() -> None:
     assert resp.videos[0].bytes == b""  # url delivery must not download bytes
 
 
+# The fixed 1x1 PNG seed frame (single brick-red pixel), shared with the
+# image-edit wire fixture; the bytes the image-to-video path inlines.
+_GROK_SEED_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGM4YWQEAALyAS2saifrAAAAAElFTkSuQmCC"
+)
+
+
+def test_video_grok_image_to_video_submit_body() -> None:
+    # BUG-010: .image(...) on Video appends a seed Part; submit inlines it as a
+    # data URL at image.url. The round-trip reaches a done video.
+    seed = base64.b64decode(_GROK_SEED_PNG_B64)
+    done = _done_body("https://vidgen.x.ai/i2v/out.mp4", duration=6)
+    with _GrokVideoServer(pending_polls=1, done_body=done) as server:
+        c = new_client("grok", "test-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(
+            c.video.model(GROK_VIDEO_MODEL)
+            .image("image/png", seed)
+            .submit("animate the still: slow push-in")
+        )
+        resp = asyncio.run(h.wait(**_FAST))
+
+    assert server.submit_body == {
+        "model": GROK_VIDEO_MODEL,
+        "prompt": "animate the still: slow push-in",
+        "image": {"url": f"data:image/png;base64,{_GROK_SEED_PNG_B64}"},
+    }
+    assert resp.videos[0].url == "https://vidgen.x.ai/i2v/out.mp4"
+
+
+def test_video_image_part_on_text_only_model_rejects() -> None:
+    # BUG-010 gate: a model without supports_image_to_video (every model but
+    # grok-imagine-video this slice) rejects an image part pre-flight.
+    seed = base64.b64decode(_GROK_SEED_PNG_B64)
+    c = new_client("zhipu", "test-token")
+    with pytest.raises(ValidationError, match="text-to-video-only"):
+        asyncio.run(
+            c.video.model("cogvideox-3")
+            .image("image/png", seed)
+            .submit("animate this")
+        )
+
+
+def test_video_rejects_multiple_seed_frames() -> None:
+    # Grok Imagine animates one seed frame; a second image part is an error.
+    seed = base64.b64decode(_GROK_SEED_PNG_B64)
+    c = new_client("grok", "test-token")
+    with pytest.raises(ValidationError, match="single seed frame"):
+        asyncio.run(
+            c.video.model(GROK_VIDEO_MODEL)
+            .image("image/png", seed)
+            .image("image/png", seed)
+            .submit("animate this")
+        )
+
+
 ZHIPU_VIDEO_MODEL = "cogvideox-3"
 
 
