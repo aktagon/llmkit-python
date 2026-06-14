@@ -1,8 +1,9 @@
 """Music generation runtime — mirror of go/music.go and ts/src/music.ts (ADR-033).
 
 Pre-flight validation (model required; each part exactly one of text or
-lyrics; image parts rejected; lyrics rejected on instrumental-only models)
-runs before any HTTP call. Dispatch branches on mg_cfg.wire_shape, which
+lyrics; image parts rejected) runs before any HTTP call. Lyrics support is
+advisory (ADR-037 MUS-008), not gated: lyrics on an instrumental-only model
+fold into the prompt for the Predict shape. Dispatch branches on mg_cfg.wire_shape, which
 fully determines the request body, the response audio path, AND the byte
 encoding (base64 for Vertex/Gemini, hex for MiniMax).
 """
@@ -47,7 +48,8 @@ class MusicRequest:
         never carries image parts; the runtime rejects them pre-flight.
 
     Pre-flight validation requires exactly one of prompt or parts to be
-    non-empty (XOR). Lyrics parts are rejected for instrumental-only models.
+    non-empty (XOR). Lyrics on an instrumental-only model are advisory, not
+    rejected (ADR-037 MUS-008): they fold into the prompt for the Predict shape.
     """
 
     model: str = ""
@@ -86,14 +88,12 @@ def generate_music(
         raise ValidationError(field="model", message="required for music generation")
 
     parts = _normalize_music_parts(request)
-    has_lyrics = False
     for i, part in enumerate(parts):
         set_count = 0
         if part.text:
             set_count += 1
         if part.lyrics:
             set_count += 1
-            has_lyrics = True
         if part.image is not None:
             raise ValidationError(
                 field=f"parts[{i}]",
@@ -122,11 +122,9 @@ def generate_music(
             field="model",
             message=f"{request.model} is not a known music-generation model for {provider.name}",
         )
-    if has_lyrics and not model.supports_lyrics:
-        raise ValidationError(
-            field="parts",
-            message=f"{request.model} is instrumental-only and does not accept lyrics",
-        )
+    # ADR-037 (MUS-008): supports_lyrics is advisory metadata, not a gate.
+    # Lyrics on an instrumental-only model fold into the prompt (for the
+    # single-prompt Predict shape) and the model ignores or honors them.
 
     mws = list(middleware or [])
     base_event = Event(
@@ -241,11 +239,16 @@ def _dispatch_music_http(
 
 
 def _build_vertex_music_body(parts: list[Part]) -> dict[str, Any]:
-    """Vertex AI Lyria :predict body. Lyria 2 is instrumental-only, so only
-    text prompt parts are sent. The instances/parameters envelope mirrors
+    """Vertex AI Lyria :predict body. Lyria 2 has no lyrics wire-slot, so any
+    lyrics parts fold into the prompt text (ADR-037 MUS-008); the instrumental
+    model ignores vocal content. The instances/parameters envelope mirrors
     Vertex Imagen."""
+    prompt = _join_prompt_text(parts)
+    lyrics = _join_lyrics_text(parts)
+    if lyrics:
+        prompt = prompt + "\n" + lyrics if prompt else lyrics
     return {
-        "instances": [{"prompt": _join_prompt_text(parts)}],
+        "instances": [{"prompt": prompt}],
         "parameters": {"sampleCount": 1},
     }
 
