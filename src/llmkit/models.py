@@ -29,7 +29,7 @@ from .providers.generated.models_parsers import (
 from .providers.generated.providers import (
     ALL_PROVIDER_NAMES,
     PROVIDERS,
-    ProviderConfig,
+    ProviderSpec,
 )
 from .providers.generated.request import AuthScheme, auth_scheme
 from .providers.generated.providers import ProviderName
@@ -219,7 +219,7 @@ def _effective_provider(scoped: "ScopedModels") -> Provider:
 
 def _paginate_sync(
     provider: Provider,
-    pcfg: ProviderConfig,
+    pcfg: ProviderSpec,
     endpoint: str,
     pagination: str,
     parser_kind: str,
@@ -245,7 +245,7 @@ def _paginate_sync(
 
 def _get_sync(
     provider: Provider,
-    pcfg: ProviderConfig,
+    pcfg: ProviderSpec,
     endpoint: str,
     id: str,
     parser_kind: str,
@@ -318,7 +318,7 @@ def _append_cursor(raw_url: str, pagination: str, cursor: str) -> str:
     return raw_url
 
 
-def _build_catalogue_url(provider: Provider, pcfg: ProviderConfig, endpoint: str) -> str:
+def _build_catalogue_url(provider: Provider, pcfg: ProviderSpec, endpoint: str) -> str:
     base = provider.base_url or pcfg.base_url
     url = base + endpoint
     scheme = auth_scheme(ProviderName(provider.name))
@@ -328,7 +328,7 @@ def _build_catalogue_url(provider: Provider, pcfg: ProviderConfig, endpoint: str
     return url
 
 
-def _build_catalogue_headers(provider: Provider, pcfg: ProviderConfig) -> dict[str, str]:
+def _build_catalogue_headers(provider: Provider, pcfg: ProviderSpec) -> dict[str, str]:
     headers: dict[str, str] = {}
     scheme = auth_scheme(ProviderName(provider.name))
     if scheme == AuthScheme.BEARER_TOKEN:

@@ -12,7 +12,7 @@ from .middleware import fire_post, fire_pre, resolve_model
 from .paths import extract_path
 from .providers.generated.batch import BatchDef, BatchInputMode, batch_config
 from .providers.generated.middleware import Event, MiddlewareOp
-from .providers.generated.providers import PROVIDERS, ProviderConfig, ProviderName
+from .providers.generated.providers import PROVIDERS, ProviderSpec, ProviderName
 from .providers.generated.request import AuthScheme, auth_scheme
 from .structs import BatchHandle
 from .types import Options, Provider, Request, Response
@@ -207,7 +207,7 @@ def _build_batch_body(
     reqs: list[Request],
     opts: Options,
     provider: Provider,
-    cfg: ProviderConfig,
+    cfg: ProviderSpec,
     bc: BatchDef,
 ) -> dict[str, Any]:
     from .caching import apply_caching
@@ -235,7 +235,7 @@ def _build_batch_jsonl(
     reqs: list[Request],
     opts: Options,
     provider: Provider,
-    cfg: ProviderConfig,
+    cfg: ProviderSpec,
     bc: BatchDef,
 ) -> bytes:
     from .caching import apply_caching
@@ -361,7 +361,7 @@ def _navigate_map_path(data: dict[str, Any], path: str) -> dict[str, Any] | None
     return current if isinstance(current, dict) else None
 
 
-def _build_auth_headers(p: Provider, cfg: ProviderConfig) -> dict[str, str]:
+def _build_auth_headers(p: Provider, cfg: ProviderSpec) -> dict[str, str]:
     headers: dict[str, str] = {}
     scheme = auth_scheme(ProviderName(p.name))
     if scheme == AuthScheme.BEARER_TOKEN:
