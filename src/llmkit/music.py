@@ -5,6 +5,7 @@
 
 
 
+
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ from .structs import AudioData, MusicResponse  # noqa: E402,F401
 @dataclass
 class MusicRequest:
     """
+
 
 
 
@@ -86,14 +88,12 @@ def generate_music(
         raise ValidationError(field="model", message="required for music generation")
 
     parts = _normalize_music_parts(request)
-    has_lyrics = False
     for i, part in enumerate(parts):
         set_count = 0
         if part.text:
             set_count += 1
         if part.lyrics:
             set_count += 1
-            has_lyrics = True
         if part.image is not None:
             raise ValidationError(
                 field=f"parts[{i}]",
@@ -122,11 +122,9 @@ def generate_music(
             field="model",
             message=f"{request.model} is not a known music-generation model for {provider.name}",
         )
-    if has_lyrics and not model.supports_lyrics:
-        raise ValidationError(
-            field="parts",
-            message=f"{request.model} is instrumental-only and does not accept lyrics",
-        )
+    #
+    #
+    #
 
     mws = list(middleware or [])
     base_event = Event(
@@ -243,9 +241,14 @@ def _dispatch_music_http(
 def _build_vertex_music_body(parts: list[Part]) -> dict[str, Any]:
     """
 
+
 """
+    prompt = _join_prompt_text(parts)
+    lyrics = _join_lyrics_text(parts)
+    if lyrics:
+        prompt = prompt + "\n" + lyrics if prompt else lyrics
     return {
-        "instances": [{"prompt": _join_prompt_text(parts)}],
+        "instances": [{"prompt": prompt}],
         "parameters": {"sampleCount": 1},
     }
 
