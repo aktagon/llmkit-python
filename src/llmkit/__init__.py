@@ -163,7 +163,7 @@ __all__ = [
     "MiddlewareVetoError",
     "ValidationError",
     # Provider identity (for use with `new_client`). The internal 37-field
-    # wire/transform spec (ProviderConfig / PROVIDERS) is NOT public surface
+    # wire/transform spec (ProviderSpec / PROVIDERS) is NOT public surface
     # (ADR-038 PMD-004); read provider metadata via the `providers` namespace —
     # `from llmkit import providers; providers.info(name)` / `providers.list()`.
     "ProviderName",

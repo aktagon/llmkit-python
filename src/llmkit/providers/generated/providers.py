@@ -74,7 +74,7 @@ ALL_PROVIDER_NAMES: tuple[ProviderName, ...] = (
 
 
 @dataclass(frozen=True)
-class ProviderConfig:
+class ProviderSpec:
     name: str
     base_url: str
     endpoint: str
@@ -111,8 +111,8 @@ class ProviderConfig:
     service_name: str = ""
 
 
-PROVIDERS: dict[str, ProviderConfig] = {
-    "ai21": ProviderConfig(
+PROVIDERS: dict[str, ProviderSpec] = {
+    "ai21": ProviderSpec(
         name="ai21",
         base_url="https://api.ai21.com",
         endpoint="/v1/chat/completions",
@@ -153,7 +153,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "anthropic": ProviderConfig(
+    "anthropic": ProviderSpec(
         name="anthropic",
         base_url="https://api.anthropic.com",
         endpoint="/v1/messages",
@@ -192,7 +192,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "azure": ProviderConfig(
+    "azure": ProviderSpec(
         name="azure",
         base_url="https://REPLACE-WITH-YOUR-RESOURCE.openai.azure.com",
         endpoint="/openai/deployments/{model}/chat/completions?api-version=2024-10-21",
@@ -233,7 +233,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "bedrock": ProviderConfig(
+    "bedrock": ProviderSpec(
         name="bedrock",
         base_url="https://bedrock-runtime.{region}.amazonaws.com",
         endpoint="/model/{model}/converse",
@@ -272,7 +272,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="AWS_REGION",
         service_name="bedrock",
     ),
-    "cerebras": ProviderConfig(
+    "cerebras": ProviderSpec(
         name="cerebras",
         base_url="https://api.cerebras.ai",
         endpoint="/v1/chat/completions",
@@ -313,7 +313,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "cohere": ProviderConfig(
+    "cohere": ProviderSpec(
         name="cohere",
         base_url="https://api.cohere.com/compatibility",
         endpoint="/v1/chat/completions",
@@ -354,7 +354,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "deepseek": ProviderConfig(
+    "deepseek": ProviderSpec(
         name="deepseek",
         base_url="https://api.deepseek.com",
         endpoint="/v1/chat/completions",
@@ -395,7 +395,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "doubao": ProviderConfig(
+    "doubao": ProviderSpec(
         name="doubao",
         base_url="https://ark.cn-beijing.volces.com/api/v3",
         endpoint="/chat/completions",
@@ -436,7 +436,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "ernie": ProviderConfig(
+    "ernie": ProviderSpec(
         name="ernie",
         base_url="https://qianfan.baidubce.com/v2",
         endpoint="/chat/completions",
@@ -477,7 +477,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "fireworks": ProviderConfig(
+    "fireworks": ProviderSpec(
         name="fireworks",
         base_url="https://api.fireworks.ai/inference",
         endpoint="/v1/chat/completions",
@@ -518,7 +518,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "google": ProviderConfig(
+    "google": ProviderSpec(
         name="google",
         base_url="https://generativelanguage.googleapis.com",
         endpoint="/v1beta/models/{model}:generateContent",
@@ -557,7 +557,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "grok": ProviderConfig(
+    "grok": ProviderSpec(
         name="grok",
         base_url="https://api.x.ai",
         endpoint="/v1/chat/completions",
@@ -598,7 +598,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "groq": ProviderConfig(
+    "groq": ProviderSpec(
         name="groq",
         base_url="https://api.groq.com/openai",
         endpoint="/v1/chat/completions",
@@ -639,7 +639,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "jan": ProviderConfig(
+    "jan": ProviderSpec(
         name="jan",
         base_url="http://localhost:1337",
         endpoint="/v1/chat/completions",
@@ -680,7 +680,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "llamacpp": ProviderConfig(
+    "llamacpp": ProviderSpec(
         name="llamacpp",
         base_url="http://localhost:8080",
         endpoint="/v1/chat/completions",
@@ -721,7 +721,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "lmstudio": ProviderConfig(
+    "lmstudio": ProviderSpec(
         name="lmstudio",
         base_url="http://localhost:1234",
         endpoint="/v1/chat/completions",
@@ -762,7 +762,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "minimax": ProviderConfig(
+    "minimax": ProviderSpec(
         name="minimax",
         base_url="https://api.minimax.chat",
         endpoint="/v1/text/chatcompletion_v2",
@@ -803,7 +803,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "mistral": ProviderConfig(
+    "mistral": ProviderSpec(
         name="mistral",
         base_url="https://api.mistral.ai",
         endpoint="/v1/chat/completions",
@@ -844,7 +844,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "moonshot": ProviderConfig(
+    "moonshot": ProviderSpec(
         name="moonshot",
         base_url="https://api.moonshot.ai",
         endpoint="/v1/chat/completions",
@@ -885,7 +885,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "ollama": ProviderConfig(
+    "ollama": ProviderSpec(
         name="ollama",
         base_url="http://localhost:11434",
         endpoint="/v1/chat/completions",
@@ -926,7 +926,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "openai": ProviderConfig(
+    "openai": ProviderSpec(
         name="openai",
         base_url="https://api.openai.com",
         endpoint="/v1/chat/completions",
@@ -967,7 +967,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "openrouter": ProviderConfig(
+    "openrouter": ProviderSpec(
         name="openrouter",
         base_url="https://openrouter.ai/api",
         endpoint="/v1/chat/completions",
@@ -1008,7 +1008,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "perplexity": ProviderConfig(
+    "perplexity": ProviderSpec(
         name="perplexity",
         base_url="https://api.perplexity.ai",
         endpoint="/chat/completions",
@@ -1048,7 +1048,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "qwen": ProviderConfig(
+    "qwen": ProviderSpec(
         name="qwen",
         base_url="https://dashscope-intl.aliyuncs.com/compatible-mode",
         endpoint="/v1/chat/completions",
@@ -1089,7 +1089,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "sambanova": ProviderConfig(
+    "sambanova": ProviderSpec(
         name="sambanova",
         base_url="https://api.sambanova.ai",
         endpoint="/v1/chat/completions",
@@ -1130,7 +1130,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "together": ProviderConfig(
+    "together": ProviderSpec(
         name="together",
         base_url="https://api.together.xyz",
         endpoint="/v1/chat/completions",
@@ -1171,7 +1171,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "vertex": ProviderConfig(
+    "vertex": ProviderSpec(
         name="vertex",
         base_url="https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/google/models",
         endpoint="/{model}:predict",
@@ -1209,7 +1209,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "vllm": ProviderConfig(
+    "vllm": ProviderSpec(
         name="vllm",
         base_url="http://localhost:8000",
         endpoint="/v1/chat/completions",
@@ -1250,7 +1250,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "yi": ProviderConfig(
+    "yi": ProviderSpec(
         name="yi",
         base_url="https://api.01.ai",
         endpoint="/v1/chat/completions",
@@ -1290,7 +1290,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         region_env_var="",
         service_name="",
     ),
-    "zhipu": ProviderConfig(
+    "zhipu": ProviderSpec(
         name="zhipu",
         base_url="https://open.bigmodel.cn/api/paas",
         endpoint="/v4/chat/completions",
@@ -1334,8 +1334,8 @@ PROVIDERS: dict[str, ProviderConfig] = {
 }
 
 
-def provider_config(name: str) -> ProviderConfig:
-    """Return the provider config for the given slug."""
+def provider_config(name: str) -> ProviderSpec:
+    """Return the provider spec for the given slug."""
     try:
         return PROVIDERS[name]
     except KeyError as exc:
