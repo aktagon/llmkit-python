@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from .errors import MiddlewareVetoError, ValidationError
 from .providers.generated.middleware import Event, MiddlewareFn, MiddlewarePhase
-from .providers.generated.providers import ProviderConfig
+from .providers.generated.providers import ProviderSpec
 
 if TYPE_CHECKING:
     from .types import Provider
@@ -39,7 +39,7 @@ def fire_post(mws: list[MiddlewareFn], base: Event) -> None:
             pass
 
 
-def resolve_model(provider: Provider, cfg: ProviderConfig) -> str:
+def resolve_model(provider: Provider, cfg: ProviderSpec) -> str:
     """Return the caller-specified model or the provider's curated default.
 
     Local daemons declare no default — what a daemon serves is runtime
