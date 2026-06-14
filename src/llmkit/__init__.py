@@ -79,7 +79,7 @@ from .providers.generated.middleware import (
     MiddlewarePhase,
     Usage,
 )
-from .providers.generated.providers import PROVIDERS, ProviderConfig, ProviderName
+from .providers.generated.providers import ProviderName
 from .types import (
     Capability,
     File,
@@ -162,10 +162,11 @@ __all__ = [
     "APIError",
     "MiddlewareVetoError",
     "ValidationError",
-    # Provider enum + registry (for use with `new_client`).
+    # Provider identity (for use with `new_client`). The internal 37-field
+    # wire/transform spec (ProviderConfig / PROVIDERS) is NOT public surface
+    # (ADR-038 PMD-004); read provider metadata via the `providers` namespace —
+    # `from llmkit import providers; providers.info(name)` / `providers.list()`.
     "ProviderName",
-    "ProviderConfig",
-    "PROVIDERS",
     # Capability vocabulary (ADR-019 catalogue filter + ADR-030
     # Client.supports query).
     "Capability",
