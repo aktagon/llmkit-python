@@ -178,6 +178,10 @@ def test_sigv4_headers_have_required_fields() -> None:
 
 
 def test_providers_registry_has_all_expected_keys() -> None:
+    # PROVIDERS is crate-internal as of ADR-038 (not re-exported from the llmkit
+    # root); read it from the generated module to assert registry coverage.
+    from llmkit.providers.generated.providers import PROVIDERS
+
     expected = {
         "openai",
         "anthropic",
@@ -187,7 +191,7 @@ def test_providers_registry_has_all_expected_keys() -> None:
         "openrouter",
         "ollama",
     }
-    assert expected.issubset(llmkit.PROVIDERS.keys())
+    assert expected.issubset(PROVIDERS.keys())
 
 
 def test_usage_cost_extracted_for_openrouter() -> None:
