@@ -137,15 +137,23 @@ def test_music_generate_vertex_surfaces_rai_filtered_reason() -> None:
     assert resp.finish_reason == "Audio filtered by safety system"
 
 
-def test_music_generate_vertex_rejects_lyrics_instrumental_only() -> None:
-    c = new_client("vertex", "test-token")
-    c.provider.base_url = "http://unused"
-    with pytest.raises(ValidationError) as exc_info:
-        asyncio.run(
-            c.music.model(VERTEX_LYRIA).lyrics("la la la").generate("a melody")
+# ADR-037 (MUS-008): supports_lyrics is advisory, not a gate. Lyrics on the
+# instrumental-only Lyria 2 fold into the :predict prompt instead of being
+# rejected.
+def test_music_generate_vertex_folds_lyrics_into_prompt_instrumental_only() -> None:
+    encoded = base64.b64encode(FAKE_AUDIO).decode("ascii")
+    with _MockServer(_vertex_music_response(encoded)) as server:
+        c = new_client("vertex", "test-token")
+        c.provider.base_url = server.url
+        resp = asyncio.run(
+            c.music.model(VERTEX_LYRIA)
+            .lyrics("[verse] neon lights")
+            .generate("ambient")
         )
-    assert exc_info.value.field == "parts"
-    assert "instrumental-only" in exc_info.value.message
+
+    body = server.received_body or {}
+    assert body["instances"] == [{"prompt": "ambient\n[verse] neon lights"}]
+    assert len(resp.audio) == 1
 
 
 # ===== Google Lyria 3 (MusicGenerateContent wire shape) =====
