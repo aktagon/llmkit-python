@@ -1,4 +1,4 @@
-"""Message and tool transforms. Selected by ProviderConfig fields, not provider name."""
+"""Message and tool transforms. Selected by ProviderSpec fields, not provider name."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any, Callable, NoReturn
 
 from .errors import ValidationError
 from .paths import parse_data_uri
-from .providers.generated.providers import ProviderConfig
+from .providers.generated.providers import ProviderSpec
 from .providers.generated.request import (
     AuthScheme,
     SystemPlacement,
@@ -19,28 +19,28 @@ from .providers.generated.request import (
 from .structs import Message, ToolCall, ToolResult
 
 
-MessageTransform = Callable[[dict[str, Any], list["_Msg"], "Request", ProviderConfig], None]
+MessageTransform = Callable[[dict[str, Any], list["_Msg"], "Request", ProviderSpec], None]
 ToolDefTransform = Callable[[dict[str, Any], list["Tool"]], None]
 ToolCallTransform = Callable[[list[ToolCall], dict[str, str]], dict[str, Any]]
 ToolResultTransform = Callable[[ToolResult, dict[str, str]], dict[str, Any]]
 ToolCallExtractor = Callable[[dict[str, Any], Any], list[ToolCall]]
 
 
-def is_bedrock(cfg: ProviderConfig) -> bool:
+def is_bedrock(cfg: ProviderSpec) -> bool:
     return (
         cfg.wraps_options_in == "inferenceConfig"
         and auth_scheme_for(cfg) == AuthScheme.SIG_V4
     )
 
 
-def auth_scheme_for(cfg: ProviderConfig) -> AuthScheme:
-    """Resolve a ProviderConfig to its AuthScheme using the generated table."""
+def auth_scheme_for(cfg: ProviderSpec) -> AuthScheme:
+    """Resolve a ProviderSpec to its AuthScheme using the generated table."""
     from .providers.generated.providers import ProviderName
 
     return auth_scheme(ProviderName(cfg.name))
 
 
-def placement_for(cfg: ProviderConfig) -> SystemPlacement:
+def placement_for(cfg: ProviderSpec) -> SystemPlacement:
     from .providers.generated.providers import ProviderName
 
     return system_placement(ProviderName(cfg.name))
@@ -50,7 +50,7 @@ def map_role(role: str, mappings: dict[str, str]) -> str:
     return mappings.get(role, role)
 
 
-def select_message_transform(cfg: ProviderConfig) -> MessageTransform:
+def select_message_transform(cfg: ProviderSpec) -> MessageTransform:
     if is_bedrock(cfg):
         return transform_bedrock_converse
     if placement_for(cfg) == SystemPlacement.SIBLING_OBJECT:
@@ -58,7 +58,7 @@ def select_message_transform(cfg: ProviderConfig) -> MessageTransform:
     return transform_flat_content
 
 
-def select_tool_def_transform(cfg: ProviderConfig) -> ToolDefTransform:
+def select_tool_def_transform(cfg: ProviderSpec) -> ToolDefTransform:
     if is_bedrock(cfg):
         return transform_bedrock_tool_defs
     if placement_for(cfg) == SystemPlacement.SIBLING_OBJECT:
@@ -78,7 +78,7 @@ def select_tool_def_transform(cfg: ProviderConfig) -> ToolDefTransform:
     return transform_openai_functions
 
 
-def select_tool_call_transform(cfg: ProviderConfig) -> ToolCallTransform:
+def select_tool_call_transform(cfg: ProviderSpec) -> ToolCallTransform:
     if is_bedrock(cfg):
         return transform_bedrock_tool_call_msg
     if placement_for(cfg) == SystemPlacement.SIBLING_OBJECT:
@@ -89,7 +89,7 @@ def select_tool_call_transform(cfg: ProviderConfig) -> ToolCallTransform:
     return transform_openai_tool_call_msg
 
 
-def select_tool_result_transform(cfg: ProviderConfig) -> ToolResultTransform:
+def select_tool_result_transform(cfg: ProviderSpec) -> ToolResultTransform:
     if is_bedrock(cfg):
         return transform_bedrock_tool_result_msg
     if placement_for(cfg) == SystemPlacement.SIBLING_OBJECT:
@@ -100,7 +100,7 @@ def select_tool_result_transform(cfg: ProviderConfig) -> ToolResultTransform:
     return transform_openai_tool_result_msg
 
 
-def select_tool_call_extractor(cfg: ProviderConfig) -> ToolCallExtractor:
+def select_tool_call_extractor(cfg: ProviderSpec) -> ToolCallExtractor:
     if is_bedrock(cfg):
         return extract_bedrock_tool_calls
     if placement_for(cfg) == SystemPlacement.SIBLING_OBJECT:
@@ -111,7 +111,7 @@ def select_tool_call_extractor(cfg: ProviderConfig) -> ToolCallExtractor:
     return extract_openai_tool_calls
 
 
-def _tool_call_def(cfg: ProviderConfig):
+def _tool_call_def(cfg: ProviderSpec):
     from .providers.generated.providers import ProviderName
 
     return tool_call_config(ProviderName(cfg.name))
@@ -190,7 +190,7 @@ def to_internal(messages: list[Message]) -> list[_Msg]:
 # Message transforms — build the messages/contents array in request body
 # =============================================================================
 
-def transform_flat_content(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderConfig) -> None:
+def transform_flat_content(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> None:
     out: list[dict[str, Any]] = []
     placement = placement_for(cfg)
 
@@ -243,7 +243,7 @@ def transform_flat_content(body: dict[str, Any], msgs: list[_Msg], req: "Request
     body["messages"] = out
 
 
-def _build_flat_content_parts(req: "Request", cfg: ProviderConfig) -> list[dict[str, Any]]:
+def _build_flat_content_parts(req: "Request", cfg: ProviderSpec) -> list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
     is_anthropic = placement_for(cfg) == SystemPlacement.TOP_LEVEL_FIELD
 
@@ -297,7 +297,7 @@ def _build_flat_content_parts(req: "Request", cfg: ProviderConfig) -> list[dict[
     return parts
 
 
-def transform_google_parts(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderConfig) -> None:
+def transform_google_parts(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> None:
     contents: list[dict[str, Any]] = []
     if msgs:
         call_t = select_tool_call_transform(cfg)
@@ -379,7 +379,7 @@ def _build_google_content_parts(req: "Request") -> list[dict[str, Any]]:
     return parts
 
 
-def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderConfig) -> None:
+def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> None:
     if req.system:
         body["system"] = [{"text": req.system}]
     out: list[dict[str, Any]] = []
