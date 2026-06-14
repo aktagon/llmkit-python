@@ -18,6 +18,10 @@ class MusicModelDef:
     supports_lyrics: bool = False
     max_duration_seconds: int = 0
     output_mime: str = ""
+    # ADR-037 advisory facts (queryable, never gated). sample_rate_hz is
+    # 0 when unverified; available_output_formats lists emittable MIMEs.
+    sample_rate_hz: int = 0
+    available_output_formats: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -40,6 +44,8 @@ _MUSIC_GEN: dict[ProviderName, MusicGenDef] = {
                 supports_lyrics=True,
                 max_duration_seconds=30,
                 output_mime="audio/mpeg",
+                sample_rate_hz=0,
+                available_output_formats=("audio/mpeg",),
             ),
             MusicModelDef(
                 model_id="lyria-3-pro-preview",
@@ -47,6 +53,8 @@ _MUSIC_GEN: dict[ProviderName, MusicGenDef] = {
                 supports_lyrics=True,
                 max_duration_seconds=120,
                 output_mime="audio/mpeg",
+                sample_rate_hz=0,
+                available_output_formats=("audio/mpeg",),
             ),
         ),
     ),
@@ -60,6 +68,8 @@ _MUSIC_GEN: dict[ProviderName, MusicGenDef] = {
                 supports_lyrics=True,
                 max_duration_seconds=0,
                 output_mime="audio/mpeg",
+                sample_rate_hz=44100,
+                available_output_formats=("audio/mpeg", "audio/wav"),
             ),
         ),
     ),
@@ -73,6 +83,8 @@ _MUSIC_GEN: dict[ProviderName, MusicGenDef] = {
                 supports_lyrics=False,
                 max_duration_seconds=30,
                 output_mime="audio/wav",
+                sample_rate_hz=48000,
+                available_output_formats=("audio/wav",),
             ),
         ),
     ),
