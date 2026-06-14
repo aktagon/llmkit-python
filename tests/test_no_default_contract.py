@@ -13,7 +13,11 @@ from __future__ import annotations
 
 import pytest
 
-from llmkit import PROVIDERS
+# PROVIDERS (the 37-field wire/transform spec registry) is crate-internal as of
+# ADR-038 (no longer re-exported from the llmkit root); this test drives the
+# internal resolve_model against that spec, so it reads it from the generated
+# module directly.
+from llmkit.providers.generated.providers import PROVIDERS
 from llmkit.errors import ValidationError
 from llmkit.middleware import resolve_model
 from llmkit.types import Provider
