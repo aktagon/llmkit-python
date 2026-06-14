@@ -12,7 +12,7 @@ from .middleware import fire_post, fire_pre, resolve_model
 from .paths import extract_path
 from .providers.generated.caching import CachingDef, CachingMode, caching_config
 from .providers.generated.middleware import Event, MiddlewareOp
-from .providers.generated.providers import PROVIDERS, ProviderConfig, ProviderName
+from .providers.generated.providers import PROVIDERS, ProviderSpec, ProviderName
 from .providers.generated.request import AuthScheme, SystemPlacement, auth_scheme, system_placement
 from .types import Options, Provider
 
@@ -21,7 +21,7 @@ def apply_caching(
     body: dict[str, Any],
     provider: Provider,
     opts: Options,
-    cfg: ProviderConfig,
+    cfg: ProviderSpec,
 ) -> None:
     """Mutate body to enable caching. Dispatches on the provider's CachingMode."""
     cc = caching_config(ProviderName(provider.name))
@@ -39,7 +39,7 @@ def apply_caching(
     raise ValidationError(field="caching", message=f"unknown caching mode: {cc.mode}")
 
 
-def _apply_explicit(body: dict[str, Any], cc: CachingDef, cfg: ProviderConfig) -> None:
+def _apply_explicit(body: dict[str, Any], cc: CachingDef, cfg: ProviderSpec) -> None:
     control_type = cc.control_type or "ephemeral"
     placement = system_placement(ProviderName(cfg.name))
 
@@ -72,7 +72,7 @@ def _apply_resource(
     provider: Provider,
     opts: Options,
     cc: CachingDef,
-    cfg: ProviderConfig,
+    cfg: ProviderSpec,
 ) -> None:
     if cc.lifecycle is None:
         raise ValidationError(field="caching", message="resource caching requires lifecycle config")
