@@ -54,6 +54,8 @@ def _build_request(b: "Text", final_text: str) -> Request:
         req.messages = msgs
     elif user:
         req.user = user
+    if b._files:
+        req.files = b._files
     if b._schema:
         req.schema = b._schema
     return req
