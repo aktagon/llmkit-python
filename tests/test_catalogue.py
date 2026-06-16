@@ -14,6 +14,7 @@ from llmkit.models import (
     ErrModelsScope,
     ErrModelsUnavailable,
 )
+from llmkit import providers
 from llmkit.types import Capability, Provider
 
 
@@ -60,7 +61,7 @@ def test_providers_list_returns_configured_provider_with_endpoint() -> None:
     c = anthropic("test-key")
     got = c.providers.list()
     assert len(got) == 1
-    assert got[0].name == "anthropic"
+    assert got[0].slug == "anthropic"
 
 
 def test_providers_list_empty_for_endpointless_provider() -> None:
@@ -86,14 +87,13 @@ def test_providers_list_includes_bound_local_provider() -> None:
     c = ollama("")
     got = c.providers.list()
     assert len(got) == 1
-    assert got[0].name == "ollama"
+    assert got[0].slug == "ollama"
 
 
 def test_providers_supported_returns_full_sdk_roster() -> None:
-    c = anthropic("test-key")
-    supported = c.providers.supported()
+    supported = providers.list()
     assert len(supported) >= 10
-    names = [p.name for p in supported]
+    names = [p.slug for p in supported]
     # Wire-format names — guards against str(Enum) leaking "ProviderName.ANTHROPIC".
     assert "anthropic" in names
     assert "openai" in names

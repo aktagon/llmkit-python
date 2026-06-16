@@ -10,11 +10,13 @@ from .providers import ProviderName
 
 @dataclass(frozen=True)
 class ProviderInfo:
-    """Narrow public per-provider catalogue: the metadata a consumer may read
-    (env var, default model, base URL). A projection of the same provider facts
-    that feed the internal spec, so the two cannot drift."""
+    """WHAT a user wants to know about a provider [PUBLIC]: the narrow, stable
+    catalogue (typed identity, env var, default model, base URL). A projection
+    of the same provider facts that feed the internal ProviderSpec, so the two
+    cannot drift."""
 
-    name: str
+    id: ProviderName  # typed identity (ADR-040)
+    slug: str  # the slug; equal to id.value
     env_var: str
     default_model: str
     base_url: str
@@ -22,181 +24,211 @@ class ProviderInfo:
 
 _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
     ProviderName.AI21: ProviderInfo(
-        name="ai21",
+        id=ProviderName.AI21,
+        slug="ai21",
         env_var="AI21_API_KEY",
         default_model="jamba-1.5-large",
         base_url="https://api.ai21.com",
     ),
     ProviderName.ANTHROPIC: ProviderInfo(
-        name="anthropic",
+        id=ProviderName.ANTHROPIC,
+        slug="anthropic",
         env_var="ANTHROPIC_API_KEY",
         default_model="claude-sonnet-4-6",
         base_url="https://api.anthropic.com",
     ),
     ProviderName.AZURE: ProviderInfo(
-        name="azure",
+        id=ProviderName.AZURE,
+        slug="azure",
         env_var="AZURE_OPENAI_API_KEY",
         default_model="gpt-4o",
         base_url="https://REPLACE-WITH-YOUR-RESOURCE.openai.azure.com",
     ),
     ProviderName.BEDROCK: ProviderInfo(
-        name="bedrock",
+        id=ProviderName.BEDROCK,
+        slug="bedrock",
         env_var="AWS_ACCESS_KEY_ID",
         default_model="anthropic.claude-sonnet-4-20250514-v1:0",
         base_url="https://bedrock-runtime.{region}.amazonaws.com",
     ),
     ProviderName.CEREBRAS: ProviderInfo(
-        name="cerebras",
+        id=ProviderName.CEREBRAS,
+        slug="cerebras",
         env_var="CEREBRAS_API_KEY",
         default_model="llama-3.3-70b",
         base_url="https://api.cerebras.ai",
     ),
     ProviderName.COHERE: ProviderInfo(
-        name="cohere",
+        id=ProviderName.COHERE,
+        slug="cohere",
         env_var="COHERE_API_KEY",
         default_model="command-r-plus",
         base_url="https://api.cohere.com/compatibility",
     ),
     ProviderName.DEEPSEEK: ProviderInfo(
-        name="deepseek",
+        id=ProviderName.DEEPSEEK,
+        slug="deepseek",
         env_var="DEEPSEEK_API_KEY",
         default_model="deepseek-chat",
         base_url="https://api.deepseek.com",
     ),
     ProviderName.DOUBAO: ProviderInfo(
-        name="doubao",
+        id=ProviderName.DOUBAO,
+        slug="doubao",
         env_var="ARK_API_KEY",
         default_model="doubao-1.5-pro-32k-250115",
         base_url="https://ark.cn-beijing.volces.com/api/v3",
     ),
     ProviderName.ERNIE: ProviderInfo(
-        name="ernie",
+        id=ProviderName.ERNIE,
+        slug="ernie",
         env_var="QIANFAN_API_KEY",
         default_model="ernie-4.0-8k",
         base_url="https://qianfan.baidubce.com/v2",
     ),
     ProviderName.FIREWORKS: ProviderInfo(
-        name="fireworks",
+        id=ProviderName.FIREWORKS,
+        slug="fireworks",
         env_var="FIREWORKS_API_KEY",
         default_model="accounts/fireworks/models/llama-v3p3-70b-instruct",
         base_url="https://api.fireworks.ai/inference",
     ),
     ProviderName.GOOGLE: ProviderInfo(
-        name="google",
+        id=ProviderName.GOOGLE,
+        slug="google",
         env_var="GOOGLE_API_KEY",
         default_model="gemini-2.5-flash",
         base_url="https://generativelanguage.googleapis.com",
     ),
     ProviderName.GROK: ProviderInfo(
-        name="grok",
+        id=ProviderName.GROK,
+        slug="grok",
         env_var="XAI_API_KEY",
         default_model="grok-3-fast",
         base_url="https://api.x.ai",
     ),
     ProviderName.GROQ: ProviderInfo(
-        name="groq",
+        id=ProviderName.GROQ,
+        slug="groq",
         env_var="GROQ_API_KEY",
         default_model="llama-3.3-70b-versatile",
         base_url="https://api.groq.com/openai",
     ),
     ProviderName.JAN: ProviderInfo(
-        name="jan",
+        id=ProviderName.JAN,
+        slug="jan",
         env_var="JAN_API_KEY",
         default_model="",
         base_url="http://localhost:1337",
     ),
     ProviderName.LLAMACPP: ProviderInfo(
-        name="llamacpp",
+        id=ProviderName.LLAMACPP,
+        slug="llamacpp",
         env_var="LLAMACPP_API_KEY",
         default_model="",
         base_url="http://localhost:8080",
     ),
     ProviderName.LMSTUDIO: ProviderInfo(
-        name="lmstudio",
+        id=ProviderName.LMSTUDIO,
+        slug="lmstudio",
         env_var="LM_STUDIO_API_KEY",
         default_model="",
         base_url="http://localhost:1234",
     ),
     ProviderName.MINIMAX: ProviderInfo(
-        name="minimax",
+        id=ProviderName.MINIMAX,
+        slug="minimax",
         env_var="MINIMAX_API_KEY",
         default_model="MiniMax-Text-01",
         base_url="https://api.minimax.chat",
     ),
     ProviderName.MISTRAL: ProviderInfo(
-        name="mistral",
+        id=ProviderName.MISTRAL,
+        slug="mistral",
         env_var="MISTRAL_API_KEY",
         default_model="mistral-large-latest",
         base_url="https://api.mistral.ai",
     ),
     ProviderName.MOONSHOT: ProviderInfo(
-        name="moonshot",
+        id=ProviderName.MOONSHOT,
+        slug="moonshot",
         env_var="MOONSHOT_API_KEY",
         default_model="moonshot-v1-8k",
         base_url="https://api.moonshot.ai",
     ),
     ProviderName.OLLAMA: ProviderInfo(
-        name="ollama",
+        id=ProviderName.OLLAMA,
+        slug="ollama",
         env_var="OLLAMA_API_KEY",
         default_model="",
         base_url="http://localhost:11434",
     ),
     ProviderName.OPENAI: ProviderInfo(
-        name="openai",
+        id=ProviderName.OPENAI,
+        slug="openai",
         env_var="OPENAI_API_KEY",
         default_model="gpt-4o-2024-08-06",
         base_url="https://api.openai.com",
     ),
     ProviderName.OPENROUTER: ProviderInfo(
-        name="openrouter",
+        id=ProviderName.OPENROUTER,
+        slug="openrouter",
         env_var="OPENROUTER_API_KEY",
         default_model="openai/gpt-4o",
         base_url="https://openrouter.ai/api",
     ),
     ProviderName.PERPLEXITY: ProviderInfo(
-        name="perplexity",
+        id=ProviderName.PERPLEXITY,
+        slug="perplexity",
         env_var="PERPLEXITY_API_KEY",
         default_model="sonar-pro",
         base_url="https://api.perplexity.ai",
     ),
     ProviderName.QWEN: ProviderInfo(
-        name="qwen",
+        id=ProviderName.QWEN,
+        slug="qwen",
         env_var="DASHSCOPE_API_KEY",
         default_model="qwen-plus",
         base_url="https://dashscope-intl.aliyuncs.com/compatible-mode",
     ),
     ProviderName.SAMBANOVA: ProviderInfo(
-        name="sambanova",
+        id=ProviderName.SAMBANOVA,
+        slug="sambanova",
         env_var="SAMBANOVA_API_KEY",
         default_model="Meta-Llama-3.3-70B-Instruct",
         base_url="https://api.sambanova.ai",
     ),
     ProviderName.TOGETHER: ProviderInfo(
-        name="together",
+        id=ProviderName.TOGETHER,
+        slug="together",
         env_var="TOGETHER_API_KEY",
         default_model="meta-llama/Llama-3.3-70B-Instruct-Turbo",
         base_url="https://api.together.xyz",
     ),
     ProviderName.VERTEX: ProviderInfo(
-        name="vertex",
+        id=ProviderName.VERTEX,
+        slug="vertex",
         env_var="VERTEX_BEARER_TOKEN",
         default_model="imagen-3.0-generate-002",
         base_url="https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/google/models",
     ),
     ProviderName.VLLM: ProviderInfo(
-        name="vllm",
+        id=ProviderName.VLLM,
+        slug="vllm",
         env_var="VLLM_API_KEY",
         default_model="",
         base_url="http://localhost:8000",
     ),
     ProviderName.YI: ProviderInfo(
-        name="yi",
+        id=ProviderName.YI,
+        slug="yi",
         env_var="YI_API_KEY",
         default_model="yi-large",
         base_url="https://api.01.ai",
     ),
     ProviderName.ZHIPU: ProviderInfo(
-        name="zhipu",
+        id=ProviderName.ZHIPU,
+        slug="zhipu",
         env_var="ZHIPU_API_KEY",
         default_model="glm-4-plus",
         base_url="https://open.bigmodel.cn/api/paas",
@@ -205,10 +237,11 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
 
 
 def info(provider: ProviderName) -> ProviderInfo:
-    """Return the public metadata for a provider. Total over ProviderName."""
+    """Return the public metadata for a provider. Keyed by the typed identity,
+    it is honestly total over ProviderName (ADR-040 PSR-001)."""
     return _PROVIDER_INFO[provider]
 
 
 def list() -> builtins.list[ProviderInfo]:
-    """Return the public metadata for every provider, sorted by name."""
-    return sorted(_PROVIDER_INFO.values(), key=lambda i: i.name)
+    """Return the public metadata for every provider, sorted by slug."""
+    return sorted(_PROVIDER_INFO.values(), key=lambda i: i.slug)

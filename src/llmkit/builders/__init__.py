@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class ProviderConfig:
-    name: str
+    name: ProviderName
     api_key: str
     base_url: str = ""
 
@@ -622,7 +622,7 @@ class Client:
     a builder prototype tied to this client; chain methods return new
     instances, the field stays constant."""
 
-    def __init__(self, name: str, api_key: str) -> None:
+    def __init__(self, name: ProviderName, api_key: str) -> None:
         self.provider = ProviderConfig(name=name, api_key=api_key)
         self.text: Text = Text(self)
         self.image: Image = Image(self)
@@ -674,41 +674,43 @@ class Client:
             return file_upload_config(pn) is not None
         return image_gen_config(pn) is not None
 
-def new_client(name: str, api_key: str) -> Client:
-    """Generic factory; per-provider helpers below are ergonomic shortcuts."""
+def new_client(name: ProviderName, api_key: str) -> Client:
+    """Generic factory taking the typed ProviderName identity (ADR-040);
+    per-provider helpers below are ergonomic shortcuts. A config slug crosses
+    in via ProviderName(slug)."""
     return Client(name, api_key)
 
 # === Per-provider factory functions ===
-def ai21(api_key: str) -> Client: return Client("ai21", api_key)
-def anthropic(api_key: str) -> Client: return Client("anthropic", api_key)
-def azure(api_key: str) -> Client: return Client("azure", api_key)
-def bedrock(api_key: str) -> Client: return Client("bedrock", api_key)
-def cerebras(api_key: str) -> Client: return Client("cerebras", api_key)
-def cohere(api_key: str) -> Client: return Client("cohere", api_key)
-def deepseek(api_key: str) -> Client: return Client("deepseek", api_key)
-def doubao(api_key: str) -> Client: return Client("doubao", api_key)
-def ernie(api_key: str) -> Client: return Client("ernie", api_key)
-def fireworks(api_key: str) -> Client: return Client("fireworks", api_key)
-def google(api_key: str) -> Client: return Client("google", api_key)
-def grok(api_key: str) -> Client: return Client("grok", api_key)
-def groq(api_key: str) -> Client: return Client("groq", api_key)
-def jan(api_key: str) -> Client: return Client("jan", api_key)
-def llamacpp(api_key: str) -> Client: return Client("llamacpp", api_key)
-def lmstudio(api_key: str) -> Client: return Client("lmstudio", api_key)
-def minimax(api_key: str) -> Client: return Client("minimax", api_key)
-def mistral(api_key: str) -> Client: return Client("mistral", api_key)
-def moonshot(api_key: str) -> Client: return Client("moonshot", api_key)
-def ollama(api_key: str) -> Client: return Client("ollama", api_key)
-def openai(api_key: str) -> Client: return Client("openai", api_key)
-def openrouter(api_key: str) -> Client: return Client("openrouter", api_key)
-def perplexity(api_key: str) -> Client: return Client("perplexity", api_key)
-def qwen(api_key: str) -> Client: return Client("qwen", api_key)
-def sambanova(api_key: str) -> Client: return Client("sambanova", api_key)
-def together(api_key: str) -> Client: return Client("together", api_key)
-def vertex(api_key: str) -> Client: return Client("vertex", api_key)
-def vllm(api_key: str) -> Client: return Client("vllm", api_key)
-def yi(api_key: str) -> Client: return Client("yi", api_key)
-def zhipu(api_key: str) -> Client: return Client("zhipu", api_key)
+def ai21(api_key: str) -> Client: return Client(ProviderName.AI21, api_key)
+def anthropic(api_key: str) -> Client: return Client(ProviderName.ANTHROPIC, api_key)
+def azure(api_key: str) -> Client: return Client(ProviderName.AZURE, api_key)
+def bedrock(api_key: str) -> Client: return Client(ProviderName.BEDROCK, api_key)
+def cerebras(api_key: str) -> Client: return Client(ProviderName.CEREBRAS, api_key)
+def cohere(api_key: str) -> Client: return Client(ProviderName.COHERE, api_key)
+def deepseek(api_key: str) -> Client: return Client(ProviderName.DEEPSEEK, api_key)
+def doubao(api_key: str) -> Client: return Client(ProviderName.DOUBAO, api_key)
+def ernie(api_key: str) -> Client: return Client(ProviderName.ERNIE, api_key)
+def fireworks(api_key: str) -> Client: return Client(ProviderName.FIREWORKS, api_key)
+def google(api_key: str) -> Client: return Client(ProviderName.GOOGLE, api_key)
+def grok(api_key: str) -> Client: return Client(ProviderName.GROK, api_key)
+def groq(api_key: str) -> Client: return Client(ProviderName.GROQ, api_key)
+def jan(api_key: str) -> Client: return Client(ProviderName.JAN, api_key)
+def llamacpp(api_key: str) -> Client: return Client(ProviderName.LLAMACPP, api_key)
+def lmstudio(api_key: str) -> Client: return Client(ProviderName.LMSTUDIO, api_key)
+def minimax(api_key: str) -> Client: return Client(ProviderName.MINIMAX, api_key)
+def mistral(api_key: str) -> Client: return Client(ProviderName.MISTRAL, api_key)
+def moonshot(api_key: str) -> Client: return Client(ProviderName.MOONSHOT, api_key)
+def ollama(api_key: str) -> Client: return Client(ProviderName.OLLAMA, api_key)
+def openai(api_key: str) -> Client: return Client(ProviderName.OPENAI, api_key)
+def openrouter(api_key: str) -> Client: return Client(ProviderName.OPENROUTER, api_key)
+def perplexity(api_key: str) -> Client: return Client(ProviderName.PERPLEXITY, api_key)
+def qwen(api_key: str) -> Client: return Client(ProviderName.QWEN, api_key)
+def sambanova(api_key: str) -> Client: return Client(ProviderName.SAMBANOVA, api_key)
+def together(api_key: str) -> Client: return Client(ProviderName.TOGETHER, api_key)
+def vertex(api_key: str) -> Client: return Client(ProviderName.VERTEX, api_key)
+def vllm(api_key: str) -> Client: return Client(ProviderName.VLLM, api_key)
+def yi(api_key: str) -> Client: return Client(ProviderName.YI, api_key)
+def zhipu(api_key: str) -> Client: return Client(ProviderName.ZHIPU, api_key)
 
 __all__ = [
     "Client",
