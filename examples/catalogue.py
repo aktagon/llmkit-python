@@ -16,7 +16,7 @@ Run: ANTHROPIC_API_KEY=sk-... python examples/catalogue.py
 import asyncio
 import os
 
-from llmkit import Provider
+from llmkit import Provider, providers
 from llmkit.builders import anthropic
 from llmkit.types import Capability
 
@@ -35,9 +35,9 @@ async def main(c=None) -> None:
     print(f"chat-capable non-empty: {len(chat) > 0}")
 
     # 2. Providers namespace.
-    configured = [p.name for p in c.providers.list()]
+    configured = [p.slug for p in c.providers.list()]
     print(f"configured: {configured}")
-    print(f"supported >= 1: {len(c.providers.supported()) > 0}")
+    print(f"supported >= 1: {len(providers.list()) > 0}")
 
     # 3. Live + scoped HTTP.
     p = Provider(
