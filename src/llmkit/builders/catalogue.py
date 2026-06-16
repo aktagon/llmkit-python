@@ -19,11 +19,11 @@ from ..models import (
     catalogue_filter,
     catalogue_lookup,
     catalogue_providers_list,
-    catalogue_providers_supported,
     catalogue_run_get,
     catalogue_run_list,
     catalogue_run_live,
 )
+from ..providers.generated.provider_info import ProviderInfo
 from ..structs import LiveResult, ModelInfo
 from ..types import Capability, Provider
 
@@ -100,13 +100,12 @@ class ScopedModels:
 class Providers:
     """
 
+
+
 """
 
     def __init__(self, client: "Client") -> None:
         self.client = client
 
-    def list(self) -> list[Provider]:
+    def list(self) -> list[ProviderInfo]:
         return catalogue_providers_list(self.client)
-
-    def supported(self) -> list[Provider]:
-        return catalogue_providers_supported()
