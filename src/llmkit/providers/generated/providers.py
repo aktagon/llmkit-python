@@ -75,6 +75,9 @@ ALL_PROVIDER_NAMES: tuple[ProviderName, ...] = (
 
 @dataclass(frozen=True)
 class ProviderSpec:
+    """
+
+"""
     name: str
     base_url: str
     endpoint: str
