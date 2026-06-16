@@ -311,6 +311,32 @@ def test_options_anthropic_plain_matches_shared_golden() -> None:
         _assert_wire_golden("options-anthropic-plain", server.last_body)
 
 
+def test_anthropic_text_document_matches_shared_golden() -> None:
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = anthropic("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.text.model(wi.WIRE_ANTHROPIC_TEXT_DOCUMENT_MODEL)
+            .file(wi.WIRE_ANTHROPIC_TEXT_DOCUMENT_FILE_ID)
+            .prompt(wi.WIRE_ANTHROPIC_TEXT_DOCUMENT_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("anthropic-text-document", server.last_body)
+
+
+def test_openai_text_document_matches_shared_golden() -> None:
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = openai("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.text.model(wi.WIRE_OPENAI_TEXT_DOCUMENT_MODEL)
+            .file(wi.WIRE_OPENAI_TEXT_DOCUMENT_FILE_ID)
+            .prompt(wi.WIRE_OPENAI_TEXT_DOCUMENT_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("openai-text-document", server.last_body)
+
+
 def test_options_anthropic_adaptive_matches_shared_golden() -> None:
     with _CaptureServer(_CANNED_RESP) as server:
         c = anthropic("key")
