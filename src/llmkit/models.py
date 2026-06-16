@@ -27,10 +27,10 @@ from .providers.generated.models_parsers import (
     parse_openai_cohort_models_response,
 )
 from .providers.generated.providers import (
-    ALL_PROVIDER_NAMES,
     PROVIDERS,
     ProviderSpec,
 )
+from .providers.generated.provider_info import ProviderInfo, info
 from .providers.generated.request import AuthScheme, auth_scheme
 from .providers.generated.providers import ProviderName
 from .structs import LiveResult, ModelInfo, ProviderError
@@ -94,8 +94,16 @@ async def catalogue_run_live(models: "Models") -> LiveResult:
     with_capability composes post-fetch."""
     from .builders.catalogue import ScopedModels as _ScopedModels
 
+    pc = models.client.provider
     configured = models.client.providers.list()
-    scoped_builders = [_ScopedModels(models.client, p, models.cap_filter) for p in configured]
+    scoped_builders = [
+        _ScopedModels(
+            models.client,
+            Provider(name=p.id, api_key=pc.api_key, base_url=pc.base_url),
+            models.cap_filter,
+        )
+        for p in configured
+    ]
     results = await asyncio.gather(
         *(scoped.list() for scoped in scoped_builders),
         return_exceptions=True,
@@ -105,7 +113,7 @@ async def catalogue_run_live(models: "Models") -> LiveResult:
     errors: dict[str, ProviderError] = {}
     for p, r in zip(configured, results):
         if isinstance(r, BaseException):
-            errors[p.name] = ProviderError(kind=classify_catalogue_error(r), message=str(r))
+            errors[p.slug] = ProviderError(kind=classify_catalogue_error(r), message=str(r))
         else:
             all_models.extend(r)
 
@@ -187,17 +195,11 @@ async def catalogue_run_get(scoped: "ScopedModels", id: str) -> ModelInfo:
 # === Providers-namespace runtime (hand-coded mirror of go/providers.go) ===
 
 
-def catalogue_providers_list(client: "Client") -> list[Provider]:
+def catalogue_providers_list(client: "Client") -> list[ProviderInfo]:
     p = client.provider
     if p.name not in catalogue_by_provider:
         return []
-    return [Provider(name=p.name, api_key=p.api_key, base_url=p.base_url)]
-
-
-def catalogue_providers_supported() -> list[Provider]:
-    # ProviderName(str, Enum) -> .value returns the wire string.
-    names = sorted(n.value for n in ALL_PROVIDER_NAMES)
-    return [Provider(name=n, api_key="") for n in names]
+    return [info(ProviderName(p.name))]
 
 
 # === HTTP internals ===
