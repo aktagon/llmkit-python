@@ -75,6 +75,9 @@ ALL_PROVIDER_NAMES: tuple[ProviderName, ...] = (
 
 @dataclass(frozen=True)
 class ProviderSpec:
+    """HOW the library talks to a provider [PRIVATE]: the internal
+    wire/transform spec consumed only by the runtime. Volatile; not exported
+    from the package root."""
     name: str
     base_url: str
     endpoint: str
