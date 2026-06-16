@@ -5,6 +5,9 @@ from ontology/wire-fixtures.ttl. Consumed by the request-wire
 conformance drivers; codegen/lint_wire_witness.py derives witness
 coverage from the same facts."""
 
+WIRE_ANTHROPIC_TEXT_DOCUMENT_MODEL = "claude-opus-4-8"
+WIRE_ANTHROPIC_TEXT_DOCUMENT_PROMPT = "Summarize the attached document in three sentences."
+WIRE_ANTHROPIC_TEXT_DOCUMENT_FILE_ID = "file_011CMZq8h5VnVe8jL3qK7p2R"
 WIRE_CACHING_PROMPT = "hi"
 WIRE_CACHING_SYSTEM = "a long stable system prefix"
 WIRE_IMAGE_EDIT_GOOGLE_FLASH_MODEL = "gemini-3.1-flash-image-preview"
@@ -26,6 +29,9 @@ WIRE_IMAGE_GEN_OPENAI_COUNT = 1
 WIRE_IMAGE_GEN_OPENAI_IMAGE_SIZE = "1024x1024"
 WIRE_IMAGE_GEN_OPENAI_OUTPUT_FORMAT = "png"
 WIRE_IMAGE_GEN_OPENAI_QUALITY = "low"
+WIRE_OPENAI_TEXT_DOCUMENT_MODEL = "gpt-4o"
+WIRE_OPENAI_TEXT_DOCUMENT_PROMPT = "Summarize the attached document in three sentences."
+WIRE_OPENAI_TEXT_DOCUMENT_FILE_ID = "file-9aXr2bQ7m1Tn"
 WIRE_OPTIONS_ANTHROPIC_MODEL = "claude-sonnet-4-6"
 WIRE_OPTIONS_ANTHROPIC_PROMPT = "Explain in one sentence why the sky appears blue at noon, then write END_OF_ANSWER."
 WIRE_OPTIONS_ANTHROPIC_MAX_TOKENS = 2048
