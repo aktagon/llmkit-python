@@ -219,6 +219,13 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         default_model="",
         base_url="http://localhost:8000",
     ),
+    ProviderName.WORKERSAI: ProviderInfo(
+        id=ProviderName.WORKERSAI,
+        slug="workersai",
+        env_var="CLOUDFLARE_API_TOKEN",
+        default_model="@cf/meta/llama-3.1-8b-instruct",
+        base_url="https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1",
+    ),
     ProviderName.YI: ProviderInfo(
         id=ProviderName.YI,
         slug="yi",
