@@ -35,6 +35,7 @@ class ProviderName(str, Enum):
     TOGETHER = "together"
     VERTEX = "vertex"
     VLLM = "vllm"
+    WORKERSAI = "workersai"
     YI = "yi"
     ZHIPU = "zhipu"
 
@@ -68,6 +69,7 @@ ALL_PROVIDER_NAMES: tuple[ProviderName, ...] = (
     ProviderName.TOGETHER,
     ProviderName.VERTEX,
     ProviderName.VLLM,
+    ProviderName.WORKERSAI,
     ProviderName.YI,
     ProviderName.ZHIPU,
 )
@@ -1241,6 +1243,47 @@ PROVIDERS: dict[str, ProviderSpec] = {
         finish_reason_path="",
         finish_message_path="",
         stream_finish_reason_path="",
+        stream_finish_message_path="",
+        wraps_options_in="",
+        safety_settings_wire_path="",
+        model_in_body=True,
+        error_message_path="error.message",
+        error_type_path="error.type",
+        access_key_env_var="",
+        secret_key_env_var="",
+        session_token_env_var="",
+        region_env_var="",
+        service_name="",
+    ),
+    "workersai": ProviderSpec(
+        name="workersai",
+        base_url="https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1",
+        endpoint="/chat/completions",
+        default_model="@cf/meta/llama-3.1-8b-instruct",
+        env_var="CLOUDFLARE_API_TOKEN",
+        default_max_tokens=4096,
+        response_text_path="choices[0].message.content",
+        auth_scheme="BearerToken",
+        auth_header="Authorization",
+        auth_prefix="Bearer",
+        auth_query_param="",
+        required_header="",
+        required_header_value="",
+        system_placement="MessageInArray",
+        role_mappings={
+            "assistant": "assistant",
+            "system": "system",
+            "tool": "tool",
+            "user": "user",
+        },
+        usage_input_path="usage.prompt_tokens",
+        usage_output_path="usage.completion_tokens",
+        usage_cost_path="",
+        usage_cost_scale=1.0,
+        reasoning_tokens_path="",
+        finish_reason_path="choices[0].finish_reason",
+        finish_message_path="",
+        stream_finish_reason_path="choices[0].finish_reason",
         stream_finish_message_path="",
         wraps_options_in="",
         safety_settings_wire_path="",
