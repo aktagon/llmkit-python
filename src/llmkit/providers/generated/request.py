@@ -86,6 +86,7 @@ _AUTH_SCHEMES: dict[ProviderName, AuthScheme] = {
     ProviderName.TOGETHER: AuthScheme.BEARER_TOKEN,
     ProviderName.VERTEX: AuthScheme.BEARER_TOKEN,
     ProviderName.VLLM: AuthScheme.BEARER_TOKEN,
+    ProviderName.WORKERSAI: AuthScheme.BEARER_TOKEN,
     ProviderName.YI: AuthScheme.BEARER_TOKEN,
     ProviderName.ZHIPU: AuthScheme.BEARER_TOKEN,
 }
@@ -120,6 +121,7 @@ _SYSTEM_PLACEMENTS: dict[ProviderName, SystemPlacement] = {
     ProviderName.TOGETHER: SystemPlacement.MESSAGE_IN_ARRAY,
     ProviderName.VERTEX: SystemPlacement.MESSAGE_IN_ARRAY,
     ProviderName.VLLM: SystemPlacement.MESSAGE_IN_ARRAY,
+    ProviderName.WORKERSAI: SystemPlacement.MESSAGE_IN_ARRAY,
     ProviderName.YI: SystemPlacement.MESSAGE_IN_ARRAY,
     ProviderName.ZHIPU: SystemPlacement.MESSAGE_IN_ARRAY,
 }

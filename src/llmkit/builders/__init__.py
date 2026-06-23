@@ -709,6 +709,7 @@ def sambanova(api_key: str) -> Client: return Client(ProviderName.SAMBANOVA, api
 def together(api_key: str) -> Client: return Client(ProviderName.TOGETHER, api_key)
 def vertex(api_key: str) -> Client: return Client(ProviderName.VERTEX, api_key)
 def vllm(api_key: str) -> Client: return Client(ProviderName.VLLM, api_key)
+def workersai(api_key: str) -> Client: return Client(ProviderName.WORKERSAI, api_key)
 def yi(api_key: str) -> Client: return Client(ProviderName.YI, api_key)
 def zhipu(api_key: str) -> Client: return Client(ProviderName.ZHIPU, api_key)
 
@@ -750,6 +751,7 @@ __all__ = [
     "together",
     "vertex",
     "vllm",
+    "workersai",
     "yi",
     "zhipu",
     "BatchHandle",
