@@ -822,6 +822,20 @@ _SUPPORTED_OPTIONS: dict[ProviderName, tuple[SupportedOptionDef, ...]] = {
             json_key="top_p",
         ),
     ),
+    ProviderName.WORKERSAI: (
+        SupportedOptionDef(
+            key=OptionKey.MAX_TOKENS,
+            json_key="max_tokens",
+        ),
+        SupportedOptionDef(
+            key=OptionKey.TEMPERATURE,
+            json_key="temperature",
+        ),
+        SupportedOptionDef(
+            key=OptionKey.TOP_P,
+            json_key="top_p",
+        ),
+    ),
     ProviderName.YI: (
         SupportedOptionDef(
             key=OptionKey.MAX_TOKENS,
@@ -946,6 +960,8 @@ _OPTION_OVERRIDES: dict[ProviderName, tuple[OptionOverrideDef, ...]] = {
     ),
     ProviderName.VLLM: (
     ),
+    ProviderName.WORKERSAI: (
+    ),
     ProviderName.YI: (
     ),
     ProviderName.ZHIPU: (
@@ -1039,6 +1055,8 @@ _MODEL_OPTION_OVERRIDES: dict[ProviderName, tuple[ModelOptionOverrideDef, ...]] 
     ProviderName.VERTEX: (
     ),
     ProviderName.VLLM: (
+    ),
+    ProviderName.WORKERSAI: (
     ),
     ProviderName.YI: (
     ),
