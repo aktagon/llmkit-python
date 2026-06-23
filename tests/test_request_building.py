@@ -275,6 +275,30 @@ def test_reasoning_tokens_zero_for_unreported_provider() -> None:
     assert resp.usage.reasoning == 0
 
 
+def test_workersai_parses_openai_shaped_response() -> None:
+    """Prompt 043: Cloudflare Workers AI returns the standard OpenAI chat shape
+    over its /ai/v1/ compat shim, so the config-driven parser reads text, usage,
+    and finish_reason with zero provider-specific code."""
+    from llmkit.client import _parse_response
+
+    body = json.dumps(
+        {
+            "choices": [
+                {
+                    "message": {"content": "Red, green, blue"},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {"prompt_tokens": 12, "completion_tokens": 4},
+        }
+    )
+    resp = _parse_response("workersai", body.encode())
+    assert resp.text == "Red, green, blue"
+    assert resp.usage.input == 12
+    assert resp.usage.output == 4
+    assert resp.finish_reason == "stop"
+
+
 def test_google_safety_settings_written_as_top_level_field() -> None:
     from llmkit.types import SafetySetting
 
