@@ -660,6 +660,35 @@ def test_integration_vertex() -> None:
     assert resp.usage.input > 0, "no input tokens reported"
 
 
+def test_integration_workersai() -> None:
+    key = os.getenv("CLOUDFLARE_API_TOKEN")
+    if not key:
+        pytest.skip("CLOUDFLARE_API_TOKEN not set")
+    c = new_client("workersai", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
+    )
+    assert resp.text != "", "empty response text"
+    assert resp.usage.input > 0, "no input tokens reported"
+
+
+def test_integration_workersai_stream() -> None:
+    key = os.getenv("CLOUDFLARE_API_TOKEN")
+    if not key:
+        pytest.skip("CLOUDFLARE_API_TOKEN not set")
+    c = new_client("workersai", key)
+
+    async def _run() -> list[str]:
+        chunks: list[str] = []
+        async for chunk in c.text.system("Reply with only the word pong").stream("ping"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_run())
+    assert chunks, "no chunks received"
+    assert "".join(chunks) != "", "empty stream output"
+
+
 def test_integration_yi() -> None:
     key = os.getenv("YI_API_KEY")
     if not key:
