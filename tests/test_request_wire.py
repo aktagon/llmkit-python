@@ -30,6 +30,7 @@ from llmkit import (
     zhipu,
 )
 from llmkit.builders import vertex  # not re-exported at top level (caller-base provider)
+from llmkit.builders import workersai  # not re-exported at top level (prompt 043)
 from llmkit.types import SafetySetting
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
@@ -589,3 +590,25 @@ def test_video_vertex_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("video-vertex", server.last_body)
+
+
+# === Prompt 043: Cloudflare Workers AI (OpenAI-compatible chat) ===
+
+
+def test_workersai_matches_shared_golden() -> None:
+    # Workers AI's OpenAI-compatible chat-completions body {model, messages,
+    # max_tokens, temperature, top_p} — structurally identical to the gpt-4o
+    # options golden (OpenAI ArgsFormat, system-in-messages); the novel bit
+    # (account-id-in-URL) is delivery-side, not request-body-side.
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = workersai("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.text.model(wi.WIRE_WORKERSAI_MODEL)
+            .max_tokens(wi.WIRE_WORKERSAI_MAX_TOKENS)
+            .temperature(wi.WIRE_WORKERSAI_TEMPERATURE)
+            .top_p(wi.WIRE_WORKERSAI_TOP_P)
+            .prompt(wi.WIRE_WORKERSAI_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("workersai", server.last_body)
