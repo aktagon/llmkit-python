@@ -184,6 +184,13 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         default_model="sonar-pro",
         base_url="https://api.perplexity.ai",
     ),
+    ProviderName.PIXVERSE: ProviderInfo(
+        id=ProviderName.PIXVERSE,
+        slug="pixverse",
+        env_var="PIXVERSE_API_KEY",
+        default_model="v4.5",
+        base_url="https://app-api.pixverse.ai",
+    ),
     ProviderName.QWEN: ProviderInfo(
         id=ProviderName.QWEN,
         slug="qwen",
