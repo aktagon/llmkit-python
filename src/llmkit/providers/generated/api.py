@@ -227,6 +227,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_voice",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_with_capability",
         sub_options=(
         ),
@@ -249,6 +254,11 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         py_func="generate_music",
         py_param_type="MusicRequest",
         comment="Synchronous text-to-music. Input is MusicRequest{ Model, Prompt, Parts []Part } where Parts is a positionally-ordered sequence of llm:Part (text prompt or Lyrics). Prompt is a sugar field for the prompt-only case (XOR with Parts; runtime synthesises []Part{Text(Prompt)} when only Prompt is set). Returns MusicResponse{ Audio []AudioData, Text string, Usage }.",
+    ),
+    APIEntryPointDef(
+        py_func="generate_speech",
+        py_param_type="SpeechRequest",
+        comment="Synchronous text-to-speech. Input is SpeechRequest{ Model, Voice, Text } \u2014 Text is the single utterance to speak (single-turn; no Message/Role wrapper, ADR-049 SPK-003), Voice is the request-data selector (ADR-021) validated pre-flight against the provider's availableVoice catalogue. Returns SpeechResponse{ Audio AudioData, Usage }.",
     ),
     APIEntryPointDef(
         py_func="prompt",
@@ -302,6 +312,11 @@ CACHE_RESPONSE_FIELDS: tuple[APIResponseFieldDef, ...] = (
     APIResponseFieldDef(
         py_field_name="audio",
         py_field_type="list[AudioData]",
+        source_path="audioPath",
+    ),
+    APIResponseFieldDef(
+        py_field_name="audio",
+        py_field_type="AudioData",
         source_path="audioPath",
     ),
     APIResponseFieldDef(

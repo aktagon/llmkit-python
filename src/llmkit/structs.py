@@ -201,6 +201,19 @@ class Response:
 
 
 @dataclass
+class SpeechResponse:
+    """"""
+    #
+    audio: AudioData = field(default_factory=AudioData)
+
+    #
+    usage: Usage = field(default_factory=Usage)
+
+    #
+    finish_reason: str = ""
+
+
+@dataclass
 class ToolCall:
     """"""
     #
