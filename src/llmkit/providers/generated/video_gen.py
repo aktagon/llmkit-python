@@ -23,7 +23,7 @@ class VideoModelDef:
 
 @dataclass(frozen=True)
 class VideoGenDef:
-    # wire_shape is VideoGrok | VideoZhipu | VideoTogether | VideoQwen | VideoMinimax | VideoVeo | VideoBedrock | VideoVertexVeo | VideoVidu.
+    # wire_shape is VideoGrok | VideoZhipu | VideoTogether | VideoQwen | VideoMinimax | VideoVeo | VideoBedrock | VideoVertexVeo | VideoVidu | VideoPixVerse.
     wire_shape: str
     # output_delivery is DeliveryDownload | DeliveryURL | DeliveryOutputURI.
     output_delivery: str
@@ -122,6 +122,45 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=6,
                 output_mime="video/mp4",
                 resolutions=("1080p", "768p"),
+                max_input_images=0,
+            ),
+        ),
+    ),
+    ProviderName.PIXVERSE: VideoGenDef(
+        wire_shape="VideoPixVerse",
+        output_delivery="DeliveryURL",
+        video_base_url="",
+        gen_endpoint="/openapi/v2/video/text/generate",
+        poll_endpoint="/openapi/v2/video/result/{id}",
+        file_endpoint="",
+        submit_handle_field="Resp.video_id",
+        requires_output_uri=False,
+        models=(
+            VideoModelDef(
+                model_id="v4.5",
+                label="PixVerse v4.5",
+                supports_image_to_video=False,
+                max_duration_seconds=8,
+                output_mime="video/mp4",
+                resolutions=(),
+                max_input_images=0,
+            ),
+            VideoModelDef(
+                model_id="v5",
+                label="PixVerse v5",
+                supports_image_to_video=False,
+                max_duration_seconds=8,
+                output_mime="video/mp4",
+                resolutions=(),
+                max_input_images=0,
+            ),
+            VideoModelDef(
+                model_id="v6",
+                label="PixVerse v6",
+                supports_image_to_video=False,
+                max_duration_seconds=15,
+                output_mime="video/mp4",
+                resolutions=(),
                 max_input_images=0,
             ),
         ),
