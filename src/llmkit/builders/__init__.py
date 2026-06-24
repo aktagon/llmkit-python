@@ -709,6 +709,7 @@ def recraft(api_key: str) -> Client: return Client(ProviderName.RECRAFT, api_key
 def sambanova(api_key: str) -> Client: return Client(ProviderName.SAMBANOVA, api_key)
 def together(api_key: str) -> Client: return Client(ProviderName.TOGETHER, api_key)
 def vertex(api_key: str) -> Client: return Client(ProviderName.VERTEX, api_key)
+def vidu(api_key: str) -> Client: return Client(ProviderName.VIDU, api_key)
 def vllm(api_key: str) -> Client: return Client(ProviderName.VLLM, api_key)
 def workersai(api_key: str) -> Client: return Client(ProviderName.WORKERSAI, api_key)
 def yi(api_key: str) -> Client: return Client(ProviderName.YI, api_key)
@@ -752,6 +753,7 @@ __all__ = [
     "sambanova",
     "together",
     "vertex",
+    "vidu",
     "vllm",
     "workersai",
     "yi",

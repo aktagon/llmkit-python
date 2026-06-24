@@ -672,6 +672,18 @@ def test_integration_vertex() -> None:
     assert resp.usage.input > 0, "no input tokens reported"
 
 
+def test_integration_vidu() -> None:
+    key = os.getenv("VIDU_API_KEY")
+    if not key:
+        pytest.skip("VIDU_API_KEY not set")
+    c = new_client("vidu", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
+    )
+    assert resp.text != "", "empty response text"
+    assert resp.usage.input > 0, "no input tokens reported"
+
+
 def test_integration_workersai() -> None:
     key = os.getenv("CLOUDFLARE_API_TOKEN")
     if not key:

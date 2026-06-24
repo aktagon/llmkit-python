@@ -32,6 +32,7 @@ from llmkit import (
 from llmkit.builders import vertex  # not re-exported at top level (caller-base provider)
 from llmkit.builders import workersai  # not re-exported at top level (prompt 043)
 from llmkit.builders import recraft  # not re-exported at top level (prompt 043)
+from llmkit.builders import vidu  # not re-exported at top level (prompt 043)
 from llmkit.types import SafetySetting
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
@@ -505,6 +506,20 @@ def test_video_zhipu_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("video-zhipu", server.last_body)
+
+
+def test_video_vidu_matches_shared_golden() -> None:
+    # Vidu (Shengshu) video-submit body {model, prompt} — structurally
+    # identical to Grok's/Zhipu's (the shared {model, prompt} arm); the
+    # lifecycle divergence is delivery-side, covered by the unit tests.
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = vidu("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.video.model(wi.WIRE_VIDEO_VIDU_MODEL).submit(wi.WIRE_VIDEO_VIDU_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("video-vidu", server.last_body)
 
 
 def test_video_together_matches_shared_golden() -> None:
