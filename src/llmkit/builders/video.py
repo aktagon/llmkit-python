@@ -540,6 +540,25 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         # PROCESSING (or any non-terminal status)
         return VideoResponse(), False
 
+    if vg_cfg.wire_shape == "VideoVidu":
+        # Vidu (Shengshu) task poll: state success terminal-success, failed
+        # terminal-error, created/queueing/processing pending. The finished
+        # video URL sits at creations[0].url (url delivery, single-hop).
+        state = raw.get("state") if isinstance(raw, dict) else None
+        if state == "success":
+            return _video_result_from_vidu(vg_cfg, raw), True
+        if state == "failed":
+            msg = raw.get("err_code") if isinstance(raw, dict) else None
+            if not isinstance(msg, str) or not msg:
+                msg = raw.get("message") if isinstance(raw, dict) else None
+            if not isinstance(msg, str) or not msg:
+                msg = "operation failed"
+            raise APIError(
+                message=f"video generation failed: {msg}", status_code=0
+            )
+        # created, queueing, processing (or any non-terminal state)
+        return VideoResponse(), False
+
     if vg_cfg.wire_shape == "VideoMinimax":
         # Two-hop: terminal-success yields a file_id, not a URL. Report done
         # with an empty result; _wait_video performs the file-retrieve hop
@@ -679,6 +698,24 @@ def _video_result_from_zhipu(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoR
     if not isinstance(results, list) or not results:
         return VideoResponse()
     first = results[0]
+    if not isinstance(first, dict):
+        return VideoResponse()
+    url = first.get("url")
+    return VideoResponse(
+        videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
+    )
+
+
+def _video_result_from_vidu(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoResponse:
+    """Extract the finished video from a Vidu (Shengshu) poll response. Vidu
+    uses url delivery: the finished video sits at creations[0].url, so
+    VideoData.url carries the temporary Vidu-hosted URL and bytes stays
+    empty."""
+    mime = _video_fallback_mime(vg_cfg)
+    creations = raw.get("creations") if isinstance(raw, dict) else None
+    if not isinstance(creations, list) or not creations:
+        return VideoResponse()
+    first = creations[0]
     if not isinstance(first, dict):
         return VideoResponse()
     url = first.get("url")
