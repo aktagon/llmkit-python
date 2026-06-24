@@ -200,6 +200,26 @@ def generate_image(
             raise ValidationError(field="background", message=f"not supported by {provider.name}")
         if safety_settings:
             raise ValidationError(field="safety_settings", message=f"not supported by {provider.name}; use safety_filter for Vertex Imagen")
+    elif img_cfg.input_mode == "JSONGenerations":
+        # Recraft (text-to-image only). The flat generations body carries only
+        # size (-> `size`) and count (-> `n`); aspect_ratio is not a Recraft
+        # wire field (it sizes by an explicit WxH `size`), and the gpt-image /
+        # safety knobs are OpenAI / Google / Vertex only. Image parts are
+        # rejected upstream by the max_input_count==0 gate.
+        if aspect_ratio:
+            raise ValidationError(field="aspect_ratio", message=f"not supported by {provider.name}; use image_size (Recraft sizes by WxH)")
+        if quality:
+            raise ValidationError(field="quality", message=f"not supported by {provider.name}")
+        if output_format:
+            raise ValidationError(field="output_format", message=f"not supported by {provider.name}")
+        if background:
+            raise ValidationError(field="background", message=f"not supported by {provider.name}")
+        if mask is not None:
+            raise ValidationError(field="mask", message=f"not supported by {provider.name}")
+        if safety_filter:
+            raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
+        if safety_settings:
+            raise ValidationError(field="safety_settings", message=f"not supported by {provider.name}")
 
     mws = list(middleware or [])
     base_event = Event(
@@ -259,6 +279,15 @@ def generate_image(
                         {**headers, "content-type": "application/json"},
                         timeout=request_timeout,
                     )
+            elif img_cfg.input_mode == "JSONGenerations":
+                body = _build_recraft_gen_body(parts, request.model, image_size, count, extra_fields)
+                json_body = json.dumps(body).encode("utf-8")
+                resp_body = do_post(
+                    base_url + img_cfg.gen_endpoint,
+                    json_body,
+                    {**headers, "content-type": "application/json"},
+                    timeout=request_timeout,
+                )
             elif img_cfg.input_mode == "JSONPredict":
                 body = _build_vertex_body(parts, aspect_ratio, count, mask, safety_filter, extra_fields)
                 json_body = json.dumps(body).encode("utf-8")
@@ -492,6 +521,48 @@ def _build_xai_edit_body(
     return body
 
 
+def _build_recraft_gen_body(
+    parts: list[Part],
+    model: str,
+    image_size: str,
+    count: int | None,
+    extra_fields: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """JSON body for Recraft's text-to-image /v1/images/generations endpoint.
+
+    image_size maps to ``size``; count maps to ``n``. response_format is
+    forced to b64_json because Recraft defaults to URL delivery — forcing it
+    keeps the response shape uniform (data[].b64_json). Vector/SVG output is
+    selected by a vector model id (recraftv3_vector), not a body flag, so the
+    body shape is identical for raster and vector. Style and other Recraft-
+    specific knobs ride extra_fields.
+    """
+    body: dict[str, Any] = {
+        "model": model,
+        "prompt": _join_text_parts(parts),
+        "response_format": "b64_json",
+    }
+    if image_size:
+        body["size"] = image_size
+    if count is not None:
+        body["n"] = count
+    for k, v in (extra_fields or {}).items():
+        body[k] = v
+    return body
+
+
+def _looks_like_svg(data: bytes) -> bool:
+    """Report whether the decoded image bytes are an SVG document. SVG is XML
+    text starting (after optional whitespace) with an XML prolog (<?xml) or
+    the root <svg element. Used to label vector-model output (Recraft)
+    correctly when the provider does not echo a mime type."""
+    try:
+        s = data.decode("utf-8", "ignore").strip()
+    except Exception:
+        return False
+    return s.startswith("<?xml") or s.startswith("<svg")
+
+
 def _build_image_body(
     parts: list[Part],
     aspect_ratio: str,
@@ -655,6 +726,13 @@ def _parse_image_response(provider_name: str, body: bytes, cfg: Any) -> ImageRes
         # passing empty field names yields zero tokens (correct, no
         # fabricated values).
         return _parse_image_response_data_array(raw, "", "")
+    if provider_name == "recraft":
+        # Recraft returns the same data[].b64_json shape as OpenAI/xAI (the
+        # SDK forces response_format=b64_json) but carries no usage object,
+        # so token fields are empty (zero tokens — no fabricated values). SVG
+        # bytes (vector models) are sniffed to image/svg+xml inside
+        # _parse_image_response_data_array.
+        return _parse_image_response_data_array(raw, "", "")
     if provider_name == "vertex":
         return _parse_vertex_image_response(raw)
 
@@ -701,6 +779,14 @@ def _parse_image_response_data_array(
                 if decoded:
                     echoed = entry.get("mime_type")
                     mime = echoed if isinstance(echoed, str) and echoed else "image/png"
+                    # Vector providers (Recraft recraftv3_vector) return SVG
+                    # bytes in the same b64_json slot without echoing a
+                    # mime_type. Sniff the leading bytes so SVG is labeled
+                    # image/svg+xml rather than the image/png default. Raster
+                    # bytes (PNG/JPEG/WebP) never start with '<', so the sniff
+                    # is a no-op for them.
+                    if mime == "image/png" and _looks_like_svg(decoded):
+                        mime = "image/svg+xml"
                     images.append(ImageData(mime_type=mime, bytes=decoded))
             rp = entry.get("revised_prompt")
             if isinstance(rp, str) and rp:
