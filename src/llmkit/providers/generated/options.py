@@ -794,6 +794,12 @@ _SUPPORTED_OPTIONS: dict[ProviderName, tuple[SupportedOptionDef, ...]] = {
             json_key="max_tokens",
         ),
     ),
+    ProviderName.VIDU: (
+        SupportedOptionDef(
+            key=OptionKey.MAX_TOKENS,
+            json_key="max_tokens",
+        ),
+    ),
     ProviderName.VLLM: (
         SupportedOptionDef(
             key=OptionKey.FREQUENCY_PENALTY,
@@ -966,6 +972,8 @@ _OPTION_OVERRIDES: dict[ProviderName, tuple[OptionOverrideDef, ...]] = {
     ),
     ProviderName.VERTEX: (
     ),
+    ProviderName.VIDU: (
+    ),
     ProviderName.VLLM: (
     ),
     ProviderName.WORKERSAI: (
@@ -1063,6 +1071,8 @@ _MODEL_OPTION_OVERRIDES: dict[ProviderName, tuple[ModelOptionOverrideDef, ...]] 
     ProviderName.TOGETHER: (
     ),
     ProviderName.VERTEX: (
+    ),
+    ProviderName.VIDU: (
     ),
     ProviderName.VLLM: (
     ),

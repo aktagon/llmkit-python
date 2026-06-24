@@ -540,6 +540,25 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         #
         return VideoResponse(), False
 
+    if vg_cfg.wire_shape == "VideoVidu":
+        #
+        #
+        #
+        state = raw.get("state") if isinstance(raw, dict) else None
+        if state == "success":
+            return _video_result_from_vidu(vg_cfg, raw), True
+        if state == "failed":
+            msg = raw.get("err_code") if isinstance(raw, dict) else None
+            if not isinstance(msg, str) or not msg:
+                msg = raw.get("message") if isinstance(raw, dict) else None
+            if not isinstance(msg, str) or not msg:
+                msg = "operation failed"
+            raise APIError(
+                message=f"video generation failed: {msg}", status_code=0
+            )
+        #
+        return VideoResponse(), False
+
     if vg_cfg.wire_shape == "VideoMinimax":
         #
         #
@@ -679,6 +698,24 @@ def _video_result_from_zhipu(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoR
     if not isinstance(results, list) or not results:
         return VideoResponse()
     first = results[0]
+    if not isinstance(first, dict):
+        return VideoResponse()
+    url = first.get("url")
+    return VideoResponse(
+        videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
+    )
+
+
+def _video_result_from_vidu(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoResponse:
+    """
+
+
+"""
+    mime = _video_fallback_mime(vg_cfg)
+    creations = raw.get("creations") if isinstance(raw, dict) else None
+    if not isinstance(creations, list) or not creations:
+        return VideoResponse()
+    first = creations[0]
     if not isinstance(first, dict):
         return VideoResponse()
     url = first.get("url")
