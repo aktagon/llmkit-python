@@ -33,6 +33,7 @@ from llmkit.builders import vertex  # not re-exported at top level (caller-base 
 from llmkit.builders import workersai  # not re-exported at top level (prompt 043)
 from llmkit.builders import recraft  # not re-exported at top level (prompt 043)
 from llmkit.builders import vidu  # not re-exported at top level (prompt 043)
+from llmkit.builders import pixverse  # not re-exported at top level (prompt 043)
 from llmkit.types import SafetySetting
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
@@ -111,6 +112,7 @@ _CANNED_RESP = {
     "name": "models/veo-test/operations/op_test",  # VideoVeo: operation-name submit handle
     "invocationArn": "arn:aws:bedrock:us-east-1:0:async-invoke/vid_test",  # VideoBedrock: invocationArn submit handle
     "output": {"task_id": "vid_test", "task_status": "PENDING"},  # VideoQwen: output.task_id submit handle
+    "Resp": {"video_id": 318633193768896},  # VideoPixVerse: Resp.video_id submit handle (numeric)
     "candidates": [
         {
             "content": {
@@ -520,6 +522,23 @@ def test_video_vidu_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("video-vidu", server.last_body)
+
+
+def test_video_pixverse_matches_shared_golden() -> None:
+    # PixVerse video-submit body {model, prompt, duration, quality,
+    # aspect_ratio} — the dedicated PixVerse arm (all five fields required);
+    # the dynamic Ai-trace-id header is omitted from the golden (it is a
+    # per-request UUID) and asserted in the lifecycle unit tests.
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = pixverse("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.video.model(wi.WIRE_VIDEO_PIXVERSE_MODEL).submit(
+                wi.WIRE_VIDEO_PIXVERSE_PROMPT
+            )
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("video-pixverse", server.last_body)
 
 
 def test_video_together_matches_shared_golden() -> None:
