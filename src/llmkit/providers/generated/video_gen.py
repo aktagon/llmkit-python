@@ -23,7 +23,7 @@ class VideoModelDef:
 
 @dataclass(frozen=True)
 class VideoGenDef:
-    # wire_shape is VideoGrok | VideoZhipu | VideoTogether | VideoQwen | VideoMinimax | VideoVeo | VideoBedrock | VideoVertexVeo.
+    # wire_shape is VideoGrok | VideoZhipu | VideoTogether | VideoQwen | VideoMinimax | VideoVeo | VideoBedrock | VideoVertexVeo | VideoVidu.
     wire_shape: str
     # output_delivery is DeliveryDownload | DeliveryURL | DeliveryOutputURI.
     output_delivery: str
@@ -185,6 +185,45 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=8,
                 output_mime="video/mp4",
                 resolutions=("1080p", "720p"),
+                max_input_images=0,
+            ),
+        ),
+    ),
+    ProviderName.VIDU: VideoGenDef(
+        wire_shape="VideoVidu",
+        output_delivery="DeliveryURL",
+        video_base_url="",
+        gen_endpoint="/ent/v2/text2video",
+        poll_endpoint="/ent/v2/tasks/{id}/creations",
+        file_endpoint="",
+        submit_handle_field="task_id",
+        requires_output_uri=False,
+        models=(
+            VideoModelDef(
+                model_id="viduq1",
+                label="Vidu Q1",
+                supports_image_to_video=False,
+                max_duration_seconds=16,
+                output_mime="video/mp4",
+                resolutions=(),
+                max_input_images=0,
+            ),
+            VideoModelDef(
+                model_id="viduq2",
+                label="Vidu Q2",
+                supports_image_to_video=False,
+                max_duration_seconds=16,
+                output_mime="video/mp4",
+                resolutions=(),
+                max_input_images=0,
+            ),
+            VideoModelDef(
+                model_id="viduq3-pro",
+                label="Vidu Q3 Pro",
+                supports_image_to_video=False,
+                max_duration_seconds=16,
+                output_mime="video/mp4",
+                resolutions=(),
                 max_input_images=0,
             ),
         ),

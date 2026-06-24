@@ -35,6 +35,7 @@ class ProviderName(str, Enum):
     SAMBANOVA = "sambanova"
     TOGETHER = "together"
     VERTEX = "vertex"
+    VIDU = "vidu"
     VLLM = "vllm"
     WORKERSAI = "workersai"
     YI = "yi"
@@ -70,6 +71,7 @@ ALL_PROVIDER_NAMES: tuple[ProviderName, ...] = (
     ProviderName.SAMBANOVA,
     ProviderName.TOGETHER,
     ProviderName.VERTEX,
+    ProviderName.VIDU,
     ProviderName.VLLM,
     ProviderName.WORKERSAI,
     ProviderName.YI,
@@ -1248,6 +1250,44 @@ PROVIDERS: dict[str, ProviderSpec] = {
         model_in_body=False,
         error_message_path="error.message",
         error_type_path="error.status",
+        access_key_env_var="",
+        secret_key_env_var="",
+        session_token_env_var="",
+        region_env_var="",
+        service_name="",
+    ),
+    "vidu": ProviderSpec(
+        name="vidu",
+        base_url="https://api.vidu.com",
+        endpoint="/ent/v2/text2video",
+        default_model="viduq3-pro",
+        env_var="VIDU_API_KEY",
+        default_max_tokens=0,
+        response_text_path="",
+        auth_scheme="BearerToken",
+        auth_header="Authorization",
+        auth_prefix="Token",
+        auth_query_param="",
+        required_header="",
+        required_header_value="",
+        system_placement="MessageInArray",
+        role_mappings={
+            "user": "user",
+        },
+        usage_input_path="",
+        usage_output_path="",
+        usage_cost_path="",
+        usage_cost_scale=1.0,
+        reasoning_tokens_path="",
+        finish_reason_path="",
+        finish_message_path="",
+        stream_finish_reason_path="",
+        stream_finish_message_path="",
+        wraps_options_in="",
+        safety_settings_wire_path="",
+        model_in_body=True,
+        error_message_path="message",
+        error_type_path="code",
         access_key_env_var="",
         secret_key_env_var="",
         session_token_env_var="",
