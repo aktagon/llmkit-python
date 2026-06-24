@@ -114,6 +114,13 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         default_model="llama-3.3-70b-versatile",
         base_url="https://api.groq.com/openai",
     ),
+    ProviderName.INWORLD: ProviderInfo(
+        id=ProviderName.INWORLD,
+        slug="inworld",
+        env_var="INWORLD_API_KEY",
+        default_model="inworld-tts-2",
+        base_url="https://api.inworld.ai",
+    ),
     ProviderName.JAN: ProviderInfo(
         id=ProviderName.JAN,
         slug="jan",
