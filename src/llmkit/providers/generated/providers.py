@@ -30,6 +30,7 @@ class ProviderName(str, Enum):
     OPENAI = "openai"
     OPENROUTER = "openrouter"
     PERPLEXITY = "perplexity"
+    PIXVERSE = "pixverse"
     QWEN = "qwen"
     RECRAFT = "recraft"
     SAMBANOVA = "sambanova"
@@ -66,6 +67,7 @@ ALL_PROVIDER_NAMES: tuple[ProviderName, ...] = (
     ProviderName.OPENAI,
     ProviderName.OPENROUTER,
     ProviderName.PERPLEXITY,
+    ProviderName.PIXVERSE,
     ProviderName.QWEN,
     ProviderName.RECRAFT,
     ProviderName.SAMBANOVA,
@@ -1051,6 +1053,44 @@ PROVIDERS: dict[str, ProviderSpec] = {
         model_in_body=True,
         error_message_path="error.message",
         error_type_path="error.type",
+        access_key_env_var="",
+        secret_key_env_var="",
+        session_token_env_var="",
+        region_env_var="",
+        service_name="",
+    ),
+    "pixverse": ProviderSpec(
+        name="pixverse",
+        base_url="https://app-api.pixverse.ai",
+        endpoint="/openapi/v2/video/text/generate",
+        default_model="v4.5",
+        env_var="PIXVERSE_API_KEY",
+        default_max_tokens=0,
+        response_text_path="",
+        auth_scheme="HeaderAPIKey",
+        auth_header="API-KEY",
+        auth_prefix="",
+        auth_query_param="",
+        required_header="",
+        required_header_value="",
+        system_placement="MessageInArray",
+        role_mappings={
+            "user": "user",
+        },
+        usage_input_path="",
+        usage_output_path="",
+        usage_cost_path="",
+        usage_cost_scale=1.0,
+        reasoning_tokens_path="",
+        finish_reason_path="",
+        finish_message_path="",
+        stream_finish_reason_path="",
+        stream_finish_message_path="",
+        wraps_options_in="",
+        safety_settings_wire_path="",
+        model_in_body=True,
+        error_message_path="ErrMsg",
+        error_type_path="ErrCode",
         access_key_env_var="",
         secret_key_env_var="",
         session_token_env_var="",
