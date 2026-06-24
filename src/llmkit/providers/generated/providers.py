@@ -31,6 +31,7 @@ class ProviderName(str, Enum):
     OPENROUTER = "openrouter"
     PERPLEXITY = "perplexity"
     QWEN = "qwen"
+    RECRAFT = "recraft"
     SAMBANOVA = "sambanova"
     TOGETHER = "together"
     VERTEX = "vertex"
@@ -65,6 +66,7 @@ ALL_PROVIDER_NAMES: tuple[ProviderName, ...] = (
     ProviderName.OPENROUTER,
     ProviderName.PERPLEXITY,
     ProviderName.QWEN,
+    ProviderName.RECRAFT,
     ProviderName.SAMBANOVA,
     ProviderName.TOGETHER,
     ProviderName.VERTEX,
@@ -1088,6 +1090,44 @@ PROVIDERS: dict[str, ProviderSpec] = {
         model_in_body=True,
         error_message_path="error.message",
         error_type_path="error.type",
+        access_key_env_var="",
+        secret_key_env_var="",
+        session_token_env_var="",
+        region_env_var="",
+        service_name="",
+    ),
+    "recraft": ProviderSpec(
+        name="recraft",
+        base_url="https://external.api.recraft.ai",
+        endpoint="/v1/images/generations",
+        default_model="recraftv3",
+        env_var="RECRAFT_API_TOKEN",
+        default_max_tokens=0,
+        response_text_path="",
+        auth_scheme="BearerToken",
+        auth_header="Authorization",
+        auth_prefix="Bearer",
+        auth_query_param="",
+        required_header="",
+        required_header_value="",
+        system_placement="MessageInArray",
+        role_mappings={
+            "user": "user",
+        },
+        usage_input_path="",
+        usage_output_path="",
+        usage_cost_path="",
+        usage_cost_scale=1.0,
+        reasoning_tokens_path="",
+        finish_reason_path="",
+        finish_message_path="",
+        stream_finish_reason_path="",
+        stream_finish_message_path="",
+        wraps_options_in="",
+        safety_settings_wire_path="",
+        model_in_body=True,
+        error_message_path="message",
+        error_type_path="code",
         access_key_env_var="",
         secret_key_env_var="",
         session_token_env_var="",

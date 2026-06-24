@@ -705,6 +705,7 @@ def openai(api_key: str) -> Client: return Client(ProviderName.OPENAI, api_key)
 def openrouter(api_key: str) -> Client: return Client(ProviderName.OPENROUTER, api_key)
 def perplexity(api_key: str) -> Client: return Client(ProviderName.PERPLEXITY, api_key)
 def qwen(api_key: str) -> Client: return Client(ProviderName.QWEN, api_key)
+def recraft(api_key: str) -> Client: return Client(ProviderName.RECRAFT, api_key)
 def sambanova(api_key: str) -> Client: return Client(ProviderName.SAMBANOVA, api_key)
 def together(api_key: str) -> Client: return Client(ProviderName.TOGETHER, api_key)
 def vertex(api_key: str) -> Client: return Client(ProviderName.VERTEX, api_key)
@@ -747,6 +748,7 @@ __all__ = [
     "openrouter",
     "perplexity",
     "qwen",
+    "recraft",
     "sambanova",
     "together",
     "vertex",
