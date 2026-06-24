@@ -456,6 +456,12 @@ _SUPPORTED_OPTIONS: dict[ProviderName, tuple[SupportedOptionDef, ...]] = {
             json_key="top_p",
         ),
     ),
+    ProviderName.INWORLD: (
+        SupportedOptionDef(
+            key=OptionKey.MAX_TOKENS,
+            json_key="max_tokens",
+        ),
+    ),
     ProviderName.JAN: (
         SupportedOptionDef(
             key=OptionKey.MAX_TOKENS,
@@ -941,6 +947,8 @@ _OPTION_OVERRIDES: dict[ProviderName, tuple[OptionOverrideDef, ...]] = {
     ),
     ProviderName.GROQ: (
     ),
+    ProviderName.INWORLD: (
+    ),
     ProviderName.JAN: (
     ),
     ProviderName.LLAMACPP: (
@@ -1037,6 +1045,8 @@ _MODEL_OPTION_OVERRIDES: dict[ProviderName, tuple[ModelOptionOverrideDef, ...]] 
     ProviderName.GROK: (
     ),
     ProviderName.GROQ: (
+    ),
+    ProviderName.INWORLD: (
     ),
     ProviderName.JAN: (
     ),

@@ -329,6 +329,18 @@ def test_integration_groq_stream() -> None:
     assert "".join(chunks) != "", "empty stream output"
 
 
+def test_integration_inworld() -> None:
+    key = os.getenv("INWORLD_API_KEY")
+    if not key:
+        pytest.skip("INWORLD_API_KEY not set")
+    c = new_client("inworld", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
+    )
+    assert resp.text != "", "empty response text"
+    assert resp.usage.input > 0, "no input tokens reported"
+
+
 def test_integration_jan() -> None:
     key = os.getenv("JAN_API_KEY")
     if not key:
