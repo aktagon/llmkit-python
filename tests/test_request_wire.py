@@ -34,6 +34,7 @@ from llmkit.builders import workersai  # not re-exported at top level (prompt 04
 from llmkit.builders import recraft  # not re-exported at top level (prompt 043)
 from llmkit.builders import vidu  # not re-exported at top level (prompt 043)
 from llmkit.builders import pixverse  # not re-exported at top level (prompt 043)
+from llmkit.builders import inworld  # not re-exported at top level (ADR-049)
 from llmkit.types import SafetySetting, Tool
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
@@ -125,6 +126,7 @@ _CANNED_RESP = {
     ],
     "content": [{"type": "text", "text": "done"}],
     "data": [{"b64_json": wi.WIRE_IMAGE_EDIT_GOOGLE_FLASH_IMAGE_BASE64}],
+    "audioContent": wi.WIRE_IMAGE_EDIT_GOOGLE_FLASH_IMAGE_BASE64,  # SpeechInworld: base64 synthesized audio
     "usage": {"input_tokens": 2000, "output_tokens": 5},
     "usageMetadata": {"promptTokenCount": 5, "candidatesTokenCount": 3},
 }
@@ -522,6 +524,21 @@ def test_video_vidu_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("video-vidu", server.last_body)
+
+
+def test_speech_inworld_matches_shared_golden() -> None:
+    # Inworld text-to-speech body {text, voiceId, modelId, audioConfig,
+    # deliveryMode} (ADR-049 SPK-007).
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = inworld("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.speech.model(wi.WIRE_SPEECH_INWORLD_MODEL)
+            .voice(wi.WIRE_SPEECH_INWORLD_VOICE)
+            .generate(wi.WIRE_SPEECH_INWORLD_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("speech-inworld", server.last_body)
 
 
 def test_video_pixverse_matches_shared_golden() -> None:
