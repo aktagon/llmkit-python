@@ -106,6 +106,29 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
             ),
         ),
     ),
+    ProviderName.RECRAFT: ImageGenDef(
+        input_mode="JSONGenerations",
+        output_mode="Base64Inline",
+        max_input_count=0,
+        gen_endpoint="/v1/images/generations",
+        edit_endpoint="",
+        models=(
+            ImageModelDef(
+                model_id="recraftv3",
+                label="Recraft V3",
+                aspect_ratios=(),
+                image_sizes=(),
+                max_input_images=0,
+            ),
+            ImageModelDef(
+                model_id="recraftv3_vector",
+                label="Recraft V3 (vector / SVG)",
+                aspect_ratios=(),
+                image_sizes=(),
+                max_input_images=0,
+            ),
+        ),
+    ),
     ProviderName.VERTEX: ImageGenDef(
         input_mode="JSONPredict",
         output_mode="Base64Inline",

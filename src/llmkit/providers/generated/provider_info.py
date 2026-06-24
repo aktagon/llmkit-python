@@ -191,6 +191,13 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         default_model="qwen-plus",
         base_url="https://dashscope-intl.aliyuncs.com/compatible-mode",
     ),
+    ProviderName.RECRAFT: ProviderInfo(
+        id=ProviderName.RECRAFT,
+        slug="recraft",
+        env_var="RECRAFT_API_TOKEN",
+        default_model="recraftv3",
+        base_url="https://external.api.recraft.ai",
+    ),
     ProviderName.SAMBANOVA: ProviderInfo(
         id=ProviderName.SAMBANOVA,
         slug="sambanova",

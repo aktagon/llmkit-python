@@ -31,6 +31,7 @@ from llmkit import (
 )
 from llmkit.builders import vertex  # not re-exported at top level (caller-base provider)
 from llmkit.builders import workersai  # not re-exported at top level (prompt 043)
+from llmkit.builders import recraft  # not re-exported at top level (prompt 043)
 from llmkit.types import SafetySetting
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
@@ -427,6 +428,21 @@ def test_image_gen_openai_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("image-gen-openai", server.last_body)
+
+
+def test_image_gen_recraft_matches_shared_golden() -> None:
+    # Recraft generations JSON body (JSONGenerations shape): {model, prompt,
+    # size, n} plus the forced response_format=b64_json (Recraft defaults to
+    # URL delivery; the SDK forces b64_json for a uniform decode path).
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = recraft("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.image.model(wi.WIRE_IMAGE_GEN_RECRAFT_MODEL).image_size(wi.WIRE_IMAGE_GEN_RECRAFT_IMAGE_SIZE).count(wi.WIRE_IMAGE_GEN_RECRAFT_COUNT)
+            .generate(wi.WIRE_IMAGE_GEN_RECRAFT_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("image-gen-recraft", server.last_body)
 
 
 def test_image_edit_google_flash_matches_shared_golden() -> None:

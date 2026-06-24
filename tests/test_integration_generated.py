@@ -590,6 +590,18 @@ def test_integration_qwen_stream() -> None:
     assert "".join(chunks) != "", "empty stream output"
 
 
+def test_integration_recraft() -> None:
+    key = os.getenv("RECRAFT_API_TOKEN")
+    if not key:
+        pytest.skip("RECRAFT_API_TOKEN not set")
+    c = new_client("recraft", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
+    )
+    assert resp.text != "", "empty response text"
+    assert resp.usage.input > 0, "no input tokens reported"
+
+
 def test_integration_sambanova() -> None:
     key = os.getenv("SAMBANOVA_API_KEY")
     if not key:
