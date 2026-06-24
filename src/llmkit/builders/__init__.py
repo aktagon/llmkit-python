@@ -23,7 +23,7 @@ from ..providers.generated.image_gen import image_gen_config
 from ..providers.generated.middleware import MiddlewareFn
 from ..providers.generated.providers import ProviderName
 from ..providers.generated.request import file_upload_config
-from ..structs import File, ImageResponse, Message, MusicResponse, Response
+from ..structs import File, ImageResponse, Message, MusicResponse, Response, SpeechResponse
 from ..types import Capability, SafetySetting, Tool
 from .agent import _agent_messages
 from .batch import BatchHandle
@@ -42,6 +42,7 @@ from .agent import agent_prompt, agent_reset
 from .batch import text_batch, text_submit_batch
 from .image import image_generate
 from .music import music_generate
+from .speech import speech_generate
 from .stream import text_stream
 from .text import text_prompt
 from .upload import upload_run
@@ -343,6 +344,30 @@ class Music:
         return await music_generate(self, msg)
 
 
+# === Speech — SpeechGeneration builder ===
+
+class Speech:
+    """Phase 2b skeleton; chain methods clone-then-mutate via copy.copy()."""
+
+    def __init__(self, client: "Client") -> None:
+        self.client = client
+        self._model: str = ""
+        self._voice: str = ""
+
+    def model(self, name: str) -> "Speech":
+        out = copy.copy(self)
+        out._model = name
+        return out
+
+    def voice(self, id: str) -> "Speech":
+        out = copy.copy(self)
+        out._voice = id
+        return out
+
+    async def generate(self, msg: str) -> SpeechResponse:
+        return await speech_generate(self, msg)
+
+
 # === Video — VideoGeneration builder ===
 
 class Video:
@@ -627,6 +652,7 @@ class Client:
         self.text: Text = Text(self)
         self.image: Image = Image(self)
         self.music: Music = Music(self)
+        self.speech: Speech = Speech(self)
         self.video: Video = Video(self)
         self.agent: Agent = Agent(self)
         self.upload: Upload = Upload(self)
@@ -694,6 +720,7 @@ def fireworks(api_key: str) -> Client: return Client(ProviderName.FIREWORKS, api
 def google(api_key: str) -> Client: return Client(ProviderName.GOOGLE, api_key)
 def grok(api_key: str) -> Client: return Client(ProviderName.GROK, api_key)
 def groq(api_key: str) -> Client: return Client(ProviderName.GROQ, api_key)
+def inworld(api_key: str) -> Client: return Client(ProviderName.INWORLD, api_key)
 def jan(api_key: str) -> Client: return Client(ProviderName.JAN, api_key)
 def llamacpp(api_key: str) -> Client: return Client(ProviderName.LLAMACPP, api_key)
 def lmstudio(api_key: str) -> Client: return Client(ProviderName.LMSTUDIO, api_key)
@@ -723,6 +750,7 @@ __all__ = [
     "Text",
     "Image",
     "Music",
+    "Speech",
     "Video",
     "Agent",
     "Upload",
@@ -739,6 +767,7 @@ __all__ = [
     "google",
     "grok",
     "groq",
+    "inworld",
     "jan",
     "llamacpp",
     "lmstudio",
@@ -769,6 +798,7 @@ __all__ = [
     "ImageData",
     "ImageResponse",
     "MusicResponse",
+    "SpeechResponse",
     "MediaRef",
     "Part",
     "MiddlewareFn",
