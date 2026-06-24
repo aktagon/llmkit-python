@@ -34,7 +34,7 @@ from llmkit.builders import workersai  # not re-exported at top level (prompt 04
 from llmkit.builders import recraft  # not re-exported at top level (prompt 043)
 from llmkit.builders import vidu  # not re-exported at top level (prompt 043)
 from llmkit.builders import pixverse  # not re-exported at top level (prompt 043)
-from llmkit.types import SafetySetting
+from llmkit.types import SafetySetting, Tool
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
 import wire_inputs as wi
@@ -662,3 +662,79 @@ def test_workersai_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("workersai", server.last_body)
+
+
+# === TASK-002: tool-definition fixtures across the four chat wire families ===
+#
+# Each driver builds the single canonical tool (name/description/schema from the
+# generated wire-input consts), registers it on the agent via add_tool, and
+# prompts it. The mock returns a plain text response, so the agent loop makes one
+# request (carrying the tool defs) and terminates. Mirrors the Go drivers
+# (TestRequestWire_ToolDef* / wireToolDef). NOT live-anchored — parity held by
+# the cross-SDK comparator + mock body, like the keyless providers.
+
+
+def _wire_tool_def() -> Tool:
+    # The Run stub is never invoked: the mock returns plain text, so the agent
+    # loop sends one request carrying the tool defs and terminates.
+    return Tool(
+        name=wi.WIRE_TOOL_TOOL_NAME,
+        description=wi.WIRE_TOOL_TOOL_DESCRIPTION,
+        schema=json.loads(wi.WIRE_TOOL_TOOL_SCHEMA),
+        run=lambda _args: "",
+    )
+
+
+def test_tooldef_openai_matches_shared_golden() -> None:
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = openai("key")
+        c.provider.base_url = server.url
+        asyncio.run(c.agent.add_tool(_wire_tool_def()).prompt(wi.WIRE_TOOL_PROMPT))
+        assert server.last_body is not None
+        _assert_wire_golden("tooldef-openai", server.last_body)
+
+
+def test_tooldef_anthropic_matches_shared_golden() -> None:
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = anthropic("key")
+        c.provider.base_url = server.url
+        asyncio.run(c.agent.add_tool(_wire_tool_def()).prompt(wi.WIRE_TOOL_PROMPT))
+        assert server.last_body is not None
+        _assert_wire_golden("tooldef-anthropic", server.last_body)
+
+
+def test_tooldef_google_matches_shared_golden() -> None:
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = google("key")
+        c.provider.base_url = server.url
+        asyncio.run(c.agent.add_tool(_wire_tool_def()).prompt(wi.WIRE_TOOL_PROMPT))
+        assert server.last_body is not None
+        _assert_wire_golden("tooldef-google", server.last_body)
+
+
+def test_tooldef_bedrock_matches_shared_golden() -> None:
+    # Bedrock captures the body before the SigV4 auth check, so a dummy key works.
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = bedrock("key")
+        c.provider.base_url = server.url
+        asyncio.run(c.agent.add_tool(_wire_tool_def()).prompt(wi.WIRE_TOOL_PROMPT))
+        assert server.last_body is not None
+        _assert_wire_golden("tooldef-bedrock", server.last_body)
+
+
+def test_bedrock_chat_matches_shared_golden() -> None:
+    # Text prompt to Bedrock (no tools) — the Converse message-transform arm,
+    # plus the inferenceConfig option surface (maxTokens/temperature/top_p/
+    # stopSequences). Mirrors Go's TestRequestWire_BedrockChat.
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = bedrock("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.text.max_tokens(wi.WIRE_BEDROCK_CHAT_MAX_TOKENS)
+            .temperature(wi.WIRE_BEDROCK_CHAT_TEMPERATURE)
+            .top_p(wi.WIRE_BEDROCK_CHAT_TOP_P)
+            .stop_sequences(wi.WIRE_BEDROCK_CHAT_STOP_SEQUENCES)
+            .prompt(wi.WIRE_BEDROCK_CHAT_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("bedrock-chat", server.last_body)
