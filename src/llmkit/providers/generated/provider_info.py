@@ -219,6 +219,13 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         default_model="imagen-3.0-generate-002",
         base_url="https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/google/models",
     ),
+    ProviderName.VIDU: ProviderInfo(
+        id=ProviderName.VIDU,
+        slug="vidu",
+        env_var="VIDU_API_KEY",
+        default_model="viduq3-pro",
+        base_url="https://api.vidu.com",
+    ),
     ProviderName.VLLM: ProviderInfo(
         id=ProviderName.VLLM,
         slug="vllm",
