@@ -19,6 +19,7 @@ import dataclasses
 import json
 import os
 import time
+import uuid
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
@@ -264,6 +265,20 @@ def _dispatch_video_submit(
         #
         #
         post_headers = {**headers, "X-DashScope-Async": "enable"}
+    elif vg_cfg.wire_shape == "VideoPixVerse":
+        #
+        #
+        #
+        #
+        #
+        body = {
+            "model": model,
+            "prompt": _join_prompt_text(parts),
+            "duration": 5,
+            "quality": "540p",
+            "aspect_ratio": "16:9",
+        }
+        post_headers = {**headers, "Ai-trace-id": _new_video_trace_id()}
     elif vg_cfg.wire_shape in ("VideoVeo", "VideoVertexVeo"):
         #
         #
@@ -362,6 +377,12 @@ def _wait_video(
 
     base = _video_base_url(p, cfg, vg_cfg)
     headers = _image_auth_headers(p, cfg, pname)
+    #
+    #
+    #
+    #
+    if vg_cfg.wire_shape == "VideoPixVerse":
+        headers = {**headers, "Ai-trace-id": _new_video_trace_id()}
 
     #
     #
@@ -485,7 +506,23 @@ def _lookup_handle_field(raw: Any, path: str) -> str:
         if not isinstance(cur, dict):
             return ""
         cur = cur.get(seg)
-    return cur if isinstance(cur, str) else ""
+    #
+    #
+    #
+    if isinstance(cur, str):
+        return cur
+    if isinstance(cur, int) and not isinstance(cur, bool):
+        return str(cur)
+    if isinstance(cur, float):
+        return str(int(cur))
+    return ""
+
+
+def _new_video_trace_id() -> str:
+    """
+
+"""
+    return str(uuid.uuid4())
 
 
 def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, bool]:
@@ -555,6 +592,21 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
                 msg = "operation failed"
             raise APIError(
                 message=f"video generation failed: {msg}", status_code=0
+            )
+        #
+        return VideoResponse(), False
+
+    if vg_cfg.wire_shape == "VideoPixVerse":
+        #
+        #
+        #
+        resp = raw.get("Resp") if isinstance(raw, dict) else None
+        status = resp.get("status") if isinstance(resp, dict) else None
+        if status == 1:
+            return _video_result_from_pixverse(vg_cfg, raw), True
+        if status in (7, 8):
+            raise APIError(
+                message=f"video generation failed (status {status})", status_code=0
             )
         #
         return VideoResponse(), False
@@ -719,6 +771,23 @@ def _video_result_from_vidu(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoRe
     if not isinstance(first, dict):
         return VideoResponse()
     url = first.get("url")
+    return VideoResponse(
+        videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
+    )
+
+
+def _video_result_from_pixverse(
+    vg_cfg: VideoGenDef, raw: dict[str, Any]
+) -> VideoResponse:
+    """
+
+
+"""
+    mime = _video_fallback_mime(vg_cfg)
+    resp = raw.get("Resp") if isinstance(raw, dict) else None
+    if not isinstance(resp, dict):
+        return VideoResponse()
+    url = resp.get("url")
     return VideoResponse(
         videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
     )

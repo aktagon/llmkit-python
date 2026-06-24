@@ -704,6 +704,7 @@ def ollama(api_key: str) -> Client: return Client(ProviderName.OLLAMA, api_key)
 def openai(api_key: str) -> Client: return Client(ProviderName.OPENAI, api_key)
 def openrouter(api_key: str) -> Client: return Client(ProviderName.OPENROUTER, api_key)
 def perplexity(api_key: str) -> Client: return Client(ProviderName.PERPLEXITY, api_key)
+def pixverse(api_key: str) -> Client: return Client(ProviderName.PIXVERSE, api_key)
 def qwen(api_key: str) -> Client: return Client(ProviderName.QWEN, api_key)
 def recraft(api_key: str) -> Client: return Client(ProviderName.RECRAFT, api_key)
 def sambanova(api_key: str) -> Client: return Client(ProviderName.SAMBANOVA, api_key)
@@ -748,6 +749,7 @@ __all__ = [
     "openai",
     "openrouter",
     "perplexity",
+    "pixverse",
     "qwen",
     "recraft",
     "sambanova",
