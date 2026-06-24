@@ -704,6 +704,12 @@ _SUPPORTED_OPTIONS: dict[ProviderName, tuple[SupportedOptionDef, ...]] = {
             json_key="top_p",
         ),
     ),
+    ProviderName.PIXVERSE: (
+        SupportedOptionDef(
+            key=OptionKey.MAX_TOKENS,
+            json_key="max_tokens",
+        ),
+    ),
     ProviderName.QWEN: (
         SupportedOptionDef(
             key=OptionKey.MAX_TOKENS,
@@ -962,6 +968,8 @@ _OPTION_OVERRIDES: dict[ProviderName, tuple[OptionOverrideDef, ...]] = {
     ),
     ProviderName.PERPLEXITY: (
     ),
+    ProviderName.PIXVERSE: (
+    ),
     ProviderName.QWEN: (
     ),
     ProviderName.RECRAFT: (
@@ -1061,6 +1069,8 @@ _MODEL_OPTION_OVERRIDES: dict[ProviderName, tuple[ModelOptionOverrideDef, ...]] 
     ProviderName.OPENROUTER: (
     ),
     ProviderName.PERPLEXITY: (
+    ),
+    ProviderName.PIXVERSE: (
     ),
     ProviderName.QWEN: (
     ),
