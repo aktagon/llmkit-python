@@ -297,6 +297,126 @@ def test_video_wait_failed_zhipu_raises() -> None:
             asyncio.run(h.wait(**_FAST))
 
 
+VIDU_VIDEO_MODEL = "viduq3-pro"
+
+
+class _ViduVideoServer:
+    """Serves the Vidu (Shengshu) submit + task-creations poll endpoints.
+    Submit POSTs ``/ent/v2/text2video`` and returns the poll handle as the
+    top-level ``task_id``; the poll GET ``/ent/v2/tasks/{id}/creations``
+    returns ``state: processing`` for the first ``pending_polls`` GET calls,
+    then the supplied done body. Vidu authenticates with the ``Token`` scheme
+    (Authorization: Token <key>), not Bearer."""
+
+    def __init__(self, pending_polls: int, done_body: dict[str, Any]) -> None:
+        self.pending_polls = pending_polls
+        self.done_body = done_body
+        self.polls = 0
+        self.submit_body: dict[str, Any] | None = None
+        self.submit_auth: str | None = None
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a, **_k):
+                pass
+
+            def _send(self, body: dict[str, Any]) -> None:
+                payload = json.dumps(body).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def do_POST(self):
+                path = urlparse(self.path).path
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                outer.submit_body = json.loads(raw.decode("utf-8"))
+                outer.submit_auth = self.headers.get("Authorization")
+                if path.endswith("/ent/v2/text2video"):
+                    return self._send({"task_id": "vidu-task-1", "state": "created"})
+                self.send_response(404)
+                self.end_headers()
+
+            def do_GET(self):
+                path = urlparse(self.path).path
+                if path == "/ent/v2/tasks/vidu-task-1/creations":
+                    outer.polls += 1
+                    if outer.polls <= outer.pending_polls:
+                        return self._send({"state": "processing"})
+                    return self._send(outer.done_body)
+                self.send_response(404)
+                self.end_headers()
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+
+    def __enter__(self) -> "_ViduVideoServer":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join(timeout=2)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_port}"
+
+
+def test_video_submit_and_wait_vidu() -> None:
+    done = {
+        "state": "success",
+        "creations": [{"url": "https://api.vidu.com/creations/abc/v.mp4"}],
+    }
+    with _ViduVideoServer(pending_polls=2, done_body=done) as server:
+        c = new_client("vidu", "test-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(
+            c.video.model(VIDU_VIDEO_MODEL).submit("a drone shot over the alps")
+        )
+        assert isinstance(h, VideoHandle)
+        assert h.id == "vidu-task-1"
+
+        resp = asyncio.run(h.wait(**_FAST))
+
+    assert server.submit_auth == "Token test-token"
+    assert server.submit_body == {
+        "model": VIDU_VIDEO_MODEL,
+        "prompt": "a drone shot over the alps",
+    }
+    assert len(resp.videos) == 1
+    assert resp.videos[0].url == "https://api.vidu.com/creations/abc/v.mp4"
+    assert resp.videos[0].mime_type == "video/mp4"
+    assert resp.videos[0].bytes == b""  # url delivery must not download bytes
+
+
+def test_video_wait_failed_vidu_raises() -> None:
+    with _ViduVideoServer(
+        pending_polls=0, done_body={"state": "failed", "err_code": "content_moderation"}
+    ) as server:
+        c = new_client("vidu", "test-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(c.video.model(VIDU_VIDEO_MODEL).submit("blocked prompt"))
+        with pytest.raises(APIError, match="content_moderation"):
+            asyncio.run(h.wait(**_FAST))
+
+
+def test_video_image_part_on_text_only_vidu_rejects() -> None:
+    # BUG-010 gate: Vidu models set supports_image_to_video=False, so an image
+    # part is rejected pre-flight.
+    seed = base64.b64decode(_GROK_SEED_PNG_B64)
+    c = new_client("vidu", "test-token")
+    with pytest.raises(ValidationError, match="text-to-video-only"):
+        asyncio.run(
+            c.video.model(VIDU_VIDEO_MODEL)
+            .image("image/png", seed)
+            .submit("animate this")
+        )
+
+
 TOGETHER_VIDEO_MODEL = "minimax/video-01-director"
 
 
