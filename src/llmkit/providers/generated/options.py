@@ -730,6 +730,12 @@ _SUPPORTED_OPTIONS: dict[ProviderName, tuple[SupportedOptionDef, ...]] = {
             json_key="top_p",
         ),
     ),
+    ProviderName.RECRAFT: (
+        SupportedOptionDef(
+            key=OptionKey.MAX_TOKENS,
+            json_key="max_tokens",
+        ),
+    ),
     ProviderName.SAMBANOVA: (
         SupportedOptionDef(
             key=OptionKey.MAX_TOKENS,
@@ -952,6 +958,8 @@ _OPTION_OVERRIDES: dict[ProviderName, tuple[OptionOverrideDef, ...]] = {
     ),
     ProviderName.QWEN: (
     ),
+    ProviderName.RECRAFT: (
+    ),
     ProviderName.SAMBANOVA: (
     ),
     ProviderName.TOGETHER: (
@@ -1047,6 +1055,8 @@ _MODEL_OPTION_OVERRIDES: dict[ProviderName, tuple[ModelOptionOverrideDef, ...]] 
     ProviderName.PERPLEXITY: (
     ),
     ProviderName.QWEN: (
+    ),
+    ProviderName.RECRAFT: (
     ),
     ProviderName.SAMBANOVA: (
     ),
