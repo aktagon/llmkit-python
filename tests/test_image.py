@@ -999,3 +999,79 @@ def test_image_safety_settings_rejected_on_openai() -> None:
             .safety_settings([SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE")])
             .generate("x")
         )
+
+
+# === Recraft (JSONGenerations input mode) ===
+
+RECRAFT_V3 = "recraftv3"
+RECRAFT_V3_VECTOR = "recraftv3_vector"
+FAKE_SVG = b'<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>'
+
+
+def _recraft_client(server_url: str | None = None):
+    c = new_client("recraft", "test-key")
+    c.provider.base_url = server_url or "http://unused"
+    return c
+
+
+def test_image_generate_recraft_generations_happy_path() -> None:
+    encoded = base64.b64encode(FAKE_PNG).decode("ascii")
+    with _OpenAIMockServer({"data": [{"b64_json": encoded}]}) as server:
+        c = _recraft_client(server.url)
+        resp = asyncio.run(
+            c.image.model(RECRAFT_V3).image_size("1024x1024").generate("A red circle")
+        )
+
+    assert server.received_path == "/v1/images/generations"
+    assert server.received_headers.get("Authorization") == "Bearer test-key"
+    body = server.received_json
+    assert body is not None
+    assert body["model"] == RECRAFT_V3
+    assert body["prompt"] == "A red circle"
+    # Recraft defaults to URL — we must force b64_json on the wire.
+    assert body["response_format"] == "b64_json"
+    assert body["size"] == "1024x1024"
+    # Text-to-image only: no image/images fields.
+    assert "image" not in body
+    assert "images" not in body
+    assert len(resp.images) == 1
+    assert resp.images[0].bytes == FAKE_PNG
+    assert resp.images[0].mime_type == "image/png"
+    # Recraft returns no usage object; tokens stay zero (no fabricated values).
+    assert resp.usage.input == 0
+    assert resp.usage.output == 0
+
+
+def test_image_generate_recraft_vector_sniffs_svg() -> None:
+    encoded = base64.b64encode(FAKE_SVG).decode("ascii")
+    with _OpenAIMockServer({"data": [{"b64_json": encoded}]}) as server:
+        c = _recraft_client(server.url)
+        resp = asyncio.run(
+            c.image.model(RECRAFT_V3_VECTOR).generate("A sailboat logo")
+        )
+
+    body = server.received_json
+    assert body is not None
+    assert body["model"] == RECRAFT_V3_VECTOR
+    assert len(resp.images) == 1
+    assert resp.images[0].bytes == FAKE_SVG
+    # Vector output: SVG bytes in the same b64_json slot, no mime echoed -> sniff.
+    assert resp.images[0].mime_type == "image/svg+xml"
+
+
+def test_image_generate_recraft_rejects_image_parts() -> None:
+    c = _recraft_client()
+    with pytest.raises(ValidationError) as exc:
+        asyncio.run(
+            c.image.model(RECRAFT_V3).image("image/png", FAKE_PNG).generate("edit this")
+        )
+    assert exc.value.field == "parts"
+
+
+def test_image_generate_recraft_rejects_aspect_ratio() -> None:
+    c = _recraft_client()
+    with pytest.raises(ValidationError) as exc:
+        asyncio.run(
+            c.image.model(RECRAFT_V3).aspect_ratio("16:9").generate("A red circle")
+        )
+    assert exc.value.field == "aspect_ratio"

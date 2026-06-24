@@ -129,6 +129,36 @@ def test_integration_image_openai_gpt_image_2() -> None:
     assert resp.usage.output > 0, "image-output tokens should land in candidatesTokenCount"
 
 
+def test_integration_image_recraft_recraftv3() -> None:
+    key = os.getenv("RECRAFT_API_TOKEN")
+    if not key:
+        pytest.skip("RECRAFT_API_TOKEN not set")
+    c = new_client("recraft", key)
+    resp = asyncio.run(
+        c.image
+        .model("recraftv3")
+        .generate("A simple red circle on a white background.")
+    )
+    assert len(resp.images) > 0
+    assert len(resp.images[0].bytes) > 0
+    assert resp.usage.output > 0, "image-output tokens should land in candidatesTokenCount"
+
+
+def test_integration_image_recraft_recraftv3_vector() -> None:
+    key = os.getenv("RECRAFT_API_TOKEN")
+    if not key:
+        pytest.skip("RECRAFT_API_TOKEN not set")
+    c = new_client("recraft", key)
+    resp = asyncio.run(
+        c.image
+        .model("recraftv3_vector")
+        .generate("A simple red circle on a white background.")
+    )
+    assert len(resp.images) > 0
+    assert len(resp.images[0].bytes) > 0
+    assert resp.usage.output > 0, "image-output tokens should land in candidatesTokenCount"
+
+
 def test_integration_image_vertex_imagen_3_0_fast_generate_001() -> None:
     key = os.getenv("VERTEX_BEARER_TOKEN")
     if not key:
