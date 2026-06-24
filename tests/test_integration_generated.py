@@ -561,6 +561,18 @@ def test_integration_perplexity_stream() -> None:
     assert "".join(chunks) != "", "empty stream output"
 
 
+def test_integration_pixverse() -> None:
+    key = os.getenv("PIXVERSE_API_KEY")
+    if not key:
+        pytest.skip("PIXVERSE_API_KEY not set")
+    c = new_client("pixverse", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
+    )
+    assert resp.text != "", "empty response text"
+    assert resp.usage.input > 0, "no input tokens reported"
+
+
 def test_integration_qwen() -> None:
     key = os.getenv("DASHSCOPE_API_KEY")
     if not key:

@@ -417,6 +417,151 @@ def test_video_image_part_on_text_only_vidu_rejects() -> None:
         )
 
 
+PIXVERSE_VIDEO_MODEL = "v4.5"
+PIXVERSE_VIDEO_ID = 318633193768896
+
+
+class _PixVerseVideoServer:
+    """Serves the PixVerse submit + result-poll endpoints. Submit POSTs
+    ``/openapi/v2/video/text/generate`` and returns the poll handle as the
+    numeric ``Resp.video_id``; the poll GET ``/openapi/v2/video/result/{id}``
+    returns ``Resp.status: 5`` (generating) for the first ``pending_polls`` GET
+    calls, then the supplied done body. PixVerse authenticates with the API-KEY
+    header and requires a unique Ai-trace-id header on BOTH submit and poll."""
+
+    def __init__(self, pending_polls: int, done_body: dict[str, Any]) -> None:
+        self.pending_polls = pending_polls
+        self.done_body = done_body
+        self.polls = 0
+        self.submit_body: dict[str, Any] | None = None
+        self.submit_api_key: str | None = None
+        self.submit_trace_id: str | None = None
+        self.poll_api_key: str | None = None
+        self.poll_trace_id: str | None = None
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a, **_k):
+                pass
+
+            def _send(self, body: dict[str, Any]) -> None:
+                payload = json.dumps(body).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def do_POST(self):
+                path = urlparse(self.path).path
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                outer.submit_body = json.loads(raw.decode("utf-8"))
+                outer.submit_api_key = self.headers.get("API-KEY")
+                outer.submit_trace_id = self.headers.get("Ai-trace-id")
+                if path == "/openapi/v2/video/text/generate":
+                    return self._send(
+                        {
+                            "ErrCode": 0,
+                            "ErrMsg": "success",
+                            "Resp": {"video_id": PIXVERSE_VIDEO_ID},
+                        }
+                    )
+                self.send_response(404)
+                self.end_headers()
+
+            def do_GET(self):
+                path = urlparse(self.path).path
+                if path == f"/openapi/v2/video/result/{PIXVERSE_VIDEO_ID}":
+                    outer.poll_api_key = self.headers.get("API-KEY")
+                    outer.poll_trace_id = self.headers.get("Ai-trace-id")
+                    outer.polls += 1
+                    if outer.polls <= outer.pending_polls:
+                        return self._send({"ErrCode": 0, "Resp": {"status": 5}})
+                    return self._send(outer.done_body)
+                self.send_response(404)
+                self.end_headers()
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+
+    def __enter__(self) -> "_PixVerseVideoServer":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join(timeout=2)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_port}"
+
+
+def test_video_submit_and_wait_pixverse() -> None:
+    done = {
+        "ErrCode": 0,
+        "ErrMsg": "success",
+        "Resp": {
+            "id": PIXVERSE_VIDEO_ID,
+            "status": 1,
+            "url": "https://media.pixverse.ai/abc/v.mp4",
+        },
+    }
+    with _PixVerseVideoServer(pending_polls=2, done_body=done) as server:
+        c = new_client("pixverse", "test-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(
+            c.video.model(PIXVERSE_VIDEO_MODEL).submit("a drone shot over the alps")
+        )
+        assert isinstance(h, VideoHandle)
+        # The numeric video_id is formatted to its integer string form.
+        assert h.id == "318633193768896"
+
+        resp = asyncio.run(h.wait(**_FAST))
+
+    assert server.submit_api_key == "test-token"
+    assert server.submit_trace_id  # non-empty UUID on submit
+    assert server.poll_api_key == "test-token"
+    assert server.poll_trace_id  # non-empty UUID on poll
+    assert server.submit_body is not None
+    assert server.submit_body["model"] == PIXVERSE_VIDEO_MODEL
+    assert server.submit_body["prompt"] == "a drone shot over the alps"
+    # All three required reference-anchored defaults are present.
+    assert server.submit_body["duration"] == 5
+    assert server.submit_body["quality"] == "540p"
+    assert server.submit_body["aspect_ratio"] == "16:9"
+    assert len(resp.videos) == 1
+    assert resp.videos[0].url == "https://media.pixverse.ai/abc/v.mp4"
+    assert resp.videos[0].mime_type == "video/mp4"
+    assert resp.videos[0].bytes == b""  # url delivery must not download bytes
+
+
+def test_video_wait_failed_pixverse_raises() -> None:
+    with _PixVerseVideoServer(
+        pending_polls=0, done_body={"ErrCode": 0, "Resp": {"status": 8}}
+    ) as server:
+        c = new_client("pixverse", "test-token")
+        c.provider.base_url = server.url
+        h = asyncio.run(c.video.model(PIXVERSE_VIDEO_MODEL).submit("blocked prompt"))
+        with pytest.raises(APIError, match="status 8"):
+            asyncio.run(h.wait(**_FAST))
+
+
+def test_video_image_part_on_text_only_pixverse_rejects() -> None:
+    # BUG-010 gate: PixVerse models set supports_image_to_video=False, so an
+    # image part is rejected pre-flight.
+    seed = base64.b64decode(_GROK_SEED_PNG_B64)
+    c = new_client("pixverse", "test-token")
+    with pytest.raises(ValidationError, match="text-to-video-only"):
+        asyncio.run(
+            c.video.model(PIXVERSE_VIDEO_MODEL)
+            .image("image/png", seed)
+            .submit("animate this")
+        )
+
+
 TOGETHER_VIDEO_MODEL = "minimax/video-01-director"
 
 
