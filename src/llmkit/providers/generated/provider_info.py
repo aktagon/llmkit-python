@@ -37,6 +37,13 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         default_model="claude-sonnet-4-6",
         base_url="https://api.anthropic.com",
     ),
+    ProviderName.ASSEMBLYAI: ProviderInfo(
+        id=ProviderName.ASSEMBLYAI,
+        slug="assemblyai",
+        env_var="ASSEMBLYAI_API_KEY",
+        default_model="best",
+        base_url="https://api.assemblyai.com",
+    ),
     ProviderName.AZURE: ProviderInfo(
         id=ProviderName.AZURE,
         slug="azure",
