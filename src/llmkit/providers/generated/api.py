@@ -277,6 +277,11 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
     ),
     APIEntryPointDef(
         py_func="submit",
+        py_param_type="TranscriptionRequest",
+        comment="Asynchronous speech-to-text submit. Input is TranscriptionRequest{ Parts []Part } carrying exactly one audio Part \u2014 parts.Audio(url) (a public URL submitted directly as audio_url) or parts.AudioBytes(mime, raw) (local bytes the runtime uploads first to obtain an upload_url, STT-005). A request without exactly one audio part is rejected pre-flight (STT-003). Returns a TranscriptionHandle immediately; poll it with Wait.",
+    ),
+    APIEntryPointDef(
+        py_func="submit",
         py_param_type="VideoRequest",
         comment="Asynchronous text/image-to-video submit. Input is VideoRequest{ Model, Prompt, Parts []Part } where Parts is a positionally-ordered sequence of llm:Part (text prompt or image-to-video reference). Prompt is a sugar field for the prompt-only case (XOR with Parts; runtime synthesises []Part{Text(Prompt)} when only Prompt is set). Returns a VideoHandle immediately; poll it with Wait.",
     ),
@@ -294,6 +299,11 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         py_func="upload_file",
         py_param_type="Bytes",
         comment="Uploads a file and returns a File handle suitable for inclusion in a Request.files slice.",
+    ),
+    APIEntryPointDef(
+        py_func="wait",
+        py_param_type="TranscriptionHandle",
+        comment="Polls the provider (per the handle's poll endpoint + status mapping) until the job reaches status=completed, then returns a TranscriptionResponse carrying the transcript text and timing segments. A status=error job surfaces as an error (never a silent empty success). Hand-written on TranscriptionHandle (not a *Transcription builder terminal), mirroring VideoHandle.Wait / BatchHandle.Wait.",
     ),
     APIEntryPointDef(
         py_func="wait",
