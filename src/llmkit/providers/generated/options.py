@@ -146,6 +146,12 @@ _SUPPORTED_OPTIONS: dict[ProviderName, tuple[SupportedOptionDef, ...]] = {
             json_key="top_p",
         ),
     ),
+    ProviderName.ASSEMBLYAI: (
+        SupportedOptionDef(
+            key=OptionKey.MAX_TOKENS,
+            json_key="max_tokens",
+        ),
+    ),
     ProviderName.AZURE: (
         SupportedOptionDef(
             key=OptionKey.FREQUENCY_PENALTY,
@@ -918,6 +924,8 @@ _OPTION_OVERRIDES: dict[ProviderName, tuple[OptionOverrideDef, ...]] = {
             root_extra_fields_json="",
         ),
     ),
+    ProviderName.ASSEMBLYAI: (
+    ),
     ProviderName.AZURE: (
     ),
     ProviderName.BEDROCK: (
@@ -1023,6 +1031,8 @@ _MODEL_OPTION_OVERRIDES: dict[ProviderName, tuple[ModelOptionOverrideDef, ...]] 
     ProviderName.AI21: (
     ),
     ProviderName.ANTHROPIC: (
+    ),
+    ProviderName.ASSEMBLYAI: (
     ),
     ProviderName.AZURE: (
     ),
