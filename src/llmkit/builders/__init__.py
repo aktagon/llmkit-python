@@ -45,6 +45,7 @@ from .music import music_generate
 from .speech import speech_generate
 from .stream import text_stream
 from .text import text_prompt
+from .transcription import transcription_submit
 from .upload import upload_run
 from .video import video_submit
 
@@ -368,6 +369,18 @@ class Speech:
         return await speech_generate(self, msg)
 
 
+# === Transcription — Transcription builder ===
+
+class Transcription:
+    """Phase 2b skeleton; chain methods clone-then-mutate via copy.copy()."""
+
+    def __init__(self, client: "Client") -> None:
+        self.client = client
+
+    async def submit(self, audio_parts: list[Part]) -> TranscriptionHandle:
+        return await transcription_submit(self, audio_parts)
+
+
 # === Video — VideoGeneration builder ===
 
 class Video:
@@ -653,6 +666,7 @@ class Client:
         self.image: Image = Image(self)
         self.music: Music = Music(self)
         self.speech: Speech = Speech(self)
+        self.transcription: Transcription = Transcription(self)
         self.video: Video = Video(self)
         self.agent: Agent = Agent(self)
         self.upload: Upload = Upload(self)
@@ -709,6 +723,7 @@ def new_client(name: ProviderName, api_key: str) -> Client:
 # === Per-provider factory functions ===
 def ai21(api_key: str) -> Client: return Client(ProviderName.AI21, api_key)
 def anthropic(api_key: str) -> Client: return Client(ProviderName.ANTHROPIC, api_key)
+def assemblyai(api_key: str) -> Client: return Client(ProviderName.ASSEMBLYAI, api_key)
 def azure(api_key: str) -> Client: return Client(ProviderName.AZURE, api_key)
 def bedrock(api_key: str) -> Client: return Client(ProviderName.BEDROCK, api_key)
 def cerebras(api_key: str) -> Client: return Client(ProviderName.CEREBRAS, api_key)
@@ -751,11 +766,13 @@ __all__ = [
     "Image",
     "Music",
     "Speech",
+    "Transcription",
     "Video",
     "Agent",
     "Upload",
     "ai21",
     "anthropic",
+    "assemblyai",
     "azure",
     "bedrock",
     "cerebras",

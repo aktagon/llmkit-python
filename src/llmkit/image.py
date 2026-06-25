@@ -36,17 +36,36 @@ from .structs import MediaRef  # noqa: E402,F401
 
 @dataclass
 class Part:
-    """Universal multimodal input atom. Exactly one of text, image, or
-    lyrics is set; empty or multiple set is invalid (rejected by
-    pre-flight). Typed-builder accumulators (``c.text.text(s)``,
+    """Universal multimodal input atom. Exactly one of text, image,
+    lyrics, audio_url, or audio is set; empty or multiple set is invalid
+    (rejected by pre-flight). Typed-builder accumulators (``c.text.text(s)``,
     ``c.image.image(m, b)``, ``c.music.lyrics(s)``, ...) are the canonical
     user-facing path; users assembling Part lists manually can construct
     Part(text=..., image=MediaRef(...)) directly. lyrics is music-only
-    (ADR-033) — text-generation and image-generation runtimes ignore it."""
+    (ADR-033) — text-generation and image-generation runtimes ignore it.
+    audio_url (a public URL) and audio (local bytes) are transcription-only
+    (ADR-048); construct them with ``audio(url)`` / ``audio_bytes(mime, raw)``."""
 
     text: str = ""
     image: MediaRef | None = None
     lyrics: str = ""
+    audio_url: str = ""
+    audio: MediaRef | None = None
+
+
+def audio(url: str) -> Part:
+    """Construct an audio-bearing Part from a public URL, for transcription
+    (ADR-048). The URL is submitted to the provider directly as the audio
+    source. Mirror of Go parts.Audio."""
+    return Part(audio_url=url)
+
+
+def audio_bytes(mime: str, raw: bytes) -> Part:
+    """Construct an audio-bearing Part from local bytes, for transcription
+    (ADR-048). mime is the IANA media type (e.g. "audio/mp3"); raw is the
+    undecoded bytes. The runtime uploads them to the provider first to obtain a
+    URL, then submits that. Mirror of Go parts.AudioBytes."""
+    return Part(audio=MediaRef(mime_type=mime, bytes=raw))
 
 
 from .structs import ImageData  # noqa: E402,F401
