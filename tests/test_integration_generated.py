@@ -68,6 +68,18 @@ def test_integration_anthropic_stream() -> None:
     assert "".join(chunks) != "", "empty stream output"
 
 
+def test_integration_assemblyai() -> None:
+    key = os.getenv("ASSEMBLYAI_API_KEY")
+    if not key:
+        pytest.skip("ASSEMBLYAI_API_KEY not set")
+    c = new_client("assemblyai", key)
+    resp = asyncio.run(
+        c.text.system("Reply with only the word pong").prompt("ping")
+    )
+    assert resp.text != "", "empty response text"
+    assert resp.usage.input > 0, "no input tokens reported"
+
+
 def test_integration_cerebras() -> None:
     key = os.getenv("CEREBRAS_API_KEY")
     if not key:

@@ -1,0 +1,308 @@
+"""Transcription (speech-to-text) runtime (ADR-048) — mirror of
+go/transcription.go and go/transcription_builder.go.
+
+Transcription is asynchronous: ``transcription_submit`` POSTs the job (with an
+upload hop first for local-bytes audio) and returns a ``TranscriptionHandle``
+immediately; the caller polls the handle with ``await handle.wait()`` (modeled
+on the video handle, ADR-034 / ADR-014).
+
+Pre-flight validation (exactly one audio part; non-audio parts rejected) runs
+before any HTTP call. The submit/poll/status facts are config; only the result
+decode is wire-shape-keyed (STT-005). Slice 1 wires TranscriptionAssemblyAI:
+upload -> submit -> poll -> {text, words[]}.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import time
+from typing import TYPE_CHECKING, Any
+
+from ..errors import APIError, ValidationError
+from ..http import do_get, do_post
+from ..image import Part, _image_auth_headers
+from ..providers.generated.providers import PROVIDERS, ProviderName
+from ..providers.generated.transcription_gen import (
+    TranscriptionDef,
+    transcription_config,
+)
+from ..structs import (
+    TranscriptionHandle as _TranscriptionHandleData,
+    TranscriptionResponse,
+    TranscriptSegment,
+)
+from ..types import Provider
+
+if TYPE_CHECKING:
+    from . import Transcription
+
+
+# Default poll cadence for TranscriptionHandle.wait. AssemblyAI jobs run from
+# seconds to minutes; the SDK polls every poll_interval until request_timeout
+# elapses. Mirror of go/transcription.go transcriptionPollInterval / Timeout.
+_DEFAULT_POLL_INTERVAL = 3.0
+_DEFAULT_REQUEST_TIMEOUT = 600.0
+
+
+class TranscriptionHandle(_TranscriptionHandleData):
+    """Typed-builder TranscriptionHandle. Inherits the ontology-generated data
+    shape (id, provider) and adds a ``wait()`` method so callers can write
+    ``handle = await transcription.submit(...); resp = await handle.wait()`` —
+    mirroring Go's ``TranscriptionHandle.Wait`` value-receiver shape (ADR-048).
+    """
+
+    async def wait(
+        self,
+        *,
+        poll_interval: float = _DEFAULT_POLL_INTERVAL,
+        request_timeout: float = _DEFAULT_REQUEST_TIMEOUT,
+    ) -> TranscriptionResponse:
+        return await asyncio.to_thread(
+            _wait_transcription, self, poll_interval, request_timeout
+        )
+
+
+async def transcription_submit(
+    b: "Transcription", audio_parts: list[Part]
+) -> TranscriptionHandle:
+    provider = Provider(
+        name=b.client.provider.name,
+        api_key=b.client.provider.api_key,
+    )
+    if b.client.provider.base_url:
+        provider.base_url = b.client.provider.base_url
+
+    return await asyncio.to_thread(
+        _submit_transcription, provider, list(audio_parts)
+    )
+
+
+def _submit_transcription(
+    provider: Provider, parts: list[Part]
+) -> TranscriptionHandle:
+    """Submit an asynchronous speech-to-text job and return a
+    TranscriptionHandle immediately. Pre-flight validation rejects an input that
+    is not exactly one audio Part before any HTTP call (STT-003). For an
+    audio-bytes part the runtime performs the upload hop (POST the raw bytes,
+    read upload_url) before submitting (STT-005). Mirror of go
+    submitTranscription."""
+    cfg = PROVIDERS.get(provider.name)
+    if cfg is None:
+        raise ValidationError(field="provider", message=f"unknown: {provider.name}")
+
+    pname = ProviderName(provider.name)
+    tc_cfg = transcription_config(pname)
+    if tc_cfg is None:
+        raise ValidationError(
+            field="provider",
+            message=f"{provider.name} does not support transcription",
+        )
+
+    audio_url, audio_bytes = _normalize_audio_part(parts)
+
+    base = _transcription_base_url(provider, cfg)
+    headers = _image_auth_headers(provider, cfg, pname)
+
+    # Upload hop (STT-005): a bytes part is uploaded first to obtain a URL the
+    # submit body can reference. URL parts skip this entirely.
+    if audio_bytes is not None:
+        if not tc_cfg.upload_endpoint:
+            raise ValidationError(
+                field="parts",
+                message=f"{provider.name} does not accept audio bytes; pass a public audio URL",
+            )
+        upload_headers = {**headers, "content-type": "application/octet-stream"}
+        upload_body = do_post(base + tc_cfg.upload_endpoint, audio_bytes, upload_headers)
+        try:
+            up = json.loads(upload_body)
+        except ValueError as exc:
+            raise APIError(
+                message=f"unmarshal transcription upload response: {exc}",
+                status_code=0,
+            ) from exc
+        audio_url = _lookup_handle_field(up, "upload_url")
+        if not audio_url:
+            raise APIError(
+                message="transcription upload: response carried no upload_url",
+                status_code=0,
+            )
+
+    submit_body = json.dumps({"audio_url": audio_url}).encode("utf-8")
+    resp_body = do_post(
+        base + tc_cfg.submit_endpoint,
+        submit_body,
+        {**headers, "content-type": "application/json"},
+    )
+    try:
+        raw = json.loads(resp_body)
+    except ValueError as exc:
+        raise APIError(
+            message=f"unmarshal transcription submit response: {exc}",
+            status_code=0,
+        ) from exc
+    handle_id = _lookup_handle_field(raw, tc_cfg.submit_handle_field)
+    if not handle_id:
+        raise APIError(
+            message=f"transcription submit: empty handle field {tc_cfg.submit_handle_field!r}",
+            status_code=0,
+        )
+    return TranscriptionHandle(id=handle_id, provider=provider)
+
+
+def _wait_transcription(
+    handle: TranscriptionHandle,
+    poll_interval: float,
+    request_timeout: float,
+) -> TranscriptionResponse:
+    """Poll the provider until the transcription job reaches a terminal state,
+    then return the finished TranscriptionResponse. A status=error job surfaces
+    as an error (never a silent empty success). The status-to-terminal mapping
+    is read from config (STT-005); only result extraction is wire-shape-keyed.
+    The handle carries the transcript id and provider config, so wait works
+    across process boundaries. Mirror of go TranscriptionHandle.Wait."""
+    p = handle.provider
+    cfg = PROVIDERS.get(p.name)
+    if cfg is None:
+        raise ValidationError(field="provider", message=f"unknown: {p.name}")
+    pname = ProviderName(p.name)
+    tc_cfg = transcription_config(pname)
+    if tc_cfg is None:
+        raise ValidationError(
+            field="provider",
+            message=f"{p.name} does not support transcription",
+        )
+
+    base = _transcription_base_url(p, cfg)
+    headers = _image_auth_headers(p, cfg, pname)
+    poll_url = base + tc_cfg.poll_endpoint.replace("{id}", handle.id)
+
+    deadline = time.monotonic() + request_timeout
+    while True:
+        if time.monotonic() > deadline:
+            raise APIError(
+                message=f"transcription poll: timed out after {request_timeout}s waiting for {handle.id}",
+                status_code=0,
+            )
+        resp_body = do_get(poll_url, headers)
+        try:
+            raw = json.loads(resp_body)
+        except ValueError as exc:
+            raise APIError(
+                message=f"unmarshal transcription poll response: {exc}",
+                status_code=0,
+            ) from exc
+        status = _lookup_handle_field(raw, tc_cfg.status_path)
+        if status == tc_cfg.done_status:
+            return _transcription_result(tc_cfg, raw)
+        if status == tc_cfg.error_status:
+            msg = _lookup_handle_field(raw, cfg.error_message_path)
+            if not msg:
+                msg = "transcription failed"
+            raise APIError(message=f"transcription failed: {msg}", status_code=0)
+        # queued, processing (or any non-terminal status): keep polling.
+        time.sleep(poll_interval)
+
+
+def _transcription_result(
+    tc_cfg: TranscriptionDef, raw: dict[str, Any]
+) -> TranscriptionResponse:
+    """Extract the finished transcript per wire shape. Only the result decode is
+    wire-shape-keyed (STT-005); the submit/poll/status facts are config. Mirror
+    of go transcriptionResult."""
+    if tc_cfg.wire_shape == "TranscriptionAssemblyAI":
+        return _transcription_result_from_assemblyai(raw)
+    raise APIError(
+        message=f"transcription: unsupported wire shape {tc_cfg.wire_shape!r}",
+        status_code=0,
+    )
+
+
+def _transcription_result_from_assemblyai(
+    raw: dict[str, Any],
+) -> TranscriptionResponse:
+    """Extract the transcript text and word-level timing segments from a
+    completed AssemblyAI transcript object. start/end are integer milliseconds;
+    speaker is present only on diarized transcripts. Usage stays zero —
+    AssemblyAI bills by audio duration, not tokens (ADR-048 OQ-2). Mirror of go
+    transcriptionResultFromAssemblyAI."""
+    text = raw.get("text") if isinstance(raw, dict) else None
+    text = text if isinstance(text, str) else ""
+    words = raw.get("words") if isinstance(raw, dict) else None
+    segments: list[TranscriptSegment] = []
+    if isinstance(words, list):
+        for w in words:
+            if not isinstance(w, dict):
+                continue
+            seg = TranscriptSegment()
+            wt = w.get("text")
+            seg.text = wt if isinstance(wt, str) else ""
+            start = w.get("start")
+            if isinstance(start, (int, float)) and not isinstance(start, bool):
+                seg.start = int(start)
+            end = w.get("end")
+            if isinstance(end, (int, float)) and not isinstance(end, bool):
+                seg.end = int(end)
+            speaker = w.get("speaker")
+            seg.speaker = speaker if isinstance(speaker, str) else ""
+            segments.append(seg)
+    return TranscriptionResponse(text=text, segments=segments)
+
+
+def _normalize_audio_part(parts: list[Part]) -> tuple[str, bytes | None]:
+    """Enforce the single-audio-part rule (STT-003) and return the audio source:
+    a URL XOR raw bytes. A request with a non-audio part, or with anything other
+    than exactly one audio part, is rejected pre-flight. Mirror of go
+    normalizeAudioPart."""
+    url = ""
+    raw: bytes | None = None
+    audio_count = 0
+    for i, part in enumerate(parts):
+        if part.audio_url:
+            audio_count += 1
+            url = part.audio_url
+        elif part.audio is not None:
+            audio_count += 1
+            raw = part.audio.bytes
+        elif part.text or part.image is not None or part.lyrics:
+            raise ValidationError(
+                field=f"parts[{i}]",
+                message="transcription accepts only audio parts (audio / audio_bytes)",
+            )
+        else:
+            raise ValidationError(field=f"parts[{i}]", message="empty part")
+    if audio_count != 1:
+        raise ValidationError(
+            field="parts",
+            message="transcription requires exactly one audio part",
+        )
+    return url, raw
+
+
+def _transcription_base_url(provider: Provider, cfg: Any) -> str:
+    """Resolve the base for the transcription API: an explicit per-client
+    override wins (tests point it at a mock; users at a proxy), else the
+    provider's chat base. Submit/poll/upload endpoints are always relative paths
+    joined to this base. Mirror of go transcriptionBaseURL."""
+    if provider.base_url:
+        return provider.base_url
+    return cfg.base_url
+
+
+def _lookup_handle_field(raw: Any, path: str) -> str:
+    """Descend a dotted path (e.g. "id", "status", "error") through the decoded
+    response, returning the leaf string or "" if any segment is missing."""
+    if not path:
+        return ""
+    cur: Any = raw
+    for seg in path.split("."):
+        if not isinstance(cur, dict):
+            return ""
+        cur = cur.get(seg)
+    if isinstance(cur, str):
+        return cur
+    if isinstance(cur, int) and not isinstance(cur, bool):
+        return str(cur)
+    if isinstance(cur, float):
+        return str(int(cur))
+    return ""
