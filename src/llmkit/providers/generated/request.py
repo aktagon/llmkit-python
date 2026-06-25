@@ -60,6 +60,7 @@ class FileUploadDef:
 _AUTH_SCHEMES: dict[ProviderName, AuthScheme] = {
     ProviderName.AI21: AuthScheme.BEARER_TOKEN,
     ProviderName.ANTHROPIC: AuthScheme.HEADER_API_KEY,
+    ProviderName.ASSEMBLYAI: AuthScheme.HEADER_API_KEY,
     ProviderName.AZURE: AuthScheme.HEADER_API_KEY,
     ProviderName.BEDROCK: AuthScheme.SIG_V4,
     ProviderName.CEREBRAS: AuthScheme.BEARER_TOKEN,
@@ -99,6 +100,7 @@ _AUTH_SCHEMES: dict[ProviderName, AuthScheme] = {
 _SYSTEM_PLACEMENTS: dict[ProviderName, SystemPlacement] = {
     ProviderName.AI21: SystemPlacement.MESSAGE_IN_ARRAY,
     ProviderName.ANTHROPIC: SystemPlacement.TOP_LEVEL_FIELD,
+    ProviderName.ASSEMBLYAI: SystemPlacement.MESSAGE_IN_ARRAY,
     ProviderName.AZURE: SystemPlacement.MESSAGE_IN_ARRAY,
     ProviderName.BEDROCK: SystemPlacement.TOP_LEVEL_FIELD,
     ProviderName.CEREBRAS: SystemPlacement.MESSAGE_IN_ARRAY,

@@ -42,11 +42,30 @@ class Part:
 
 
 
+
+
 """
 
     text: str = ""
     image: MediaRef | None = None
     lyrics: str = ""
+    audio_url: str = ""
+    audio: MediaRef | None = None
+
+
+def audio(url: str) -> Part:
+    """
+
+"""
+    return Part(audio_url=url)
+
+
+def audio_bytes(mime: str, raw: bytes) -> Part:
+    """
+
+
+"""
+    return Part(audio=MediaRef(mime_type=mime, bytes=raw))
 
 
 from .structs import ImageData  # noqa: E402,F401

@@ -237,6 +237,45 @@ class ToolResult:
 
 
 @dataclass
+class TranscriptSegment:
+    """"""
+    #
+    text: str = ""
+
+    #
+    start: int = 0
+
+    #
+    end: int = 0
+
+    #
+    speaker: str = ""
+
+
+@dataclass(kw_only=True)
+class TranscriptionHandle:
+    """"""
+    #
+    id: str = ""
+
+    #
+    provider: Provider
+
+
+@dataclass
+class TranscriptionResponse:
+    """"""
+    #
+    text: str = ""
+
+    #
+    segments: list[TranscriptSegment] = field(default_factory=list)
+
+    #
+    usage: Usage = field(default_factory=Usage)
+
+
+@dataclass
 class VideoData:
     """"""
     #
