@@ -6,6 +6,13 @@ Async. Zero external dependencies — stdlib only, no `httpx`, no `pydantic`. Py
 
 Also available for Go, TypeScript, and Rust.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/aktagon/llmkit-python/master/assets/logos/llmkit-languages.svg" alt="Go, TypeScript, Python, Rust" height="26">
+</p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/aktagon/llmkit-python/master/assets/logos/llmkit-providers.svg" alt="Anthropic, OpenAI, Google, and 20+ more providers" height="26">
+</p>
+
 ## Install
 
 ```bash
