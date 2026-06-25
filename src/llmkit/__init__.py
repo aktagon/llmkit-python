@@ -61,9 +61,19 @@ from .image import (
     ImageRequest,
     MediaRef,
     Part,
+    audio,
+    audio_bytes,
 )
 from .music import MusicRequest
-from .structs import AudioData, ImageResponse, MusicResponse, ToolCall, ToolResult
+from .structs import (
+    AudioData,
+    ImageResponse,
+    MusicResponse,
+    ToolCall,
+    ToolResult,
+    TranscriptionResponse,
+    TranscriptSegment,
+)
 from .wire import (
     MissingWireVersionError,
     UnknownWireKeyError,
@@ -152,6 +162,11 @@ __all__ = [
     "MusicResponse",
     "MediaRef",
     "Part",
+    # Audio Part constructors + transcription containers (ADR-048).
+    "audio",
+    "audio_bytes",
+    "TranscriptionResponse",
+    "TranscriptSegment",
     # Middleware.
     "Event",
     "MiddlewareFn",

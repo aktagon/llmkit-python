@@ -9,6 +9,7 @@ from enum import Enum
 class ProviderName(str, Enum):
     AI21 = "ai21"
     ANTHROPIC = "anthropic"
+    ASSEMBLYAI = "assemblyai"
     AZURE = "azure"
     BEDROCK = "bedrock"
     CEREBRAS = "cerebras"
@@ -47,6 +48,7 @@ class ProviderName(str, Enum):
 ALL_PROVIDER_NAMES: tuple[ProviderName, ...] = (
     ProviderName.AI21,
     ProviderName.ANTHROPIC,
+    ProviderName.ASSEMBLYAI,
     ProviderName.AZURE,
     ProviderName.BEDROCK,
     ProviderName.CEREBRAS,
@@ -199,6 +201,44 @@ PROVIDERS: dict[str, ProviderSpec] = {
         model_in_body=True,
         error_message_path="error.message",
         error_type_path="error.type",
+        access_key_env_var="",
+        secret_key_env_var="",
+        session_token_env_var="",
+        region_env_var="",
+        service_name="",
+    ),
+    "assemblyai": ProviderSpec(
+        name="assemblyai",
+        base_url="https://api.assemblyai.com",
+        endpoint="/v2/transcript",
+        default_model="best",
+        env_var="ASSEMBLYAI_API_KEY",
+        default_max_tokens=0,
+        response_text_path="",
+        auth_scheme="HeaderAPIKey",
+        auth_header="authorization",
+        auth_prefix="",
+        auth_query_param="",
+        required_header="",
+        required_header_value="",
+        system_placement="MessageInArray",
+        role_mappings={
+            "user": "user",
+        },
+        usage_input_path="",
+        usage_output_path="",
+        usage_cost_path="",
+        usage_cost_scale=1.0,
+        reasoning_tokens_path="",
+        finish_reason_path="",
+        finish_message_path="",
+        stream_finish_reason_path="",
+        stream_finish_message_path="",
+        wraps_options_in="",
+        safety_settings_wire_path="",
+        model_in_body=False,
+        error_message_path="error",
+        error_type_path="status",
         access_key_env_var="",
         secret_key_env_var="",
         session_token_env_var="",
