@@ -35,6 +35,8 @@ from llmkit.builders import recraft  # not re-exported at top level (prompt 043)
 from llmkit.builders import vidu  # not re-exported at top level (prompt 043)
 from llmkit.builders import pixverse  # not re-exported at top level (prompt 043)
 from llmkit.builders import inworld  # not re-exported at top level (ADR-049)
+from llmkit.builders import assemblyai  # not re-exported at top level (ADR-048)
+from llmkit import audio  # transcription audio Part constructor (ADR-048)
 from llmkit.types import SafetySetting, Tool
 from llmkit.client import _build_request
 from llmkit.providers.generated.providers import PROVIDERS
@@ -539,6 +541,23 @@ def test_speech_inworld_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("speech-inworld", server.last_body)
+
+
+def test_transcription_assemblyai_matches_shared_golden() -> None:
+    # AssemblyAI transcription submit body {audio_url} (ADR-048). The async
+    # TranscriptionHandle is discarded; only the outbound submit bytes are
+    # asserted. The upload hop is bytes-only and is not exercised here (URL
+    # part skips it).
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = assemblyai("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.transcription.submit(
+                [audio(wi.WIRE_TRANSCRIPTION_ASSEMBLYAI_AUDIO_U_R_L)]
+            )
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("transcription-assemblyai", server.last_body)
 
 
 def test_video_pixverse_matches_shared_golden() -> None:
