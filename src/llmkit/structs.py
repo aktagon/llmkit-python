@@ -237,6 +237,45 @@ class ToolResult:
 
 
 @dataclass
+class TranscriptSegment:
+    """TranscriptSegment is one timed span of transcript (ADR-048). Slice-1 segments carry text + millisecond offsets + an optional diarized speaker label; confidence (a float) is deferred until the struct-field type table gains a float type (ADR-048 OQ-4)."""
+    # text is the segment text.
+    text: str = ""
+
+    # start is the segment start offset in milliseconds.
+    start: int = 0
+
+    # end is the segment end offset in milliseconds.
+    end: int = 0
+
+    # speaker is the diarized speaker label, when the provider reports one. Empty otherwise.
+    speaker: str = ""
+
+
+@dataclass(kw_only=True)
+class TranscriptionHandle:
+    """TranscriptionHandle is a value struct identifying a submitted transcription job, modeled on VideoHandle / BatchHandle (ADR-014 / ADR-034). Cross-process resume works by persisting the fields and reconstructing the handle; the poll loop (Wait) is hand-written runtime, not part of the generated value."""
+    # id is the provider-assigned transcript id returned by the submit endpoint (AssemblyAI: id). Opaque to the SDK; round-tripped to the poll endpoint verbatim.
+    id: str = ""
+
+    # provider is the Provider config used to submit the job. Carried on the handle so Wait knows where to poll without re-parameterising the client.
+    provider: Provider
+
+
+@dataclass
+class TranscriptionResponse:
+    """TranscriptionResponse is the universal speech-to-text response container returned by TranscriptionHandle.Wait. Carries the full transcript text, the timed transcript segments, and the provider-reported usage. The container is text-shaped, NOT a media *Data container — the structural divergence from video (ADR-048)."""
+    # text is the full transcript text.
+    text: str = ""
+
+    # segments are the timed transcript segments (start/end offsets in milliseconds). Empty when the provider returns no word-level timing.
+    segments: list[TranscriptSegment] = field(default_factory=list)
+
+    # usage holds provider-reported usage. AssemblyAI bills by audio duration, not tokens; this stays zero unless a provider surfaces a token axis (ADR-048 OQ-2).
+    usage: Usage = field(default_factory=Usage)
+
+
+@dataclass
 class VideoData:
     """VideoData is one finished video returned in a VideoResponse. Models bytes (downloaded payload) XOR url (a provider link or caller S3 URI) — the source-XOR pattern (VID-004). url-delivery and output-uri providers set url; download-delivery providers set bytes."""
     # mime_type is the IANA media type of the video (video/mp4). Drives the file extension the caller picks for storage.
