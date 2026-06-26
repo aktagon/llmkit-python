@@ -45,7 +45,7 @@ from .music import music_generate
 from .speech import speech_generate
 from .stream import text_stream
 from .text import text_prompt
-from .transcription import transcription_submit
+from .transcription import transcription_submit, transcription_transcribe
 from .upload import upload_run
 from .video import video_submit
 
@@ -376,9 +376,18 @@ class Transcription:
 
     def __init__(self, client: "Client") -> None:
         self.client = client
+        self._model: str = ""
+
+    def model(self, name: str) -> "Transcription":
+        out = copy.copy(self)
+        out._model = name
+        return out
 
     async def submit(self, audio_parts: list[Part]) -> TranscriptionHandle:
         return await transcription_submit(self, audio_parts)
+
+    async def transcribe(self, audio_parts: list[Part]) -> TranscriptionResponse:
+        return await transcription_transcribe(self, audio_parts)
 
 
 # === Video — VideoGeneration builder ===
