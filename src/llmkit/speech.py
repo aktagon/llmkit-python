@@ -101,7 +101,9 @@ def generate_speech(
             None,
         ) from raw_err
 
-    return _parse_speech_response(sg_cfg.wire_shape, model.output_mime, resp_body)
+    return _parse_speech_response(
+        sg_cfg.audio_response_encoding, model.output_mime, resp_body
+    )
 
 
 def _find_speech_model(cfg: SpeechGenDef, model_id: str) -> SpeechModelDef | None:
@@ -113,6 +115,8 @@ def _find_speech_model(cfg: SpeechGenDef, model_id: str) -> SpeechModelDef | Non
 
 #
 #
+#
+#
 def _dispatch_speech_http(
     cfg: Any,
     sg_cfg: SpeechGenDef,
@@ -121,7 +125,20 @@ def _dispatch_speech_http(
 ) -> tuple[str, dict[str, Any]]:
     endpoint = sg_cfg.gen_endpoint or cfg.endpoint or ""
     url = endpoint if endpoint.startswith("http") else base_url + endpoint
+    if sg_cfg.wire_shape == "SpeechOpenAI":
+        return url, _build_openai_speech_body(request)
     return url, _build_inworld_speech_body(request)
+
+
+#
+#
+def _build_openai_speech_body(request: SpeechRequest) -> dict[str, Any]:
+    return {
+        "model": request.model,
+        "input": request.text,
+        "voice": request.voice,
+        "response_format": "mp3",
+    }
 
 
 #
@@ -141,11 +158,18 @@ def _build_inworld_speech_body(request: SpeechRequest) -> dict[str, Any]:
 
 
 #
+#
+#
+#
 def _parse_speech_response(
-    wire_shape: str, fallback_mime: str, resp_body: bytes
+    audio_encoding: str, fallback_mime: str, resp_body: bytes
 ) -> SpeechResponse:
-    raw = json.loads(resp_body)
+    if audio_encoding == "rawBody":
+        return SpeechResponse(
+            audio=AudioData(mime_type=fallback_mime, bytes=resp_body), usage=Usage()
+        )
     #
+    raw = json.loads(resp_body)
     audio = AudioData(mime_type=fallback_mime, bytes=b"")
     content = raw.get("audioContent")
     if isinstance(content, str) and content:
