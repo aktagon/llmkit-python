@@ -543,6 +543,22 @@ def test_speech_inworld_matches_shared_golden() -> None:
         _assert_wire_golden("speech-inworld", server.last_body)
 
 
+def test_speech_openai_matches_shared_golden() -> None:
+    # OpenAI text-to-speech body {model, input, voice, response_format}
+    # (ADR-051). The response is raw audio bytes; only the outbound request
+    # bytes are asserted here.
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = openai("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.speech.model(wi.WIRE_SPEECH_OPENAI_MODEL)
+            .voice(wi.WIRE_SPEECH_OPENAI_VOICE)
+            .generate(wi.WIRE_SPEECH_OPENAI_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("speech-openai", server.last_body)
+
+
 def test_transcription_assemblyai_matches_shared_golden() -> None:
     # AssemblyAI transcription submit body {audio_url} (ADR-048). The async
     # TranscriptionHandle is discarded; only the outbound submit bytes are
