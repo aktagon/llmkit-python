@@ -212,7 +212,157 @@ def test_transcription_requires_exactly_one_audio_part() -> None:
 
 
 def test_transcription_unsupported_provider_rejected() -> None:
-    c = new_client("openai", "test-key")
+    # Anthropic does not support transcription (OpenAI now does, ADR-051).
+    c = new_client("anthropic", "test-key")
     with pytest.raises(ValidationError) as exc:
         asyncio.run(c.transcription.submit([audio(ASSEMBLYAI_AUDIO_URL)]))
     assert "does not support transcription" in exc.value.message
+
+
+# === Synchronous transcription — OpenAI (TranscriptionOpenAI, ADR-051) ===
+
+import email  # noqa: E402
+
+FAKE_MP3 = bytes([0xFF, 0xFB, 0x90, 0x00, 0x6D, 0x70, 0x33])
+
+OPENAI_VERBOSE = {
+    "text": "The quarterly review is scheduled for Tuesday.",
+    "segments": [
+        {"start": 0.0, "end": 1.5, "text": "The quarterly review"},
+        {"start": 1.5, "end": 2.84, "text": " is scheduled for Tuesday."},
+    ],
+}
+
+
+class _OpenAITranscriptionServer:
+    """Serves POST /v1/audio/transcriptions, parsing the multipart body and
+    exposing the captured fields for assertion."""
+
+    def __init__(self, resp_body: dict[str, Any]) -> None:
+        self.resp_body = resp_body
+        self.path = ""
+        self.auth = ""
+        self.fields: dict[str, str] = {}
+        self.file_name = ""
+        self.file_ctype = ""
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a, **_k):
+                pass
+
+            def do_POST(self):
+                outer.path = urlparse(self.path).path
+                outer.auth = self.headers.get("Authorization", "")
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                ctype = self.headers.get("Content-Type", "")
+                msg = email.message_from_bytes(
+                    b"Content-Type: " + ctype.encode() + b"\r\n\r\n" + raw
+                )
+                for part in msg.get_payload():
+                    name = part.get_param("name", header="content-disposition")
+                    fn = part.get_filename()
+                    if fn:
+                        outer.file_name = fn
+                        outer.file_ctype = part.get_content_type()
+                    else:
+                        outer.fields[name] = part.get_payload(decode=True).decode()
+                body = json.dumps(outer.resp_body).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+
+    def __enter__(self):
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc):
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join(timeout=2)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_port}"
+
+
+def test_transcribe_sync_openai_segments_sec_to_ms() -> None:
+    with _OpenAITranscriptionServer(OPENAI_VERBOSE) as server:
+        c = new_client("openai", "test-key")
+        c.provider.base_url = server.url
+        resp = asyncio.run(
+            c.transcription.model("whisper-1").transcribe(
+                [audio_bytes("audio/mpeg", FAKE_MP3)]
+            )
+        )
+    assert server.path == "/v1/audio/transcriptions"
+    assert server.auth == "Bearer test-key"
+    assert server.fields["model"] == "whisper-1"
+    assert server.fields["response_format"] == "verbose_json"
+    assert server.file_name == "audio.mp3"
+    assert server.file_ctype == "audio/mpeg"
+    assert resp.text == "The quarterly review is scheduled for Tuesday."
+    assert len(resp.segments) == 2
+    assert resp.segments[0].end == 1500
+    assert resp.segments[1].end == 2840
+
+
+def test_transcribe_openai_empty_segments() -> None:
+    with _OpenAITranscriptionServer({"text": "Hello there."}) as server:
+        c = new_client("openai", "test-key")
+        c.provider.base_url = server.url
+        resp = asyncio.run(
+            c.transcription.model("whisper-1").transcribe(
+                [audio_bytes("audio/mpeg", FAKE_MP3)]
+            )
+        )
+    assert resp.text == "Hello there."
+    assert resp.segments == []
+
+
+def test_submit_on_sync_provider_rejected() -> None:
+    c = new_client("openai", "test-key")
+    with pytest.raises(ValidationError) as exc:
+        asyncio.run(
+            c.transcription.model("whisper-1").submit(
+                [audio_bytes("audio/mpeg", FAKE_MP3)]
+            )
+        )
+    assert exc.value.field == "interaction"
+    assert "Transcribe" in exc.value.message
+
+
+def test_transcribe_on_async_provider_rejected() -> None:
+    c = new_client("assemblyai", "test-key")
+    with pytest.raises(ValidationError) as exc:
+        asyncio.run(
+            c.transcription.model("best").transcribe(
+                [audio_bytes("audio/mpeg", FAKE_MP3)]
+            )
+        )
+    assert exc.value.field == "interaction"
+    assert "Submit/Wait" in exc.value.message
+
+
+def test_transcribe_rejects_audio_url() -> None:
+    c = new_client("openai", "test-key")
+    with pytest.raises(ValidationError) as exc:
+        asyncio.run(
+            c.transcription.model("whisper-1").transcribe([audio(ASSEMBLYAI_AUDIO_URL)])
+        )
+    assert exc.value.field.startswith("parts")
+
+
+def test_transcribe_requires_model() -> None:
+    c = new_client("openai", "test-key")
+    with pytest.raises(ValidationError) as exc:
+        asyncio.run(
+            c.transcription.transcribe([audio_bytes("audio/mpeg", FAKE_MP3)])
+        )
+    assert exc.value.field == "model"

@@ -19,6 +19,7 @@ from typing import Any
 
 import llmkit
 from llmkit import (
+    audio_bytes,
     anthropic,
     bedrock,
     google,
@@ -574,6 +575,88 @@ def test_transcription_assemblyai_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("transcription-assemblyai", server.last_body)
+
+
+class _MultipartCaptureServer:
+    """Records the outbound multipart/form-data body and decodes it into the
+    canonical descriptor (ADR-051 OQ-3): ordered fields, the file part keeping
+    filename + content-type with a fixed bytes placeholder."""
+
+    def __init__(self, response_body: dict[str, Any]):
+        self.descriptor: dict[str, Any] | None = None
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a, **_k):
+                pass
+
+            def do_POST(self):
+                import email
+
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length)
+                ctype = self.headers.get("Content-Type", "")
+                msg = email.message_from_bytes(
+                    b"Content-Type: " + ctype.encode() + b"\r\n\r\n" + raw
+                )
+                fields: list[dict[str, str]] = []
+                for part in msg.get_payload():
+                    name = part.get_param("name", header="content-disposition")
+                    fn = part.get_filename()
+                    if fn:
+                        fields.append(
+                            {
+                                "name": name,
+                                "filename": fn,
+                                "contentType": part.get_content_type(),
+                                "bytes": "<audio-bytes>",
+                            }
+                        )
+                    else:
+                        fields.append(
+                            {
+                                "name": name,
+                                "value": part.get_payload(decode=True).decode(),
+                            }
+                        )
+                outer.descriptor = {
+                    "_encoding": "multipart/form-data",
+                    "fields": fields,
+                }
+                payload = json.dumps(response_body).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self._httpd.server_address[1]}"
+
+    def __enter__(self):
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc):
+        self._httpd.shutdown()
+        self._httpd.server_close()
+
+
+def test_transcription_openai_matches_shared_golden() -> None:
+    # OpenAI SYNCHRONOUS transcription — the first multipart/form-data request
+    # body (ADR-051). The golden is the canonical multipart descriptor (OQ-3);
+    # the driver decodes its actual encoded multipart body into ordered fields.
+    with _MultipartCaptureServer(_CANNED_RESP) as server:
+        c = openai("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.transcription.model(wi.WIRE_TRANSCRIPTION_OPENAI_MODEL).transcribe(
+                [audio_bytes(wi.WIRE_TRANSCRIPTION_OPENAI_AUDIO_MIME, b"fake-audio")]
+            )
+        )
+        assert server.descriptor is not None
+        _assert_wire_golden("transcription-openai", server.descriptor)
 
 
 def test_video_pixverse_matches_shared_golden() -> None:
