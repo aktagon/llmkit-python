@@ -22,8 +22,10 @@ class SpeechModelDef:
 
 @dataclass(frozen=True)
 class SpeechGenDef:
-    # wire_shape is SpeechInworld.
+    # wire_shape is SpeechInworld | SpeechOpenAI.
     wire_shape: str
+    # audio_response_encoding selects the response decoder: "base64Envelope" | "rawBody" (ADR-051).
+    audio_response_encoding: str = "base64Envelope"
     # gen_endpoint is an override; empty = use provider main endpoint.
     gen_endpoint: str = ""
     # voices is the catalogue the Voice setter validates against.
@@ -34,6 +36,7 @@ class SpeechGenDef:
 _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
     ProviderName.INWORLD: SpeechGenDef(
         wire_shape="SpeechInworld",
+        audio_response_encoding="base64Envelope",
         gen_endpoint="/tts/v1/voice",
         voices=("Alex", "Ashley", "Dennis"),
         models=(
@@ -53,6 +56,32 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 model_id="inworld-tts-2",
                 label="Inworld TTS 2",
                 output_mime="audio/wav",
+                sample_rate_hz=0,
+            ),
+        ),
+    ),
+    ProviderName.OPENAI: SpeechGenDef(
+        wire_shape="SpeechOpenAI",
+        audio_response_encoding="rawBody",
+        gen_endpoint="/v1/audio/speech",
+        voices=("alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"),
+        models=(
+            SpeechModelDef(
+                model_id="gpt-4o-mini-tts",
+                label="GPT-4o mini TTS",
+                output_mime="audio/mpeg",
+                sample_rate_hz=0,
+            ),
+            SpeechModelDef(
+                model_id="tts-1",
+                label="TTS 1",
+                output_mime="audio/mpeg",
+                sample_rate_hz=0,
+            ),
+            SpeechModelDef(
+                model_id="tts-1-hd",
+                label="TTS 1 HD",
+                output_mime="audio/mpeg",
                 sample_rate_hz=0,
             ),
         ),
