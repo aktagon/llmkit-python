@@ -296,6 +296,11 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         comment="Client.Supports(Capability) \u2014 true iff an explicit request for the capability will not hard-fail pre-flight on this client's provider (ADR-030). Gated arms (caching, batching, file_upload, image_generation) dispatch the same generated *_config(provider) lookup as the strict validation paths, so the query and the error cannot drift; capabilities with no provider-level pre-flight gate return true. Says nothing about per-model or per-option rejections \u2014 use the catalogue's ModelInfo.Capabilities for model-level facts. Sync, no IO, infallible.",
     ),
     APIEntryPointDef(
+        py_func="transcribe",
+        py_param_type="TranscriptionRequest",
+        comment="Synchronous speech-to-text (ADR-051): one multipart/form-data POST returns the finished TranscriptionResponse directly \u2014 no job handle. Input is TranscriptionRequest{ Model, Parts } carrying exactly one inline-bytes audio Part (parts.AudioBytes(mime, raw)); a remote URL is rejected pre-flight (OpenAI ingests no URL \u2014 the inverse of AssemblyAI). Available only on sync providers (llm:transcriptionInteraction sync); calling it on an async provider, or Submit/Wait on a sync provider, is a pre-flight ValidationError naming the supported terminal.",
+    ),
+    APIEntryPointDef(
         py_func="upload_file",
         py_param_type="Bytes",
         comment="Uploads a file and returns a File handle suitable for inclusion in a Request.files slice.",
