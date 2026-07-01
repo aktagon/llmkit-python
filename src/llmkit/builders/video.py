@@ -100,6 +100,7 @@ async def video_submit(b: "Video", msg: str) -> VideoHandle:
     provider = Provider(
         name=b.client.provider.name,
         api_key=b.client.provider.api_key,
+        headers=b.client.provider.headers,
     )
     if b.client.provider.base_url:
         provider.base_url = b.client.provider.base_url

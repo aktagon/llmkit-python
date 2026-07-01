@@ -17,6 +17,7 @@ import urllib.request
 from typing import TYPE_CHECKING
 
 from .catalogue import catalogue_by_provider, compiled_in_models, ontology_capabilities
+from .http import merge_caller_headers
 from .middleware import fire_post, fire_pre
 from .providers.generated.middleware import Event, MiddlewareOp
 from .providers.generated.models_parsers import (
@@ -209,13 +210,14 @@ def _effective_provider(scoped: "ScopedModels") -> Provider:
     """Materialise the Provider used for HTTP from the Client's stored
     credentials, not from the user-supplied scoped.target. The target
     carries only the provider name (used for parser dispatch); the
-    base_url / api_key live on client.provider where with_base_url
+    base_url / api_key live on client.provider where base_url
     sets them."""
     pc = scoped.client.provider
     return Provider(
         name=scoped.target.name,
         api_key=pc.api_key,
         base_url=pc.base_url,
+        headers=pc.headers,  # ADR-052: carry custom headers onto the catalogue request
     )
 
 
@@ -339,6 +341,8 @@ def _build_catalogue_headers(provider: Provider, pcfg: ProviderSpec) -> dict[str
         headers[pcfg.auth_header] = provider.api_key
     if pcfg.required_header:
         headers[pcfg.required_header] = pcfg.required_header_value
+    # ADR-052: custom headers reach the catalogue path too.
+    merge_caller_headers(headers, provider.headers)
     return headers
 
 

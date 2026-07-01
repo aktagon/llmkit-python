@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .errors import APIError, ValidationError, parse_error
-from .http import do_multipart_post_multi, do_post
+from .http import do_multipart_post_multi, do_post, merge_caller_headers
 from .middleware import fire_post, fire_pre
 from .paths import extract_int_path
 from .providers.generated.image_gen import (
@@ -724,6 +724,8 @@ def _image_auth_headers(p: Provider, cfg: Any, pname: ProviderName) -> dict[str,
         headers[cfg.auth_header] = p.api_key
     if cfg.required_header:
         headers[cfg.required_header] = cfg.required_header_value
+    # ADR-052: additive; never clobbers the provider auth / required header above.
+    merge_caller_headers(headers, p.headers)
     return headers
 
 
