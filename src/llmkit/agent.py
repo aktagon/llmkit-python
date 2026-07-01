@@ -155,6 +155,7 @@ class Agent:
                         region,
                         cfg.service_name,
                         timeout=self.opts.request_timeout,
+                        custom_headers=self.provider.headers,
                     )
                 else:
                     resp_body = do_post(url, json_body, headers, timeout=self.opts.request_timeout)

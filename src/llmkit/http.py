@@ -10,6 +10,19 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable
 
+
+def merge_caller_headers(headers: dict[str, str], caller: dict[str, str]) -> None:
+    """ADR-052: add caller-supplied custom headers (Client.add_header) that are
+    NOT already present (case-insensitively). Call AFTER the SDK-set headers
+    (auth, required) so those can never be clobbered — HTTP header names are
+    case-insensitive, so a caller "authorization" must not shadow the
+    provider's "Authorization". The caller can still add a new gateway header.
+    """
+    existing = {k.lower() for k in headers}
+    for k, v in caller.items():
+        if k.lower() not in existing:
+            headers[k] = v
+
 from .errors import APIError
 from .paths import detect_mime_type, extract_int_path, extract_path
 from .providers.generated.middleware import Usage
@@ -91,14 +104,20 @@ def do_sigv4_post(
     region: str,
     service: str,
     timeout: float = 600.0,
+    custom_headers: dict[str, str] | None = None,
 ) -> bytes:
-    """POST signed with AWS SigV4. Raises APIError on 4xx/5xx."""
+    """POST signed with AWS SigV4. Raises APIError on 4xx/5xx.
+
+    custom_headers are caller-supplied custom headers (Client.add_header,
+    ADR-052); added AFTER signing so they ride along without altering the AWS
+    signature (extra unsigned headers are permitted; a gateway in front of
+    Bedrock can read them)."""
     from .sigv4 import sign_sigv4
 
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     headers = sign_sigv4(url, body, access_key, secret_key, session_token, region, service)
-    for key, value in headers.items():
+    for key, value in {**(custom_headers or {}), **headers}.items():
         req.add_header(key, value)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -120,18 +139,20 @@ def do_sigv4_get(
     region: str,
     service: str,
     timeout: float = 600.0,
+    custom_headers: dict[str, str] | None = None,
 ) -> bytes:
     """GET signed with AWS SigV4 (empty body). Raises APIError on 4xx/5xx.
 
     Used by the Bedrock video poll: the handle ARN is carried as one percent-
     encoded path segment so its ':' and '/' do not split into extra segments,
     and the signer canonicalizes the escaped path so the signed path equals the
-    wire path."""
+    wire path. custom_headers (Client.add_header, ADR-052) are added after
+    signing so they do not alter the AWS signature."""
     from .sigv4 import sign_sigv4
 
     req = urllib.request.Request(url, method="GET")
     headers = sign_sigv4(url, b"", access_key, secret_key, session_token, region, service, method="GET")
-    for key, value in headers.items():
+    for key, value in {**(custom_headers or {}), **headers}.items():
         req.add_header(key, value)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:

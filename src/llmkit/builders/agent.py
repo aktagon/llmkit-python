@@ -32,6 +32,7 @@ def _init_agent(b: "Agent") -> AgentState:
     provider = Provider(
         name=b.client.provider.name,
         api_key=b.client.provider.api_key,
+        headers=b.client.provider.headers,
     )
     if b._model:
         provider.model = b._model
