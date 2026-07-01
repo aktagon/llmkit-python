@@ -1,10 +1,10 @@
-"""Reasoning-effort prompting against OpenAI.
+"""
 
-Run: OPENAI_API_KEY=sk-... python examples/reasoning.py
 
-`.reasoning_effort("high")` raises the internal reasoning budget. Reasoning
-tokens are only reported by o-series / thinking models (OpenAI o1/o3/o4,
-Gemini 2.5+); other models leave usage.reasoning at zero.
+
+
+
+
 """
 import asyncio
 import os

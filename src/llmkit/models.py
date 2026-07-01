@@ -1,9 +1,9 @@
-"""Hand-coded catalogue runtime (ADR-019). The generated builder classes
-in builders/catalogue.py delegate their terminal methods here.
+"""
 
-Folds in the providers-namespace runtime (catalogue_providers_*) because
-``llmkit.providers`` is the generated subpackage path and Python forbids
-shadowing it with a sibling module.
+
+
+
+
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ import urllib.request
 from typing import TYPE_CHECKING
 
 from .catalogue import catalogue_by_provider, compiled_in_models, ontology_capabilities
+from .http import merge_caller_headers
 from .middleware import fire_post, fire_pre
 from .providers.generated.middleware import Event, MiddlewareOp
 from .providers.generated.models_parsers import (
@@ -60,10 +61,10 @@ class ErrModelsScope(Exception):
 
 
 def classify_catalogue_error(exc: BaseException) -> str:
-    """Map a caught exception to the wire-format discriminant carried in
-    ProviderError.kind (ADR-019 Amendment 1). Unknown errors fall back
-    to "unavailable" — safer than "scope" since scope implies a documented
-    retry path."""
+    """
+
+
+"""
     if isinstance(exc, ErrModelsNotSupported):
         return "not_supported"
     if isinstance(exc, ErrModelsScope):
@@ -72,16 +73,16 @@ def classify_catalogue_error(exc: BaseException) -> str:
 
 
 def catalogue_filter(cap_filter: Capability | None) -> list[ModelInfo]:
-    """Walk the compiled-in slice and return records whose capabilities list
-    contains cap_filter. Returns a fresh list so callers cannot mutate the
-    module-level constant."""
+    """
+
+"""
     if not cap_filter:
         return list(compiled_in_models)
     return [m for m in compiled_in_models if cap_filter in m.capabilities]
 
 
 def catalogue_lookup(id: str) -> ModelInfo | None:
-    """Linear scan over the compiled-in slice. Returns None on miss."""
+    """"""
     for m in compiled_in_models:
         if m.id == id:
             return m
@@ -89,9 +90,9 @@ def catalogue_lookup(id: str) -> ModelInfo | None:
 
 
 async def catalogue_run_live(models: "Models") -> LiveResult:
-    """Fan out per-provider live calls and aggregate into LiveResult.
-    Errors land in result.errors as typed ProviderError per Amendment 1.
-    with_capability composes post-fetch."""
+    """
+
+"""
     from .builders.catalogue import ScopedModels as _ScopedModels
 
     pc = models.client.provider
@@ -124,10 +125,10 @@ async def catalogue_run_live(models: "Models") -> LiveResult:
 
 
 async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
-    """Single-provider live HTTP. Paginates per the catalogue config until
-    the parser reports no next cursor; enriches each record with the
-    ontology-derived capability list. Middleware fires once per call (not
-    per page) so observability stays at the call granularity."""
+    """
+
+
+"""
     cfg = catalogue_by_provider.get(scoped.target.name)
     if cfg is None:
         raise ErrModelsNotSupported()
@@ -166,7 +167,7 @@ async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
 
 
 async def catalogue_run_get(scoped: "ScopedModels", id: str) -> ModelInfo:
-    """Single-provider live model fetch. URL shapes pinned in plan 025."""
+    """"""
     cfg = catalogue_by_provider.get(scoped.target.name)
     if cfg is None:
         raise ErrModelsNotSupported()
@@ -192,7 +193,7 @@ async def catalogue_run_get(scoped: "ScopedModels", id: str) -> ModelInfo:
     return _enrich(scoped, [record])[0]
 
 
-# === Providers-namespace runtime (hand-coded mirror of go/providers.go) ===
+#
 
 
 def catalogue_providers_list(client: "Client") -> list[ProviderInfo]:
@@ -202,20 +203,21 @@ def catalogue_providers_list(client: "Client") -> list[ProviderInfo]:
     return [info(ProviderName(p.name))]
 
 
-# === HTTP internals ===
+#
 
 
 def _effective_provider(scoped: "ScopedModels") -> Provider:
-    """Materialise the Provider used for HTTP from the Client's stored
-    credentials, not from the user-supplied scoped.target. The target
-    carries only the provider name (used for parser dispatch); the
-    base_url / api_key live on client.provider where with_base_url
-    sets them."""
+    """
+
+
+
+"""
     pc = scoped.client.provider
     return Provider(
         name=scoped.target.name,
         api_key=pc.api_key,
         base_url=pc.base_url,
+        headers=pc.headers,  # ADR-052: carry custom headers onto the catalogue request
     )
 
 
@@ -226,10 +228,10 @@ def _paginate_sync(
     pagination: str,
     parser_kind: str,
 ) -> list[ParsedModelRecord]:
-    """Synchronous pagination loop. Runs in a worker thread per
-    asyncio.to_thread so other live fan-out tasks proceed in parallel.
-    urllib is blocking, which is why we don't call it on the event loop
-    directly."""
+    """
+
+
+"""
     headers = _build_catalogue_headers(provider, pcfg)
     cursor = ""
     all_records: list[ParsedModelRecord] = []
@@ -339,6 +341,8 @@ def _build_catalogue_headers(provider: Provider, pcfg: ProviderSpec) -> dict[str
         headers[pcfg.auth_header] = provider.api_key
     if pcfg.required_header:
         headers[pcfg.required_header] = pcfg.required_header_value
+    #
+    merge_caller_headers(headers, provider.headers)
     return headers
 
 

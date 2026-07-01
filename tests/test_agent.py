@@ -1,8 +1,8 @@
-"""Unit tests for llmkit.agent — the internal stateful Agent class
-that the typed-builder *Agent terminal wraps. End-to-end agent tool
-loops are tested via builder integration tests; here we cover the
-state-management primitives directly (add_tool / reset / set_system)
-so the public-symbol-untested gate has a path to STRICT."""
+"""
+
+
+
+"""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def _agent() -> Agent:
     return Agent(provider=Provider(name="anthropic", api_key="test-key"))
 
 
-# ---------- set_system ----------
+#
 
 
 def test_agent_set_system_assigns_field() -> None:
@@ -38,15 +38,15 @@ def test_agent_set_system_assigns_field() -> None:
 
 
 def test_agent_set_system_can_be_changed() -> None:
-    # Mid-conversation system swaps aren't recommended but the primitive
-    # supports it — last-writer-wins.
+    #
+    #
     a = _agent()
     a.set_system("first")
     a.set_system("second")
     assert a.system == "second"
 
 
-# ---------- add_tool ----------
+#
 
 
 def test_agent_add_tool_appends_to_tools_list() -> None:
@@ -68,19 +68,19 @@ def test_agent_add_tool_preserves_caller_order() -> None:
     )
     a.add_tool(t1)
     a.add_tool(t2)
-    # Caller order matters — some providers (Bedrock, Anthropic) reflect
-    # the declaration order back in their tool-selection biases.
+    #
+    #
     assert a.tools == [t1, t2]
 
 
-# ---------- reset ----------
+#
 
 
 def test_agent_reset_clears_history_and_tools() -> None:
     a = _agent()
     a.add_tool(_calculator_tool())
-    # Simulate a previous chat by mutating history directly (chat() would
-    # require a live HTTP server; we're testing reset, not chat).
+    #
+    #
     a.history.append(  # type: ignore[arg-type]
         type(
             "_M",
@@ -98,8 +98,8 @@ def test_agent_reset_does_not_clear_system_or_provider() -> None:
     a.set_system("You are a helpful assistant.")
     a.add_tool(_calculator_tool())
     a.reset()
-    # reset() is "clear conversation state"; the agent's identity
-    # (provider, system prompt) survives so it can be reused.
+    #
+    #
     assert a.system == "You are a helpful assistant."
     assert a.provider.name == "anthropic"
 
@@ -112,7 +112,7 @@ def test_agent_reset_is_idempotent() -> None:
     assert a.tools == []
 
 
-# ---------- Options round-trip via constructor ----------
+#
 
 
 def test_agent_options_threaded_from_constructor() -> None:
@@ -145,11 +145,11 @@ def test_agent_options_threaded_from_constructor() -> None:
     assert a.opts.max_tool_iterations == 5
 
 
-# ---------- ADR-026: request parity with the Text path ----------
+#
 
 
 class _CaptureServer:
-    """Mock LLM endpoint capturing the request body the Agent sends."""
+    """"""
 
     def __init__(self, response: dict) -> None:
         self._response = response
@@ -191,11 +191,11 @@ class _CaptureServer:
 
 
 def test_agent_request_applies_options_and_safety_like_text() -> None:
-    """ADR-026 PIPE-001/004: the Agent builds its body through the shared
-    _build_request, so generation options AND safety settings reach the wire
-    body — matching the Text path. The old _build_agent_request applied options
-    but dropped safety settings (the latent gap class). Google is used because
-    it is the only shape that emits safetySettings."""
+    """
+
+
+
+"""
     from llmkit.types import SafetySetting
 
     google_response = {

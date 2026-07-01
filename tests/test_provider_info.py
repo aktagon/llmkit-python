@@ -1,10 +1,10 @@
-"""ADR-038: the `providers` namespace (providers.info / providers.list) is the
-narrow public per-provider metadata access — the public replacement for reaching
-into the internal spec (BUG-012). The import is consumer-style (`from llmkit
-import providers`, no `generated` segment); a missing re-export fails it at
-collection time. Values are a projection of provider A-Box facts; the field-set
-assertion guards against the projection silently widening back toward the
-37-field spec.
+"""
+
+
+
+
+
+
 """
 
 from __future__ import annotations

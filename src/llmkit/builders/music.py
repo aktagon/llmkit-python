@@ -1,6 +1,6 @@
-"""Owns Music.generate translation (ADR-033). The typed-builder method is
-the only public entry point for music generation; the internal
-generate_music helper in ../music.py holds the runtime."""
+"""
+
+"""
 
 from __future__ import annotations
 
@@ -23,13 +23,14 @@ async def music_generate(b: "Music", msg: str) -> MusicResponse:
     provider = Provider(
         name=b.client.provider.name,
         api_key=b.client.provider.api_key,
+        headers=b.client.provider.headers,
     )
     if b.client.provider.base_url:
         provider.base_url = b.client.provider.base_url
 
-    # Mirror go/music_builder.go: chain-accumulated parts plus an optional
-    # trailing text part from generate(msg). The XOR (prompt vs parts) is
-    # enforced by _normalize_music_parts in the runtime — both empty errors.
+    #
+    #
+    #
     request = MusicRequest(model=b._model)
     if b._parts:
         if msg:

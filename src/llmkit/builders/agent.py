@@ -1,13 +1,13 @@
-"""Phase 3 slice 2c — wires Agent.prompt + Agent.reset against the
-legacy ``Agent`` class.
+"""
 
-Stateful builder pattern (mirror of Go/TS slice 2c). The typed-builder
-``Agent`` carries a private ``_state: AgentState | None`` that wraps a
-live legacy ``Agent`` instance. First ``.prompt()`` lazily constructs
-it from chained config; subsequent calls reuse it so history
-accumulates. Forking via a chain method (e.g., ``bot.system("new")``)
-produces a clone with ``_state = None`` thanks to the codegen
-post-mutation hook (PYTHON_BUILDER_POST_MUTATION["Agent"]).
+
+
+
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ def _init_agent(b: "Agent") -> AgentState:
     provider = Provider(
         name=b.client.provider.name,
         api_key=b.client.provider.api_key,
+        headers=b.client.provider.headers,
     )
     if b._model:
         provider.model = b._model
@@ -75,10 +76,10 @@ def _init_agent(b: "Agent") -> AgentState:
         agent.set_system(b._system)
     for t in b._tools:
         agent.add_tool(t)
-    # ADR-020 HIST-007: seed the legacy agent's internal history from
-    # the chain's typed Message list. Mechanical field copy; the
-    # internal `tool_result` role discriminator is restored from the
-    # public `tool` role.
+    #
+    #
+    #
+    #
     if b._history:
         from ..agent import _InternalMessage
         seeded: list[_InternalMessage] = []
@@ -103,27 +104,27 @@ async def agent_prompt(b: "Agent", msg: str) -> Response:
 
 
 def agent_reset(b: "Agent") -> None:
-    """Clears state. Chain config is preserved on the typed builder;
-    next .prompt() re-runs ``_init_agent``. Deliberately doesn't call
-    ``LegacyAgent.reset()``, which clears tools too — the typed
-    builder's own ``_tools`` slice re-supplies them on re-init."""
+    """
+
+
+"""
     b._state = None
 
 
 def _agent_messages(legacy_agent: LegacyAgent) -> tuple[Message, ...]:
-    """Project the legacy agent's _InternalMessage history into the
-    public Message tuple (ADR-020 HIST-004).
-
-    The internal ``tool_result`` role is flattened to ``tool`` so the
-    public wire shape matches the ontology's union-by-role
-    discriminator. Each ``Message.tool_calls`` list and each
-    ``ToolCall``/``ToolResult`` instance is constructed fresh per
-    call, so the returned tuple is fully decoupled from the agent's
-    runtime state — except for the inner ``ToolCall.input`` dict
-    reference, which is aliased with the internal entry. In-place
-    mutation of an ``input`` mapping on a returned ``Message`` would
-    corrupt the agent; replacing the ``.input`` attribute is safe.
     """
+
+
+
+
+
+
+
+
+
+
+
+"""
     out: list[Message] = []
     for m in legacy_agent.history:
         role = m.role

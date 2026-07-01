@@ -1,7 +1,7 @@
-"""Unit tests for llmkit.http.do_sigv4_post — POSTs signed with AWS
-SigV4 (Bedrock invoke path). Mock HTTP server checks the canonical
-SigV4 header set is present and the body is forwarded verbatim, then
-exercises the error path on a 4xx response."""
+"""
+
+
+"""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from llmkit.http import do_sigv4_post
 
 
 class _SigV4Server:
-    """Mock server that records request headers + body and serves a canned response."""
+    """"""
 
     def __init__(self, response_body: bytes, status_code: int = 200) -> None:
         self.response_body = response_body
@@ -56,7 +56,7 @@ class _SigV4Server:
         return f"http://127.0.0.1:{self._httpd.server_port}"
 
 
-# ---------- happy path ----------
+#
 
 
 def test_do_sigv4_post_attaches_sigv4_headers_and_forwards_body() -> None:
@@ -75,21 +75,21 @@ def test_do_sigv4_post_attaches_sigv4_headers_and_forwards_body() -> None:
         )
 
     assert got == response
-    # Forwarded body is verbatim.
+    #
     assert server.received_body == body
 
-    # SigV4 canonical header set is present.
+    #
     auth = server.received_headers.get("authorization", "")
     assert auth.startswith("AWS4-HMAC-SHA256 ")
-    # Authorization carries Credential / SignedHeaders / Signature parts.
+    #
     for marker in ("Credential=AKIA-TEST/", "SignedHeaders=", "Signature="):
         assert marker in auth
-    # The credential scope encodes us-east-1/bedrock/aws4_request.
+    #
     assert "/us-east-1/bedrock/aws4_request" in auth
 
     assert "x-amz-date" in server.received_headers
     assert "x-amz-content-sha256" in server.received_headers
-    # No session token requested → header omitted.
+    #
     assert "x-amz-security-token" not in server.received_headers
 
 
@@ -107,12 +107,12 @@ def test_do_sigv4_post_includes_security_token_when_provided() -> None:
         )
 
     assert server.received_headers.get("x-amz-security-token") == "FwoGZ-temp-credentials"
-    # The token is also folded into SignedHeaders so it's part of the signature.
+    #
     auth = server.received_headers["authorization"]
     assert "x-amz-security-token" in auth
 
 
-# ---------- error path ----------
+#
 
 
 def test_do_sigv4_post_raises_apierror_on_4xx() -> None:

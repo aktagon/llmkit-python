@@ -1,8 +1,8 @@
-"""ADR-013 unit tests for stream-time finish-reason capture.
+"""
 
-Each provider's stream parser is exercised against a canned SSE event
-sequence; the assertion is that ``TextStream.response.finish_reason``
-carries the provider stop signal after iteration completes.
+
+
+
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from llmkit.builders import anthropic, google, grok, groq, openai
 
 
 class _SSEServer:
-    """Single-shot SSE producer that emits a canned event sequence."""
+    """"""
 
     def __init__(self, events: list[str]) -> None:
         outer = self
@@ -25,8 +25,8 @@ class _SSEServer:
                 pass
 
             def do_POST(self):
-                # Drain the request body so the client doesn't see a reset
-                # while we're emitting events.
+                #
+                #
                 length = int(self.headers.get("Content-Length", "0"))
                 if length:
                     self.rfile.read(length)
@@ -100,8 +100,8 @@ def test_anthropic_stream_finish_reason() -> None:
 
 
 def test_google_stream_finish_reason_filters_unspecified() -> None:
-    # First chunk carries the unspecified sentinel — must NOT clobber the
-    # real terminal value that arrives in the next chunk.
+    #
+    #
     events = [
         'data: {"candidates":[{"content":{"parts":[{"text":"Hi"}]},"finishReason":"FINISH_REASON_UNSPECIFIED"}]}',
         "",
@@ -118,8 +118,8 @@ def test_google_stream_finish_reason_filters_unspecified() -> None:
 
 
 def test_pathless_provider_stream_finish_reason_stays_empty() -> None:
-    """Provider with no stream_finish_reason_path must leave finish_reason empty
-    even when the frame carries a value that would match other providers' paths."""
+    """
+"""
     events = [
         'data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":"stop"}]}',
         "",

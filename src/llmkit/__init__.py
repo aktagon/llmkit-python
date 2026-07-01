@@ -1,19 +1,19 @@
-"""llmkit — unified LLM client. One API, many providers, zero dependencies.
+"""
 
-Quick start::
 
-    import llmkit
-    c = llmkit.anthropic(api_key)
-    resp = await c.text.system("...").temperature(0.7).prompt("hello")
 
-Or via the explicit subpackage::
 
-    from llmkit.builders import new_client, anthropic, openai, google
 
-The typed builder is the only public surface as of v1.0.0. Imports at
-the top level bring in the per-provider factories, the `Client` type,
-and the four builder classes (`Text`, `Image`, `Agent`, `Upload`) so
-`import llmkit` is enough for the common case.
+
+
+
+
+
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ from .types import (
 )
 
 __all__ = [
-    # Typed builder factories (the v1.0.0 entry points).
+    #
     "new_client",
     "ai21",
     "anthropic",
@@ -132,7 +132,7 @@ __all__ = [
     "vllm",
     "yi",
     "zhipu",
-    # Builder + result types.
+    #
     "Client",
     "Text",
     "Image",
@@ -140,14 +140,14 @@ __all__ = [
     "Agent",
     "Upload",
     "BatchHandle",
-    # Conversation / response types.
+    #
     "File",
     "Message",
     "Response",
     "Tool",
     "ToolCall",
     "ToolResult",
-    # Wire format (ADR-023).
+    #
     "save_history",
     "load_history",
     "WIRE_SCHEMA_VERSION",
@@ -162,32 +162,32 @@ __all__ = [
     "MusicResponse",
     "MediaRef",
     "Part",
-    # Audio Part constructors + transcription containers (ADR-048).
+    #
     "audio",
     "audio_bytes",
     "TranscriptionResponse",
     "TranscriptSegment",
-    # Middleware.
+    #
     "Event",
     "MiddlewareFn",
     "MiddlewareOp",
     "MiddlewarePhase",
     "Usage",
-    # Errors.
+    #
     "APIError",
     "MiddlewareVetoError",
     "ValidationError",
-    # Provider identity (for use with `new_client`). The internal 37-field
-    # wire/transform spec (ProviderSpec / PROVIDERS) is NOT public surface
-    # (ADR-038 PMD-004); read provider metadata via the `providers` namespace —
-    # `from llmkit import providers; providers.info(name)` / `providers.list()`.
+    #
+    #
+    #
+    #
     "ProviderName",
-    # Capability vocabulary (ADR-019 catalogue filter + ADR-030
-    # Client.supports query).
+    #
+    #
     "Capability",
-    # Codegen-runtime types — kept exposed for the contract-level test
-    # surface and for callers writing custom transports. Typical v1.0.0
-    # callers should not need these; use the typed builder.
+    #
+    #
+    #
     "InputImage",
     "Options",
     "Provider",

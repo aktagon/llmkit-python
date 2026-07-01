@@ -1,4 +1,4 @@
-"""Caching lifecycle: explicit (inline mutations) and resource (pre-flight request)."""
+""""""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 from .errors import APIError, ValidationError
-from .http import do_post
+from .http import do_post, merge_caller_headers
 from .middleware import fire_post, fire_pre, resolve_model
 from .paths import extract_path
 from .providers.generated.caching import CachingDef, CachingMode, caching_config
@@ -23,7 +23,7 @@ def apply_caching(
     opts: Options,
     cfg: ProviderSpec,
 ) -> None:
-    """Mutate body to enable caching. Dispatches on the provider's CachingMode."""
+    """"""
     cc = caching_config(ProviderName(provider.name))
     if cc is None:
         raise ValidationError(field="caching", message=f"not supported by {provider.name}")
@@ -114,6 +114,8 @@ def _apply_resource(
         headers[cfg.auth_header] = cfg.auth_prefix + " " + provider.api_key
     elif scheme == AuthScheme.HEADER_API_KEY:
         headers[cfg.auth_header] = provider.api_key
+    #
+    merge_caller_headers(headers, provider.headers)
 
     try:
         resp_body = do_post(create_url, create_json, headers, timeout=opts.request_timeout)

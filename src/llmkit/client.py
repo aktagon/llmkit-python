@@ -1,4 +1,4 @@
-"""Public entry points: prompt, prompt_stream, upload_file. Mirrors go/llmkit.go."""
+""""""
 
 from __future__ import annotations
 
@@ -9,7 +9,13 @@ from typing import Any, Callable
 
 from .caching import apply_caching
 from .errors import APIError, ValidationError, parse_error
-from .http import do_multipart_post, do_post, do_sigv4_post, do_stream_post
+from .http import (
+    do_multipart_post,
+    do_post,
+    do_sigv4_post,
+    do_stream_post,
+    merge_caller_headers,
+)
 from .middleware import fire_post, fire_pre, resolve_model
 from .paths import (
     contains_value,
@@ -68,7 +74,7 @@ def prompt(
     request_timeout: float = 600.0,
     raw: bool = False,
 ) -> Response:
-    """Send a one-shot request to an LLM provider."""
+    """"""
     opts = Options(
         temperature=temperature,
         top_p=top_p,
@@ -96,8 +102,8 @@ def prompt(
     if cfg is None:
         raise ValidationError(field="provider", message=f"unknown: {provider.name}")
 
-    # Carrier-validate at the single boundary before firing middleware, so a
-    # malformed message rejects without a dangling pre-hook (PIPE-008).
+    #
+    #
     msgs = to_internal(request.messages)
 
     base_event = Event(
@@ -134,6 +140,7 @@ def prompt(
                 region,
                 cfg.service_name,
                 timeout=opts.request_timeout,
+                custom_headers=provider.headers,
             )
         else:
             resp_body = do_post(url, json_body, headers, timeout=opts.request_timeout)
@@ -187,7 +194,7 @@ def prompt_stream(
     middleware: list | None = None,
     request_timeout: float = 600.0,
 ) -> Response:
-    """Streaming variant of `prompt`. Calls on_chunk(text) for each delta; returns accumulated response."""
+    """"""
     opts = Options(
         temperature=temperature,
         top_p=top_p,
@@ -219,7 +226,7 @@ def prompt_stream(
             field="provider", message=f"streaming not supported: {provider.name}"
         )
 
-    # Carrier-validate at the single boundary before firing middleware (PIPE-008).
+    #
     msgs = to_internal(request.messages)
 
     base_event = Event(
@@ -287,19 +294,19 @@ def upload_file(
     middleware: list | None = None,
     request_timeout: float = 600.0,
 ) -> File:
-    """Upload a file to a provider and return a File reference.
-
-    ``source`` may be:
-
-    - ``str`` or ``os.PathLike`` — read the file from disk. The
-      multipart filename defaults to ``os.path.basename(source)``;
-      pass ``filename=`` to override.
-    - ``bytes`` (or ``bytearray``) — upload the buffer directly.
-      ``filename=`` is required.
-
-    ``mime_type`` overrides the filename-extension–based detection
-    used for the multipart Content-Type header.
     """
+
+
+
+
+
+
+
+
+
+
+
+"""
     if isinstance(source, (bytes, bytearray)):
         if not filename:
             raise ValidationError(
@@ -347,6 +354,8 @@ def upload_file(
         headers[cfg.required_header] = cfg.required_header_value
     if fu.beta_header:
         headers["anthropic-beta"] = fu.beta_header
+    #
+    merge_caller_headers(headers, provider.headers)
 
     extra_fields: dict[str, str] = {}
     if fu.extra_fields_json:
@@ -410,9 +419,9 @@ def upload_file(
     return file
 
 
-# =============================================================================
-# Validation
-# =============================================================================
+#
+#
+#
 
 
 def _validate_provider(p: Provider) -> None:
@@ -423,9 +432,9 @@ def _validate_provider(p: Provider) -> None:
 def _validate_request(req: Request) -> None:
     if not req.user and not req.messages:
         raise ValidationError(field="user", message="required")
-    # The carrier invariant (ADR-026: each message holds at most one of
-    # {text content, tool calls, tool result}) is enforced at the single
-    # to_internal boundary (PIPE-008), not here.
+    #
+    #
+    #
 
 
 def _validate_options(p: Provider, opts: Options) -> None:
@@ -463,9 +472,9 @@ def _validate_options(p: Provider, opts: Options) -> None:
             )
 
 
-# =============================================================================
-# URL and request builders
-# =============================================================================
+#
+#
+#
 
 
 def _build_url(p: Provider, cfg) -> str:
@@ -504,14 +513,14 @@ def _resolve_option_key(
     param: OptionKey,
     supported: dict[OptionKey, SupportedOptionDef],
 ) -> str | None:
-    """Wire (JSON) key for ``param`` on ``(provider, model)``.
-
-    Per-model overrides (ADR-024) outrank the provider default table: an exact
-    model id wins outright, otherwise the longest-prefix glob wins, and failing
-    any override the provider's default supported-options key is used. This is
-    the single resolution path; both the max-tokens site and the general option
-    loop call it (OPT-005).
     """
+
+
+
+
+
+
+"""
     best_key: str | None = None
     best_len = -1
     for ov in model_option_overrides(pname):
@@ -543,22 +552,22 @@ def _build_request(
     *,
     msgs=None,
 ):
-    # msgs is the internal message sum (ADR-026 PIPE-007). The Text/batch/stream
-    # paths convert their public Message list via to_internal at the single
-    # carrier-validation boundary (PIPE-008); the Agent builds it directly from
-    # its trusted history, with no lossy public-Message hop. When msgs is None
-    # it is derived here (the common Text/batch call), so unit tests and batch
-    # need no change; prompt/prompt_stream pass it in so the carrier check runs
-    # before fire_pre (preserving the middleware contract).
     #
-    # Deliberate scope limit (vs the TS slice, matching the Go slice): only
-    # multi-turn history flows through the sum. The single-turn req.user path —
-    # which also carries media (req.files/req.images) — is handled directly in
-    # each message transform's elif branch, because _MsgText carries only
-    # (role, text). Unifying it is tracked as a follow-up; see CLAUDE.md.
     #
-    # tools is the Agent's tool set; Text/batch pass None, so the tool-def step
-    # is a no-op there and their wire body stays identical (ADR-026 PIPE-005).
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
     if msgs is None:
         msgs = to_internal(req.messages)
     body: dict[str, Any] = {}
@@ -622,23 +631,26 @@ def _build_request(
     if cfg.required_header:
         headers[cfg.required_header] = cfg.required_header_value
 
+    #
+    merge_caller_headers(headers, p.headers)
+
     return body, headers
 
 
 def _add_options(
     root: dict[str, Any], body: dict[str, Any], opts: Options, provider_name: str, model: str
 ) -> None:
-    """Apply generation parameters to body, honouring dotted JSON keys + extra_fields.
-
-    JSON keys may be dotted (e.g. "thinking.budget_tokens") for providers that
-    require nested objects. Each option's per-provider OptionOverrideDef may
-    also carry extra_fields_json — sibling JSON merged into the same parent
-    path (e.g. {"type":"enabled"} alongside Anthropic's thinking.budget_tokens)
-    — and root_extra_fields_json (ADR-029 THK-003) — JSON deep-merged at the
-    request body ROOT (root differs from body for wraps_options_in providers),
-    for options that imply a sibling object elsewhere in the body (e.g.
-    {"thinking":{"type":"adaptive"}} alongside Anthropic's output_config.effort).
     """
+
+
+
+
+
+
+
+
+
+"""
     pname = ProviderName(provider_name)
     supported = {o.key: o for o in supported_options(pname)}
     overrides = {ov.key: ov for ov in option_overrides(pname)}
@@ -703,9 +715,9 @@ def _add_structured_output(
     if so.beta_header:
         headers["anthropic-beta"] = so.beta_header
 
-    # SiblingOfFormat placement (Google): the format field carries the literal
-    # format type (responseMimeType: "application/json") and the schema is an
-    # independent sibling at schema_path (responseSchema), not nested in a wrapper.
+    #
+    #
+    #
     if so.schema_placement == "SiblingOfFormat":
         set_nested_field(body, so.format_field, so.format_type)
         set_nested_field(body, so.schema_path, parsed_schema)
@@ -732,9 +744,9 @@ def _add_structured_output(
         set_nested_field(body, so.format_field, format_obj)
 
 
-# =============================================================================
-# Response parsing
-# =============================================================================
+#
+#
+#
 
 
 def _parse_response(provider: str, body: bytes) -> Response:

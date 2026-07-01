@@ -1,6 +1,6 @@
-"""Text-to-image generation against Google's Nano Banana.
+"""
 
-Run: GOOGLE_API_KEY=... python examples/image.py
+
 """
 import asyncio
 import os

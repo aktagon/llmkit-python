@@ -1,14 +1,14 @@
-"""Unit tests for llmkit.batch (prompt_batch / submit_batch / wait_batch)
-and the typed-builder Text.batch / text_batch wire. Uses a stateful
-Anthropic mock that handles the three-endpoint batch lifecycle:
+"""
 
-  POST /v1/messages/batches           → create
-  GET  /v1/messages/batches/{id}      → poll status
-  GET  /v1/messages/batches/{id}/results → JSONL results
 
-Anthropic chosen over OpenAI because its lifecycle is single-shape
-(no two-hop file_id retrieval) — the bookkeeping is in one wire shape,
-which makes the cross-symbol coverage clear."""
+
+
+
+
+
+
+
+"""
 
 from __future__ import annotations
 
@@ -24,12 +24,12 @@ from llmkit.builders import new_client
 from llmkit.types import Provider, Request
 
 
-# ---------- stateful Anthropic batch mock ----------
+#
 
 
 class _AnthropicBatchServer:
-    """Mimics the Anthropic batch lifecycle. ``status_progression`` controls
-    how many polls return `in_progress` before flipping to `ended`."""
+    """
+"""
 
     def __init__(
         self,
@@ -108,7 +108,7 @@ class _AnthropicBatchServer:
 
 
 def _anthropic_result_line(custom_id: str, text: str, input_tokens: int = 5, output_tokens: int = 7) -> dict[str, Any]:
-    """An Anthropic batch result wraps the message at result.message."""
+    """"""
     return {
         "custom_id": custom_id,
         "result": {
@@ -135,16 +135,16 @@ def _anthropic_provider(base_url: str) -> Provider:
     )
 
 
-# =============================================================================
-# Free-function entry points (legacy surface — still exported, still tested)
-# =============================================================================
+#
+#
+#
 
 
 def test_submit_batch_returns_handle_with_batch_id_and_provider() -> None:
-    """submit_batch posts the create body and returns the parsed handle.
-    Does not poll. Wire-body must carry the {custom_id, params: {...}}
-    envelope under the `requests` key — the `params` key is load-bearing
-    for Anthropic (the message body lives inside it)."""
+    """
+
+
+"""
 
     with _AnthropicBatchServer(batch_id="batch_anthro_1", result_lines=[]) as server:
         provider = _anthropic_provider(server.url)
@@ -158,24 +158,24 @@ def test_submit_batch_returns_handle_with_batch_id_and_provider() -> None:
     assert handle.id == "batch_anthro_1"
     assert handle.provider.name == "anthropic"
 
-    # Verify the create body envelope.
+    #
     assert server.create_body is not None
     assert "requests" in server.create_body
     items = server.create_body["requests"]
     assert len(items) == 2
-    # Each item: {"custom_id": "req-N", "params": {body...}}.
+    #
     assert items[0]["custom_id"] == "req-0"
     assert items[1]["custom_id"] == "req-1"
     assert "params" in items[0] and "params" in items[1]
-    # The inner params body carries the message content.
+    #
     inner = items[0]["params"]
     assert inner["model"] == "claude-sonnet-4-6"
     assert any("2+2" in (m.get("content") or "") for m in inner.get("messages", []))
 
 
 def test_wait_batch_polls_then_fetches_results_and_parses_via_result_body_path() -> None:
-    """wait_batch polls until status=ended, fetches results, and unwraps
-    each JSONL line via result.message (Anthropic's result_body_path)."""
+    """
+"""
 
     results = [
         _anthropic_result_line("req-0", "four"),
@@ -186,19 +186,19 @@ def test_wait_batch_polls_then_fetches_results_and_parses_via_result_body_path()
         handle = BatchHandle(id="batch_wait_1", provider=provider)
         responses = wait_batch(handle, poll_interval=0.01)
 
-    # Polled twice (1 in_progress + 1 ended).
+    #
     assert server.poll_count == 2
     assert len(responses) == 2
     assert responses[0].text == "four"
     assert responses[1].text == "six"
-    # Usage extracted from the unwrapped message body, not the wrapper.
+    #
     assert responses[0].usage.input == 5
     assert responses[0].usage.output == 7
     assert responses[1].usage.input == 8
 
 
 def test_prompt_batch_end_to_end_submit_then_wait() -> None:
-    """prompt_batch is the convenience wrapper: submits + waits."""
+    """"""
 
     results = [_anthropic_result_line("req-0", "the answer is 42")]
     with _AnthropicBatchServer(batch_id="batch_e2e", result_lines=results) as server:
@@ -213,16 +213,16 @@ def test_prompt_batch_end_to_end_submit_then_wait() -> None:
     assert responses[0].text == "the answer is 42"
 
 
-# =============================================================================
-# Typed-builder wire (Text.batch → text_batch → legacy prompt_batch)
-# =============================================================================
+#
+#
+#
 
 
 def test_text_batch_through_typed_builder_round_trips_two_prompts() -> None:
-    """Closes the Text.batch + text_batch coverage warnings. Builder's
-    system, sampling options, and per-prompt user content must all flow
-    through the wire body. ADR-012 REQ-PROP-003 forbids drift between
-    Text.prompt and Text.batch on which chain fields propagate."""
+    """
+
+
+"""
 
     results = [
         _anthropic_result_line("req-0", "alpha"),
@@ -243,17 +243,17 @@ def test_text_batch_through_typed_builder_round_trips_two_prompts() -> None:
 
     assert [r.text for r in responses] == ["alpha", "beta"]
 
-    # Wire body: the typed-builder's system reaches each request's params.
+    #
     assert server.create_body is not None
     items = server.create_body["requests"]
     inner_0 = items[0]["params"]
     assert inner_0["system"] == "You are terse."
-    # ADR-012: sampling options propagate through the batch path.
+    #
     assert inner_0["max_tokens"] == 64
     assert inner_0["temperature"] == 0.3
     assert inner_0["top_p"] == 0.9
     assert inner_0["stop_sequences"] == ["END"]
-    # User content carries the prompt.
+    #
     msgs_0 = inner_0.get("messages", [])
     assert any("first prompt" in (m.get("content") or "") for m in msgs_0)
     assert any(
@@ -263,9 +263,9 @@ def test_text_batch_through_typed_builder_round_trips_two_prompts() -> None:
 
 
 def test_text_submit_batch_through_typed_builder_returns_typed_batch_handle() -> None:
-    """Text.submit_batch returns a builders.batch.BatchHandle (typed-builder
-    class) that exposes ``.wait()`` — distinct from the legacy free-function
-    BatchHandle dataclass."""
+    """
+
+"""
 
     from llmkit.builders.batch import BatchHandle as TypedHandle
 

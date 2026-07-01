@@ -1,4 +1,4 @@
-"""Batch API: prompt_batch, submit_batch, wait_batch. Mirrors go/batch.go."""
+""""""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 from .errors import APIError, ValidationError
-from .http import do_get, do_multipart_post, do_post
+from .http import do_get, do_multipart_post, do_post, merge_caller_headers
 from .middleware import fire_post, fire_pre, resolve_model
 from .paths import extract_path
 from .providers.generated.batch import BatchDef, BatchInputMode, batch_config
@@ -40,7 +40,7 @@ def prompt_batch(
     poll_interval: float = 2.0,
     raw: bool = False,
 ) -> list[Response]:
-    """Submit a batch and block until all results are ready."""
+    """"""
     handle = submit_batch(
         provider,
         requests,
@@ -84,7 +84,7 @@ def submit_batch(
     request_timeout: float = 600.0,
     raw: bool = False,
 ) -> BatchHandle:
-    """Submit a batch and return a handle for polling."""
+    """"""
     from .client import _build_request, _validate_provider  # avoid circular at import time
 
     _validate_provider(provider)
@@ -173,7 +173,7 @@ def wait_batch(
     poll_interval: float = 2.0,
     raw: bool = False,
 ) -> list[Response]:
-    """Block until the batch finishes and return parsed results."""
+    """"""
     p = handle.provider
     cfg = PROVIDERS.get(p.name)
     if cfg is None:
@@ -190,9 +190,9 @@ def wait_batch(
     else:
         poll_url = base + bc.lifecycle.create_endpoint + "/" + handle.id
 
-    # ADR-014 cross-process resume: a handle that remembers raw (set
-    # either by submit_batch or by a caller reconstructing the dataclass)
-    # takes effect at wait time even if raw kwarg was not passed.
+    #
+    #
+    #
     raw = raw or handle.raw
     while True:
         resp_body = do_get(poll_url, headers, timeout=request_timeout)
@@ -370,4 +370,6 @@ def _build_auth_headers(p: Provider, cfg: ProviderSpec) -> dict[str, str]:
         headers[cfg.auth_header] = p.api_key
     if cfg.required_header:
         headers[cfg.required_header] = cfg.required_header_value
+    #
+    merge_caller_headers(headers, p.headers)
     return headers

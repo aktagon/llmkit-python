@@ -1,18 +1,18 @@
-"""Smoke runner for python/examples/*.py.
+"""
 
-Each example imports a real provider factory from llmkit.builders, builds
-a Client, and calls a chain → terminal. The test substitutes the
-factory with one that pins the Client's base_url at a mock HTTP server
-serving a canned response, then runs the example's main() coroutine.
 
-This catches the README/example bug class that py_compile and import-only
-checks miss:
-  * builder access form — `c.text()` vs `c.text` (TypeError at runtime)
-  * Response field naming — `resp.usage` vs `resp.usage` (AttributeError)
-  * builder surface — calling `Agent.history(...)` (AttributeError)
 
-The mock servers reuse the same shapes as tests/test_builders.py and
-tests/test_image.py.
+
+
+
+
+
+
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -33,12 +33,12 @@ import pytest
 EXAMPLES_DIR = pathlib.Path(__file__).resolve().parent.parent / "examples"
 
 
-# ---------- module loader -----------------------------------------------------
+#
 
 
 def _load(name: str):
-    """Load an example as a fresh module so per-test monkey-patches are
-    isolated."""
+    """
+"""
     path = EXAMPLES_DIR / f"{name}.py"
     spec = importlib.util.spec_from_file_location(f"_example_{name}", path)
     assert spec is not None and spec.loader is not None
@@ -47,11 +47,11 @@ def _load(name: str):
     return mod
 
 
-# ---------- mock servers ------------------------------------------------------
+#
 
 
 class _JSONServer:
-    """Replies to every POST/GET with the same canned JSON body."""
+    """"""
 
     def __init__(self, body: dict[str, Any]) -> None:
         outer = self
@@ -97,9 +97,9 @@ class _JSONServer:
 
 
 class _GrokVideoServer:
-    """Grok video lifecycle: POST submit returns a request id, GET poll
-    returns the done body immediately (no pending polls). Mirror of the
-    submit->poll->done mock in tests/test_video.py."""
+    """
+
+"""
 
     def __init__(self, request_id: str, done_body: dict[str, Any]) -> None:
         self.request_id = request_id
@@ -147,7 +147,7 @@ class _GrokVideoServer:
 
 
 class _SSEServer:
-    """Streams a canned SSE event sequence on POST."""
+    """"""
 
     def __init__(self, events: list[str]) -> None:
         outer = self
@@ -188,8 +188,8 @@ class _SSEServer:
 
 
 class _AnthropicBatchServer:
-    """Anthropic batch lifecycle: POST create, GET poll (ended at once),
-    GET results (JSONL). Returns one succeeded line per submitted prompt."""
+    """
+"""
 
     def __init__(self, batch_id: str, texts: list[str]) -> None:
         self.batch_id = batch_id
@@ -268,7 +268,7 @@ class _AnthropicBatchServer:
         return f"http://127.0.0.1:{self._httpd.server_port}"
 
 
-# ---------- canned response bodies --------------------------------------------
+#
 
 
 _ANTHROPIC_OK = {
@@ -280,8 +280,8 @@ _ANTHROPIC_OK = {
 _OPENAI_FILE_OK = {"id": "file-zzz", "object": "file"}
 
 
-# Anthropic message carrying explicit-cache token counts so the caching
-# example's resp.usage.cache_read / cache_write read non-trivial values.
+#
+#
 _ANTHROPIC_CACHED = {
     "content": [{"type": "text", "text": "The API is fast."}],
     "usage": {
@@ -293,8 +293,8 @@ _ANTHROPIC_CACHED = {
     "stop_reason": "end_turn",
 }
 
-# OpenAI chat completion exposing reasoning tokens via
-# completion_tokens_details (o-series shape).
+#
+#
 _OPENAI_REASONING = {
     "choices": [{"message": {"content": "9 sheep remain."}}],
     "usage": {
@@ -355,12 +355,12 @@ _ANTHROPIC_SSE = [
 ]
 
 
-# ---------- patch helper ------------------------------------------------------
+#
 
 
 def _redirect(module, factory_name: str, base_url: str) -> None:
-    """Replace `module.<factory_name>` with a wrapper that pins
-    `provider.base_url` to the mock before returning the Client."""
+    """
+"""
     from llmkit.builders import (  # local import to avoid cycle on collection
         anthropic,
         google,
@@ -385,7 +385,7 @@ def _redirect(module, factory_name: str, base_url: str) -> None:
     setattr(module, factory_name, patched)
 
 
-# ---------- tests -------------------------------------------------------------
+#
 
 
 def test_quickstart_runs() -> None:
@@ -419,7 +419,7 @@ def test_image_runs(tmp_path, monkeypatch) -> None:
 
 
 def test_upload_runs(tmp_path, monkeypatch) -> None:
-    # Path branch reads ./data.pdf from CWD; pre-create it in tmp.
+    #
     monkeypatch.chdir(tmp_path)
     (tmp_path / "data.pdf").write_bytes(b"%PDF-1.4 stub")
     ex = _load("upload")

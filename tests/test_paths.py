@@ -1,7 +1,7 @@
-"""Unit tests for llmkit.paths — pure-function helpers used by request
-shaping, response parsing, and schema massaging. All tests use real
-domain shapes (image MIME paths, OpenAI-style JSON schemas, data URIs)
-rather than placeholder strings."""
+"""
+
+
+"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from llmkit.paths import (
 )
 
 
-# ---------- detect_mime_type ----------
+#
 
 
 @pytest.mark.parametrize(
@@ -36,12 +36,12 @@ from llmkit.paths import (
         ("photo.jpeg", "image/jpeg"),
         ("animated.gif", "image/gif"),
         ("photo.webp", "image/webp"),
-        # Case insensitivity matters: macOS Finder defaults to lowercase
-        # but iOS Camera Roll exports uppercase JPG.
+        #
+        #
         ("PHOTO.JPG", "image/jpeg"),
-        # Path with directories.
+        #
         ("/some/dir/report.pdf", "application/pdf"),
-        # Unknown extensions fall back to octet-stream.
+        #
         ("binary.bin", "application/octet-stream"),
         ("noextension", "application/octet-stream"),
     ],
@@ -50,7 +50,7 @@ def test_detect_mime_type(filename: str, expected: str) -> None:
     assert detect_mime_type(filename) == expected
 
 
-# ---------- parse_data_uri ----------
+#
 
 
 def test_parse_data_uri_base64_png() -> None:
@@ -61,8 +61,8 @@ def test_parse_data_uri_base64_png() -> None:
 
 
 def test_parse_data_uri_no_base64_marker() -> None:
-    # data: URIs without base64 still parse — mime is the literal part
-    # before the comma.
+    #
+    #
     uri = "data:text/plain,hello"
     mime, payload = parse_data_uri(uri)
     assert mime == "text/plain"
@@ -83,7 +83,7 @@ def test_parse_data_uri_malformed_no_comma() -> None:
     assert payload == uri
 
 
-# ---------- contains_value ----------
+#
 
 
 def test_contains_value_present() -> None:
@@ -95,7 +95,7 @@ def test_contains_value_absent() -> None:
 
 
 def test_contains_value_whitespace_trimmed() -> None:
-    # Provider-config CSVs sometimes carry whitespace around commas.
+    #
     assert contains_value("png, jpeg , webp", "jpeg") is True
 
 
@@ -103,7 +103,7 @@ def test_contains_value_empty_csv() -> None:
     assert contains_value("", "anything") is False
 
 
-# ---------- set_additional_properties_false ----------
+#
 
 
 def test_set_additional_properties_false_on_object_schema() -> None:
@@ -116,7 +116,7 @@ def test_set_additional_properties_false_on_object_schema() -> None:
     }
     set_additional_properties_false(schema)
     assert schema["additionalProperties"] is False
-    # Required is auto-filled when missing — OpenAI strict mode requires it.
+    #
     assert set(schema["required"]) == {"name", "age"}
 
 
@@ -127,7 +127,7 @@ def test_set_additional_properties_false_preserves_existing_required() -> None:
         "required": ["name"],
     }
     set_additional_properties_false(schema)
-    # User-supplied `required` is not stomped.
+    #
     assert schema["required"] == ["name"]
 
 
@@ -158,12 +158,12 @@ def test_set_additional_properties_false_recurses_into_arrays() -> None:
 
 
 def test_set_additional_properties_false_skips_non_dict() -> None:
-    # No raise on a non-dict — defensive idempotence.
+    #
     set_additional_properties_false("not a schema")  # type: ignore[arg-type]
     set_additional_properties_false(42)  # type: ignore[arg-type]
 
 
-# ---------- remove_additional_properties ----------
+#
 
 
 def test_remove_additional_properties_drops_top_level() -> None:
@@ -201,12 +201,12 @@ def test_remove_additional_properties_recurses_into_array_items() -> None:
 
 
 def test_remove_additional_properties_skips_non_dict() -> None:
-    # No raise on non-dict.
+    #
     remove_additional_properties(None)  # type: ignore[arg-type]
 
 
-# ---------- extract_path / extract_int_path (already used widely;
-#            keeping a sanity case to lock in behavior) ----------
+#
+#
 
 
 def test_extract_path_simple_dotted_lookup() -> None:
@@ -222,7 +222,7 @@ def test_extract_int_path_returns_int_or_zero() -> None:
     assert extract_int_path(data, "usage.missing") == 0
 
 
-# ---------- set_nested_field / merge_into_parent (already used widely) ----------
+#
 
 
 def test_set_nested_field_creates_intermediate_maps() -> None:

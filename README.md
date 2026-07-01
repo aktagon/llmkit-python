@@ -217,7 +217,7 @@ base_url = (
     "/v1/projects/my-gcp-project/locations/us-central1/publishers/google/models"
 )
 
-c = vertex(os.environ["VERTEX_BEARER_TOKEN"]).with_base_url(base_url)
+c = vertex(os.environ["VERTEX_BEARER_TOKEN"]).base_url(base_url)
 
 resp = await (
     c.image
@@ -444,10 +444,26 @@ Pre-phase middleware can veto by returning a non-None error message; post-phase 
 ```python
 from llmkit.builders import openai
 
-c = openai("anything").with_base_url("http://localhost:8080/v1")
+c = openai("anything").base_url("http://localhost:8080/v1")
 ```
 
 Works for any OpenAI-compatible server (vLLM, LM Studio, Ollama, corporate gateways).
+
+## Custom headers
+
+Attach a custom HTTP header to every request — for example an authenticated gateway that needs its own auth header alongside the provider key. `add_header` is chainable and calls accumulate.
+
+```python
+from llmkit.builders import anthropic
+
+c = (
+    anthropic(api_key)
+    .base_url("https://gateway.example.com/anthropic")
+    .add_header("cf-aig-authorization", f"Bearer {gateway_token}")
+)
+```
+
+The custom header is sent in addition to the provider's auth header; it cannot override the provider auth header or the required version header.
 
 ## Wire-format stability
 

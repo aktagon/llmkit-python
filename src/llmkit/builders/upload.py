@@ -1,8 +1,8 @@
-"""Wires Upload.run against the internal upload_file helper.
+"""
 
-Both Path and Bytes branches dispatch through ``upload_file(provider,
-source, ...)``: ``str`` source is read from disk; ``bytes`` source is
-uploaded directly with the chained ``filename()`` value.
+
+
+
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ async def upload_run(b: "Upload") -> File:
     provider = Provider(
         name=b.client.provider.name,
         api_key=b.client.provider.api_key,
+        headers=b.client.provider.headers,
     )
     if b.client.provider.base_url:
         provider.base_url = b.client.provider.base_url
