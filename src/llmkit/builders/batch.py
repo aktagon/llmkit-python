@@ -51,6 +51,7 @@ def _provider_for(b: "Text") -> Provider:
     p = Provider(
         name=b.client.provider.name,
         api_key=b.client.provider.api_key,
+        headers=b.client.provider.headers,
     )
     if b._model:
         p.model = b._model

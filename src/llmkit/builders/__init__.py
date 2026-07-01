@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from ..image import ImageData, MediaRef, Part
@@ -37,6 +37,7 @@ class ProviderConfig:
     name: ProviderName
     api_key: str
     base_url: str = ""
+    headers: dict[str, str] = field(default_factory=dict)
 
 from .agent import agent_prompt, agent_reset
 from .batch import text_batch, text_submit_batch
@@ -686,11 +687,13 @@ class Client:
         self.models: _Models = _Models(self)
         self.providers: _Providers = _Providers(self)
 
-    def with_base_url(self, url: str) -> "Client":
-        """Override the provider's default base URL. Required for
-        providers whose default base URL is a template that the
-        caller must substitute (e.g. Vertex AI Imagen). Returns
-        the same Client for chaining."""
+    def add_header(self, name: str, value: str) -> "Client":
+        """Attach a custom HTTP header to every request for this client; calls accumulate. Applied before the provider auth header, so a gateway header (e.g. cf-aig-authorization) rides alongside the provider key. Returns the same Client."""
+        self.provider.headers[name] = value
+        return self
+
+    def base_url(self, url: str) -> "Client":
+        """Override the provider's default base URL. Required for providers whose default base URL is a template the caller must substitute (e.g. Vertex AI Imagen) and to point an OpenAI-compatible provider or gateway at a self-hosted endpoint. Returns the same Client."""
         self.provider.base_url = url
         return self
 

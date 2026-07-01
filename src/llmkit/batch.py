@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 from .errors import APIError, ValidationError
-from .http import do_get, do_multipart_post, do_post
+from .http import do_get, do_multipart_post, do_post, merge_caller_headers
 from .middleware import fire_post, fire_pre, resolve_model
 from .paths import extract_path
 from .providers.generated.batch import BatchDef, BatchInputMode, batch_config
@@ -370,4 +370,6 @@ def _build_auth_headers(p: Provider, cfg: ProviderSpec) -> dict[str, str]:
         headers[cfg.auth_header] = p.api_key
     if cfg.required_header:
         headers[cfg.required_header] = cfg.required_header_value
+    # ADR-052: additive; never clobbers the provider auth / required header above.
+    merge_caller_headers(headers, p.headers)
     return headers

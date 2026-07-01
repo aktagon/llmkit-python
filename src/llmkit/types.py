@@ -15,6 +15,11 @@ class Provider:
     api_key: str
     model: str = ""
     base_url: str = ""
+    # Custom HTTP headers added via Client.add_header (ADR-052). Merged into
+    # every request before the provider auth header and the static required
+    # header, so a gateway header (e.g. cf-aig-authorization) rides alongside
+    # the provider key without clobbering it.
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 class Capability(str):
