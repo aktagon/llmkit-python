@@ -12,7 +12,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 from urllib.parse import urlparse
 
+import pytest
+
 from llmkit.caching import apply_caching
+from llmkit.errors import APIError
 from llmkit.providers.generated.providers import PROVIDERS
 from llmkit.types import Options, Provider
 
@@ -23,8 +26,9 @@ from llmkit.types import Options, Provider
 class _CacheCreateServer:
     """Single-shot HTTPS-shaped mock for the cachedContents create endpoint."""
 
-    def __init__(self, response_body: dict[str, Any]) -> None:
+    def __init__(self, response_body: dict[str, Any], status_code: int = 200) -> None:
         self.response_body = response_body
+        self.status_code = status_code
         self.received_path = ""
         self.received_body: dict[str, Any] | None = None
         outer = self
@@ -38,7 +42,7 @@ class _CacheCreateServer:
                 length = int(self.headers.get("Content-Length", "0"))
                 outer.received_body = json.loads(self.rfile.read(length).decode("utf-8"))
                 payload = json.dumps(outer.response_body).encode("utf-8")
-                self.send_response(200)
+                self.send_response(outer.status_code)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
@@ -130,6 +134,41 @@ def test_apply_caching_google_creates_resource_and_rewrites_body() -> None:
     # Body now references the cached resource and the inline system is gone.
     assert body["cachedContent"] == "cachedContents/abc123"
     assert "system_instruction" not in body
+
+
+def test_apply_caching_google_surfaces_provider_error() -> None:
+    # BUG-016: when the cachedContents create is rejected (e.g. Gemini's
+    # "too small" 400 below its per-model token floor), the caller must get
+    # a clean, typed APIError carrying the provider's OWN message — not an
+    # opaque raw-body wrap. llmkit invents no size floor; it reports whatever
+    # the provider rejected with. This structured error (provider + status +
+    # message) is the substrate the opt-in capability telemetry reads.
+    error_envelope = {
+        "error": {
+            "code": 400,
+            "message": "Cached content is too small. total_token_count=653, min_total_token_count=1024",
+            "status": "INVALID_ARGUMENT",
+        }
+    }
+    with _CacheCreateServer(error_envelope, status_code=400) as server:
+        body: dict[str, Any] = {
+            "system_instruction": {"parts": [{"text": "small system prompt"}]},
+            "contents": [{"role": "user", "parts": [{"text": "hi"}]}],
+        }
+        provider = Provider(
+            name="google",
+            api_key="test-key",
+            model="gemini-2.5-pro",
+            base_url=server.url,
+        )
+        with pytest.raises(APIError) as exc_info:
+            apply_caching(body, provider, Options(), PROVIDERS["google"])
+
+    err = exc_info.value
+    # parse_error ran: provider name set, provider's own message extracted.
+    assert err.provider == "google"
+    assert err.status_code == 400
+    assert "min_total_token_count=1024" in err.message
 
 
 def test_apply_caching_google_respects_explicit_cache_ttl() -> None:
