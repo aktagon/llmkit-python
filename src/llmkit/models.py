@@ -17,6 +17,7 @@ import urllib.request
 from typing import TYPE_CHECKING
 
 from .catalogue import catalogue_by_provider, compiled_in_models, ontology_capabilities
+from .http import merge_caller_headers
 from .middleware import fire_post, fire_pre
 from .providers.generated.middleware import Event, MiddlewareOp
 from .providers.generated.models_parsers import (
@@ -216,6 +217,7 @@ def _effective_provider(scoped: "ScopedModels") -> Provider:
         name=scoped.target.name,
         api_key=pc.api_key,
         base_url=pc.base_url,
+        headers=pc.headers,  # ADR-052: carry custom headers onto the catalogue request
     )
 
 
@@ -339,6 +341,8 @@ def _build_catalogue_headers(provider: Provider, pcfg: ProviderSpec) -> dict[str
         headers[pcfg.auth_header] = provider.api_key
     if pcfg.required_header:
         headers[pcfg.required_header] = pcfg.required_header_value
+    #
+    merge_caller_headers(headers, provider.headers)
     return headers
 
 

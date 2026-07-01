@@ -10,6 +10,19 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable
 
+
+def merge_caller_headers(headers: dict[str, str], caller: dict[str, str]) -> None:
+    """
+
+
+
+
+"""
+    existing = {k.lower() for k in headers}
+    for k, v in caller.items():
+        if k.lower() not in existing:
+            headers[k] = v
+
 from .errors import APIError
 from .paths import detect_mime_type, extract_int_path, extract_path
 from .providers.generated.middleware import Usage
@@ -91,14 +104,20 @@ def do_sigv4_post(
     region: str,
     service: str,
     timeout: float = 600.0,
+    custom_headers: dict[str, str] | None = None,
 ) -> bytes:
-    """"""
+    """
+
+
+
+
+"""
     from .sigv4 import sign_sigv4
 
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     headers = sign_sigv4(url, body, access_key, secret_key, session_token, region, service)
-    for key, value in headers.items():
+    for key, value in {**(custom_headers or {}), **headers}.items():
         req.add_header(key, value)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -120,8 +139,10 @@ def do_sigv4_get(
     region: str,
     service: str,
     timeout: float = 600.0,
+    custom_headers: dict[str, str] | None = None,
 ) -> bytes:
     """
+
 
 
 
@@ -131,7 +152,7 @@ def do_sigv4_get(
 
     req = urllib.request.Request(url, method="GET")
     headers = sign_sigv4(url, b"", access_key, secret_key, session_token, region, service, method="GET")
-    for key, value in headers.items():
+    for key, value in {**(custom_headers or {}), **headers}.items():
         req.add_header(key, value)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
