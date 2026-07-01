@@ -9,7 +9,13 @@ from typing import Any, Callable
 
 from .caching import apply_caching
 from .errors import APIError, ValidationError, parse_error
-from .http import do_multipart_post, do_post, do_sigv4_post, do_stream_post
+from .http import (
+    do_multipart_post,
+    do_post,
+    do_sigv4_post,
+    do_stream_post,
+    merge_caller_headers,
+)
 from .middleware import fire_post, fire_pre, resolve_model
 from .paths import (
     contains_value,
@@ -134,6 +140,7 @@ def prompt(
                 region,
                 cfg.service_name,
                 timeout=opts.request_timeout,
+                custom_headers=provider.headers,
             )
         else:
             resp_body = do_post(url, json_body, headers, timeout=opts.request_timeout)
@@ -347,6 +354,8 @@ def upload_file(
         headers[cfg.required_header] = cfg.required_header_value
     if fu.beta_header:
         headers["anthropic-beta"] = fu.beta_header
+    # ADR-052: additive; never clobbers the SDK headers above.
+    merge_caller_headers(headers, provider.headers)
 
     extra_fields: dict[str, str] = {}
     if fu.extra_fields_json:
@@ -621,6 +630,9 @@ def _build_request(
 
     if cfg.required_header:
         headers[cfg.required_header] = cfg.required_header_value
+
+    # ADR-052: additive; never clobbers the provider auth / required header above.
+    merge_caller_headers(headers, p.headers)
 
     return body, headers
 
