@@ -1,7 +1,7 @@
 """HTTP runtime tests for the catalogue (ADR-019 Phase 3).
 
 Each test spins up an ``http.server`` thread, points the Client at its
-URL via ``with_base_url``, and asserts pagination / parser / error
+URL via ``base_url``, and asserts pagination / parser / error
 classification behaviour. Mirror of go/models_test.go and
 ts/tests/catalogue_http.test.ts.
 """
@@ -87,7 +87,7 @@ def test_scoped_list_anthropic_cursor_pagination() -> None:
 
     srv, base, calls = _start_server(handler)
     try:
-        c = anthropic("test-key").with_base_url(base)
+        c = anthropic("test-key").base_url(base)
         models = asyncio.run(c.models.provider(Provider(name="anthropic", api_key="test-key")).list())
         assert len(models) == 3
         assert len(calls) == 2
@@ -122,7 +122,7 @@ def test_scoped_list_google_opaque_token_pagination() -> None:
 
     srv, base, calls = _start_server(handler)
     try:
-        c = google("test-key").with_base_url(base)
+        c = google("test-key").base_url(base)
         models = asyncio.run(c.models.provider(Provider(name="google", api_key="test-key")).list())
         assert len(models) == 2
         assert len(calls) == 2
@@ -150,7 +150,7 @@ def test_scoped_list_openai_non_paginated() -> None:
 
     srv, base, calls = _start_server(handler)
     try:
-        c = openai("test-key").with_base_url(base)
+        c = openai("test-key").base_url(base)
         models = asyncio.run(c.models.provider(Provider(name="openai", api_key="test-key")).list())
         assert len(calls) == 1
         assert len(models) == 2
@@ -164,7 +164,7 @@ def test_scoped_list_403_scope_maps_to_err_models_scope() -> None:
 
     srv, base, _ = _start_server(handler)
     try:
-        c = openai("test-key").with_base_url(base)
+        c = openai("test-key").base_url(base)
         with pytest.raises(ErrModelsScope):
             asyncio.run(c.models.provider(Provider(name="openai", api_key="test-key")).list())
     finally:
@@ -177,7 +177,7 @@ def test_scoped_list_503_maps_to_err_models_unavailable() -> None:
 
     srv, base, _ = _start_server(handler)
     try:
-        c = anthropic("test-key").with_base_url(base)
+        c = anthropic("test-key").base_url(base)
         with pytest.raises(ErrModelsUnavailable):
             asyncio.run(c.models.provider(Provider(name="anthropic", api_key="test-key")).list())
     finally:
@@ -204,7 +204,7 @@ def test_scoped_get_anthropic_single_record() -> None:
 
     srv, base, calls = _start_server(handler)
     try:
-        c = anthropic("test-key").with_base_url(base)
+        c = anthropic("test-key").base_url(base)
         m = asyncio.run(
             c.models.provider(Provider(name="anthropic", api_key="test-key"))
             .get("claude-opus-4-7")
@@ -222,7 +222,7 @@ def test_models_live_partial_success_typed_provider_error() -> None:
 
     srv, base, _ = _start_server(handler)
     try:
-        c = openai("test-key").with_base_url(base)
+        c = openai("test-key").base_url(base)
         res = asyncio.run(c.models.live())
         assert res.models == []
         err = res.errors.get("openai")

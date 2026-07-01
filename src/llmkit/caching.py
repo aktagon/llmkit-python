@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 from .errors import APIError, ValidationError
-from .http import do_post
+from .http import do_post, merge_caller_headers
 from .middleware import fire_post, fire_pre, resolve_model
 from .paths import extract_path
 from .providers.generated.caching import CachingDef, CachingMode, caching_config
@@ -114,6 +114,8 @@ def _apply_resource(
         headers[cfg.auth_header] = cfg.auth_prefix + " " + provider.api_key
     elif scheme == AuthScheme.HEADER_API_KEY:
         headers[cfg.auth_header] = provider.api_key
+    # ADR-052: additive; never clobbers the provider auth above.
+    merge_caller_headers(headers, provider.headers)
 
     try:
         resp_body = do_post(create_url, create_json, headers, timeout=opts.request_timeout)
