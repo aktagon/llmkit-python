@@ -6,7 +6,7 @@ import json
 import time
 from typing import Any
 
-from .errors import APIError, ValidationError
+from .errors import APIError, ValidationError, parse_error
 from .http import do_post, merge_caller_headers
 from .middleware import fire_post, fire_pre, resolve_model
 from .paths import extract_path
@@ -119,7 +119,16 @@ def _apply_resource(
 
     try:
         resp_body = do_post(create_url, create_json, headers, timeout=opts.request_timeout)
-    except (APIError, Exception) as exc:
+    except APIError as raw_api_err:
+        # Surface the provider's own error envelope (e.g. Gemini's
+        # "Cached content is too small ... min_total_token_count=1024")
+        # rather than the raw body. Caching is optional but must fail
+        # honestly: llmkit never invents the provider's size floor, it
+        # reports whatever the provider rejected with.
+        err = parse_error(provider.name, raw_api_err.status_code, raw_api_err.message.encode("utf-8"), None)
+        _fire_post_err(opts.middleware, base_event, err, start)
+        raise err from raw_api_err
+    except Exception as exc:
         _fire_post_err(opts.middleware, base_event, exc, start)
         raise
 
