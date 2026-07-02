@@ -104,6 +104,7 @@ class ProviderSpec:
     required_header: str
     required_header_value: str
     system_placement: str
+    chat_wire_shape: str = ""  # ADR-055 total-switch discriminator
     role_mappings: dict[str, str] = field(default_factory=dict)
     usage_input_path: str = ""
     usage_output_path: str = ""
@@ -142,6 +143,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -183,6 +185,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="anthropic-version",
         required_header_value="2023-06-01",
         system_placement="TopLevelField",
+        chat_wire_shape="ChatAnthropic",
         role_mappings={
             "assistant": "assistant",
             "user": "user",
@@ -222,6 +225,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="",
         role_mappings={
             "user": "user",
         },
@@ -260,6 +264,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -301,6 +306,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="TopLevelField",
+        chat_wire_shape="ChatBedrock",
         role_mappings={
             "assistant": "assistant",
             "user": "user",
@@ -340,6 +346,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -381,6 +388,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -422,6 +430,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -463,6 +472,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -504,6 +514,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -545,6 +556,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -586,6 +598,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="SiblingObject",
+        chat_wire_shape="ChatGoogle",
         role_mappings={
             "assistant": "model",
             "user": "user",
@@ -625,6 +638,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -666,6 +680,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -707,6 +722,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="",
         role_mappings={
             "user": "user",
         },
@@ -745,6 +761,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -786,6 +803,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -827,6 +845,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -868,6 +887,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -909,6 +929,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -950,6 +971,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -991,6 +1013,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1032,6 +1055,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1073,6 +1097,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1114,6 +1139,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1154,6 +1180,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="",
         role_mappings={
             "user": "user",
         },
@@ -1192,6 +1219,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1233,6 +1261,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="",
         role_mappings={
             "user": "user",
         },
@@ -1271,6 +1300,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1312,6 +1342,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1353,6 +1384,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="",
         role_mappings={
             "user": "user",
         },
@@ -1391,6 +1423,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="",
         role_mappings={
             "user": "user",
         },
@@ -1429,6 +1462,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1470,6 +1504,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1511,6 +1546,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1551,6 +1587,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header="",
         required_header_value="",
         system_placement="MessageInArray",
+        chat_wire_shape="ChatOpenAI",
         role_mappings={
             "assistant": "assistant",
             "system": "system",
