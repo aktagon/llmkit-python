@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import urllib.request
 from dataclasses import dataclass
 
 from .errors import ValidationError
+from .middleware import _copy_event
 from .providers.generated.middleware import Event, MiddlewareFn, MiddlewarePhase
 from .providers.generated.telemetry import (
     OTEL_ATTR_ERR,
@@ -90,7 +92,16 @@ def make_telemetry_middleware(telemetry: Telemetry) -> MiddlewareFn:
     def _hook(event: Event) -> Exception | None:
         if event.phase != MiddlewarePhase.POST:
             return None
-        _export(telemetry, event)
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        threading.Thread(
+            target=_export, args=(telemetry, _copy_event(event)), daemon=True
+        ).start()
         return None
 
     return _hook
