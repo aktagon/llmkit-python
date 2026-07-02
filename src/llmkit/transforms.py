@@ -10,9 +10,7 @@ from .errors import ValidationError
 from .paths import parse_data_uri
 from .providers.generated.providers import ProviderSpec
 from .providers.generated.request import (
-    AuthScheme,
     SystemPlacement,
-    auth_scheme,
     system_placement,
     tool_call_config,
 )
@@ -26,20 +24,6 @@ ToolResultTransform = Callable[[ToolResult, dict[str, str]], dict[str, Any]]
 ToolCallExtractor = Callable[[dict[str, Any], Any], list[ToolCall]]
 
 
-def is_bedrock(cfg: ProviderSpec) -> bool:
-    return (
-        cfg.wraps_options_in == "inferenceConfig"
-        and auth_scheme_for(cfg) == AuthScheme.SIG_V4
-    )
-
-
-def auth_scheme_for(cfg: ProviderSpec) -> AuthScheme:
-    """Resolve a ProviderSpec to its AuthScheme using the generated table."""
-    from .providers.generated.providers import ProviderName
-
-    return auth_scheme(ProviderName(cfg.name))
-
-
 def placement_for(cfg: ProviderSpec) -> SystemPlacement:
     from .providers.generated.providers import ProviderName
 
@@ -51,17 +35,17 @@ def map_role(role: str, mappings: dict[str, str]) -> str:
 
 
 def select_message_transform(cfg: ProviderSpec) -> MessageTransform:
-    if is_bedrock(cfg):
+    if cfg.chat_wire_shape == "ChatBedrock":
         return transform_bedrock_converse
-    if placement_for(cfg) == SystemPlacement.SIBLING_OBJECT:
+    if cfg.chat_wire_shape == "ChatGoogle":
         return transform_google_parts
     return transform_flat_content
 
 
 def select_tool_def_transform(cfg: ProviderSpec) -> ToolDefTransform:
-    if is_bedrock(cfg):
+    if cfg.chat_wire_shape == "ChatBedrock":
         return transform_bedrock_tool_defs
-    if placement_for(cfg) == SystemPlacement.SIBLING_OBJECT:
+    if cfg.chat_wire_shape == "ChatGoogle":
         # Google carries tool params under a per-provider wire field (ADR-025):
         # "parametersJsonSchema" accepts native JSON Schema verbatim, vs the
         # OpenAPI-3.0-subset "parameters" default.
@@ -79,9 +63,9 @@ def select_tool_def_transform(cfg: ProviderSpec) -> ToolDefTransform:
 
 
 def select_tool_call_transform(cfg: ProviderSpec) -> ToolCallTransform:
-    if is_bedrock(cfg):
+    if cfg.chat_wire_shape == "ChatBedrock":
         return transform_bedrock_tool_call_msg
-    if placement_for(cfg) == SystemPlacement.SIBLING_OBJECT:
+    if cfg.chat_wire_shape == "ChatGoogle":
         return transform_google_tool_call_msg
     tc = _tool_call_def(cfg)
     if tc is not None and tc.args_format == "map":
@@ -90,9 +74,9 @@ def select_tool_call_transform(cfg: ProviderSpec) -> ToolCallTransform:
 
 
 def select_tool_result_transform(cfg: ProviderSpec) -> ToolResultTransform:
-    if is_bedrock(cfg):
+    if cfg.chat_wire_shape == "ChatBedrock":
         return transform_bedrock_tool_result_msg
-    if placement_for(cfg) == SystemPlacement.SIBLING_OBJECT:
+    if cfg.chat_wire_shape == "ChatGoogle":
         return transform_google_tool_result_msg
     tc = _tool_call_def(cfg)
     if tc is not None and tc.result_role == "user" and tc.args_format == "map":
@@ -101,9 +85,9 @@ def select_tool_result_transform(cfg: ProviderSpec) -> ToolResultTransform:
 
 
 def select_tool_call_extractor(cfg: ProviderSpec) -> ToolCallExtractor:
-    if is_bedrock(cfg):
+    if cfg.chat_wire_shape == "ChatBedrock":
         return extract_bedrock_tool_calls
-    if placement_for(cfg) == SystemPlacement.SIBLING_OBJECT:
+    if cfg.chat_wire_shape == "ChatGoogle":
         return extract_google_tool_calls
     tc = _tool_call_def(cfg)
     if tc is not None and tc.args_format == "map":
@@ -245,7 +229,7 @@ def transform_flat_content(body: dict[str, Any], msgs: list[_Msg], req: "Request
 
 def _build_flat_content_parts(req: "Request", cfg: ProviderSpec) -> list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
-    is_anthropic = placement_for(cfg) == SystemPlacement.TOP_LEVEL_FIELD
+    is_anthropic = cfg.chat_wire_shape == "ChatAnthropic"
 
     for f in req.files:
         if is_anthropic:
