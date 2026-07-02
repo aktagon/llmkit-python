@@ -40,23 +40,23 @@ class Event:
     """Observation and veto carrier passed to middleware hooks."""
     # Always set.
     op: MiddlewareOp = MiddlewareOp.LLM_REQUEST
-    # Always set.
+    # Always set. Internal-only (drives pre/post dispatch); not an OTEL attribute.
     phase: MiddlewarePhase = MiddlewarePhase.PRE
     # Always set.
     provider: str = ""
     # Always set.
     model: str = ""
-    # Only set when Op=tool_call.
+    # Only set when Op=tool_call. Internal-only.
     tool: str = ""
-    # Only set when Op=tool_call, Phase=pre. Mutation by middleware is observed by the tool.
+    # Only set when Op=tool_call, Phase=pre. Mutation by middleware is observed by the tool. Internal-only.
     args: dict[str, Any] = field(default_factory=dict)
-    # Only set when Op=tool_call, Phase=post.
+    # Only set when Op=tool_call, Phase=post. Internal-only.
     result: str = ""
-    # Set for Op=llm_request, Phase=post.
+    # Set for Op=llm_request, Phase=post. Expanded to gen_ai.usage.* via llm:otelUsageAttribute on each TokenDimension, not a single attribute.
     usage: Usage | None = None
     # Set in Phase=post when the operation failed.
     err: str | None = None
-    # Set in Phase=post.
+    # Set in Phase=post. Internal-only (maps to span duration, not a gen_ai attribute).
     duration: float = 0.0
 
 
