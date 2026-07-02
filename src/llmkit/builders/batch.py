@@ -21,6 +21,7 @@ from ..batch import (
     submit_batch as legacy_submit_batch,
     wait_batch as legacy_wait_batch,
 )
+from ..errors import ValidationError
 from ..providers.generated.providers import ProviderName
 from ..structs import BatchHandle as _BatchHandleData
 from ..types import Provider, Request, Response
@@ -95,6 +96,15 @@ def _option_kwargs(b: "Text") -> dict:
     Text builder is propagated into the underlying batch call so the wire
     body carries the same knobs that the one-shot ``Text.prompt`` path
     sends. ADR-012 REQ-PROP-003 forbids drift between helpers."""
+    # ADR-055: Protocol (e.g. Responses) is prompt-only in slice 1. Reject a
+    # non-default protocol loudly rather than silently sending a Chat
+    # Completions batch — the honest handling of a deferred-capability field
+    # (REQ-PROP-003: read the field, don't silently drop it).
+    if b._protocol:
+        raise ValidationError(
+            field="protocol",
+            message="protocol (e.g. Responses) is only supported on the prompt terminal, not batch (ADR-055)",
+        )
     kwargs: dict = {}
     if b._max_tokens is not None:
         kwargs["max_tokens"] = b._max_tokens
