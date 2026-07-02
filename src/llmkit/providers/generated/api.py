@@ -152,6 +152,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_protocol",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_provider",
         sub_options=(
         ),

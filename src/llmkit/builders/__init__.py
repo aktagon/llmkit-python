@@ -66,6 +66,7 @@ class Text:
         self._max_tokens: int | None = None
         self._model: str = ""
         self._presence_penalty: float | None = None
+        self._protocol: str = ""
         self._raw: bool = False
         self._reasoning_effort: str = ""
         self._safety_settings: list[SafetySetting] = []
@@ -121,6 +122,11 @@ class Text:
     def presence_penalty(self, v: float) -> "Text":
         out = copy.copy(self)
         out._presence_penalty = v
+        return out
+
+    def protocol(self, name: str) -> "Text":
+        out = copy.copy(self)
+        out._protocol = name
         return out
 
     def raw(self) -> "Text":

@@ -86,6 +86,16 @@ ALL_PROVIDER_NAMES: tuple[ProviderName, ...] = (
 
 
 @dataclass(frozen=True)
+class ChatProtocol:
+    """One chat request/response contract a provider exposes (ADR-055):
+    the default plus any opt-in protocol (e.g. OpenAI Responses) resolvable
+    via Text.protocol. state_model is introspection-only."""
+    wire_shape: str
+    endpoint: str
+    state_model: str
+
+
+@dataclass(frozen=True)
 class ProviderSpec:
     """HOW the library talks to a provider [PRIVATE]: the internal
     wire/transform spec consumed only by the runtime. Volatile; not exported
@@ -105,6 +115,7 @@ class ProviderSpec:
     required_header_value: str
     system_placement: str
     chat_wire_shape: str = ""  # ADR-055 total-switch discriminator
+    chat_protocols: tuple[ChatProtocol, ...] = ()  # ADR-055 full chat protocol set (default + opt-in); empty for media-only providers
     role_mappings: dict[str, str] = field(default_factory=dict)
     usage_input_path: str = ""
     usage_output_path: str = ""
@@ -144,6 +155,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -186,6 +200,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="2023-06-01",
         system_placement="TopLevelField",
         chat_wire_shape="ChatAnthropic",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatAnthropic", endpoint="/v1/messages", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "user": "user",
@@ -265,6 +282,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/openai/deployments/{model}/chat/completions?api-version=2024-10-21", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -307,6 +327,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="TopLevelField",
         chat_wire_shape="ChatBedrock",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatBedrock", endpoint="/model/{model}/converse", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "user": "user",
@@ -347,6 +370,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -389,6 +415,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -431,6 +460,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -473,6 +505,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -515,6 +550,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -557,6 +595,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -599,6 +640,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="SiblingObject",
         chat_wire_shape="ChatGoogle",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatGoogle", endpoint="/v1beta/models/{model}:generateContent", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "model",
             "user": "user",
@@ -639,6 +683,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -681,6 +728,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -762,6 +812,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -804,6 +857,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -846,6 +902,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -888,6 +947,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/text/chatcompletion_v2", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -930,6 +992,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -972,6 +1037,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1014,6 +1082,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1056,6 +1127,10 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+            ChatProtocol(wire_shape="ChatResponsesOpenAI", endpoint="/v1/responses", state_model="ServerSideState"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1098,6 +1173,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1140,6 +1218,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1220,6 +1301,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1301,6 +1385,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1343,6 +1430,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1463,6 +1553,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1505,6 +1598,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1547,6 +1643,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v1/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
@@ -1588,6 +1687,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         required_header_value="",
         system_placement="MessageInArray",
         chat_wire_shape="ChatOpenAI",
+        chat_protocols=(
+            ChatProtocol(wire_shape="ChatOpenAI", endpoint="/v4/chat/completions", state_model="Stateless"),
+        ),
         role_mappings={
             "assistant": "assistant",
             "system": "system",
