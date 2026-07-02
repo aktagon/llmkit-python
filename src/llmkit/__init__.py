@@ -19,6 +19,7 @@ and the four builder classes (`Text`, `Image`, `Agent`, `Upload`) so
 from __future__ import annotations
 
 from .batch import BatchHandle
+from .client import Responses
 from .builders import (
     Agent,
     Client,
@@ -148,6 +149,8 @@ __all__ = [
     "Tool",
     "ToolCall",
     "ToolResult",
+    # Chat protocol opt-in token (ADR-055).
+    "Responses",
     # Wire format (ADR-023).
     "save_history",
     "load_history",

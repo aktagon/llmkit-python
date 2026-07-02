@@ -799,6 +799,27 @@ def test_workersai_matches_shared_golden() -> None:
         _assert_wire_golden("workersai", server.last_body)
 
 
+# === ADR-055 Phase B: OpenAI Responses chat protocol ===
+
+
+def test_responses_openai_matches_shared_golden() -> None:
+    # OpenAI Responses body: the SAME flat message array as Chat Completions but
+    # under "input" (not "messages"), max_tokens renamed to max_output_tokens,
+    # POSTed to /v1/responses. Text.protocol("responses") is the opt-in. The
+    # default Chat Completions goldens are untouched (default pinned).
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = openai("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.text.protocol("responses")
+            .model(wi.WIRE_RESPONSES_OPENAI_MODEL)
+            .max_tokens(wi.WIRE_RESPONSES_OPENAI_MAX_TOKENS)
+            .prompt(wi.WIRE_RESPONSES_OPENAI_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("responses-openai", server.last_body)
+
+
 # === TASK-002: tool-definition fixtures across the four chat wire families ===
 #
 # Each driver builds the single canonical tool (name/description/schema from the
