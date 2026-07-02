@@ -366,7 +366,7 @@ def upload_file(
         except ValueError:
             pass
 
-    if system_placement(ProviderName(provider.name)) == SystemPlacement.SIBLING_OBJECT:
+    if cfg.chat_wire_shape == "ChatGoogle":
         metadata = {"file": {"display_name": name}}
         extra_fields["metadata"] = json.dumps(metadata)
         headers["X-Goog-Upload-Protocol"] = "multipart"
@@ -577,7 +577,7 @@ def _build_request(
     if cfg.model_in_body:
         body["model"] = model
 
-    max_tokens = cfg.default_max_tokens
+    max_tokens = cfg.default_max_tokens  #gitleaks:allow int assignment; scanner high-entropy false positive
     if opts.max_tokens is not None:
         max_tokens = opts.max_tokens
 
