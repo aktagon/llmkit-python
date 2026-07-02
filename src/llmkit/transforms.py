@@ -39,6 +39,8 @@ def select_message_transform(cfg: ProviderSpec) -> MessageTransform:
         return transform_bedrock_converse
     if cfg.chat_wire_shape == "ChatGoogle":
         return transform_google_parts
+    if cfg.chat_wire_shape == "ChatResponsesOpenAI":
+        return transform_responses_input
     return transform_flat_content
 
 
@@ -175,6 +177,22 @@ def to_internal(messages: list[Message]) -> list[_Msg]:
 #
 
 def transform_flat_content(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> None:
+    body["messages"] = _build_flat_message_array(msgs, req, cfg)
+
+
+def transform_responses_input(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> None:
+    """
+
+
+
+
+"""
+    body["input"] = _build_flat_message_array(msgs, req, cfg)
+
+
+def _build_flat_message_array(msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> list[dict[str, Any]]:
+    """
+"""
     out: list[dict[str, Any]] = []
     placement = placement_for(cfg)
 
@@ -224,7 +242,7 @@ def transform_flat_content(body: dict[str, Any], msgs: list[_Msg], req: "Request
                 }
             )
 
-    body["messages"] = out
+    return out
 
 
 def _build_flat_content_parts(req: "Request", cfg: ProviderSpec) -> list[dict[str, Any]]:
