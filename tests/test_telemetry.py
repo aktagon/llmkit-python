@@ -84,6 +84,9 @@ class _CollectorServer:
         self.path: str | None = None
         self.headers: dict[str, str] = {}
         self.body: dict | None = None
+        # Export is now fire-and-forget on a daemon thread (FU-2); tests wait on
+        # this before asserting rather than racing the background POST.
+        self.received = threading.Event()
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -99,6 +102,7 @@ class _CollectorServer:
                 self.send_response(200)
                 self.send_header("Content-Length", "0")
                 self.end_headers()
+                outer.received.set()
 
         self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
         self.url = f"http://127.0.0.1:{self._httpd.server_address[1]}"
@@ -165,6 +169,7 @@ def test_exporter_posts_to_collector() -> None:
             Telemetry(endpoint=collector.url, headers={"authorization": "Bearer tok-123"})
         )
         assert mw(_post_event()) is None
+        assert collector.received.wait(timeout=2.0), "export did not reach collector"
         assert collector.path == "/v1/traces"
         assert collector.headers.get("authorization") == "Bearer tok-123"
         assert collector.body is not None
@@ -180,6 +185,7 @@ def test_exporter_wired_on_chat_path() -> None:
         with_telemetry(client, Telemetry(endpoint=collector.url))
         asyncio.run(client.text.prompt("hello"))
         assert provider.hit
+        assert collector.received.wait(timeout=2.0), "export did not reach collector"
         assert collector.body is not None
         span = collector.body["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
         attrs = {a["key"]: a["value"] for a in span["attributes"]}
