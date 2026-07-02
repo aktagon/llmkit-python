@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 from .batch import BatchHandle
+from .client import Responses
 from .builders import (
     Agent,
     Client,
@@ -148,6 +149,8 @@ __all__ = [
     "Tool",
     "ToolCall",
     "ToolResult",
+    #
+    "Responses",
     #
     "save_history",
     "load_history",

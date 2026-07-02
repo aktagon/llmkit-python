@@ -24,6 +24,7 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
 from ..client import prompt_stream as legacy_prompt_stream
+from ..errors import ValidationError
 from ..types import Response
 from .text import _build_provider, _build_request
 
@@ -69,6 +70,14 @@ class TextStream:
 
     async def _iterate(self) -> AsyncIterator[str]:
         b = self._b
+        #
+        #
+        #
+        if b._protocol:
+            raise ValidationError(
+                field="protocol",
+                message="protocol (e.g. Responses) is only supported on the prompt terminal, not stream (ADR-055)",
+            )
         provider = _build_provider(b)
         request = _build_request(b, self._msg)
         #
