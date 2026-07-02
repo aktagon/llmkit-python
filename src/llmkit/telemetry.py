@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import urllib.request
 from dataclasses import dataclass
 
 from .errors import ValidationError
+from .middleware import _copy_event
 from .providers.generated.middleware import Event, MiddlewareFn, MiddlewarePhase
 from .providers.generated.telemetry import (
     OTEL_ATTR_ERR,
@@ -90,7 +92,16 @@ def make_telemetry_middleware(telemetry: Telemetry) -> MiddlewareFn:
     def _hook(event: Event) -> Exception | None:
         if event.phase != MiddlewarePhase.POST:
             return None
-        _export(telemetry, event)
+        # Fire-and-forget on a daemon thread (FU-2): a slow/hung collector must
+        # never block the caller, and daemon=True means it never holds up
+        # interpreter exit. _export is itself fail-open. One thread per export
+        # for now; a shared worker + bounded channel is the FU-6 upgrade.
+        # Snapshot the event first: fire_post shares one Event across all post
+        # hooks, so a later hook could mutate it while this thread reads it (Go
+        # copies by value and Rust clones scalars for the same reason).
+        threading.Thread(
+            target=_export, args=(telemetry, _copy_event(event)), daemon=True
+        ).start()
         return None
 
     return _hook
