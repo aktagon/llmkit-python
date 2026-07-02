@@ -24,6 +24,7 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
 from ..client import prompt_stream as legacy_prompt_stream
+from ..errors import ValidationError
 from ..types import Response
 from .text import _build_provider, _build_request
 
@@ -69,6 +70,14 @@ class TextStream:
 
     async def _iterate(self) -> AsyncIterator[str]:
         b = self._b
+        # ADR-055: Protocol (e.g. Responses) is prompt-only in slice 1;
+        # streaming Responses is not yet wired. Reject loudly rather than
+        # silently streaming Chat Completions (REQ-PROP-003 honest read).
+        if b._protocol:
+            raise ValidationError(
+                field="protocol",
+                message="protocol (e.g. Responses) is only supported on the prompt terminal, not stream (ADR-055)",
+            )
         provider = _build_provider(b)
         request = _build_request(b, self._msg)
         # ADR-012 REQ-PROP-003: every chain-set field must propagate
