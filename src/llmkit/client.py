@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import time
@@ -53,6 +54,45 @@ from .types import File, Options, Provider, Request, Response
 StreamCallback = Callable[[str], None]
 
 
+# ADR-055: the opt-in chat-protocol token for OpenAI's Responses API. Pass it to
+# Text.protocol to POST the {input} envelope to /v1/responses instead of the
+# default Chat Completions {messages} envelope to /v1/chat/completions. It is a
+# plain string; c.text.protocol("responses") is equivalent.
+Responses = "responses"
+
+_PROTOCOL_WIRE_SHAPES = {Responses: "ChatResponsesOpenAI"}
+
+
+def _protocol_wire_shape(token: str) -> str:
+    """Map a public Protocol token to its llm:ChatWireShape local name. An empty
+    string means the token is unknown (an empty token is handled by the caller)."""
+    return _PROTOCOL_WIRE_SHAPES.get(token, "")
+
+
+def resolve_chat_protocol(cfg, token: str):
+    """Return cfg with endpoint + chat_wire_shape overridden for a non-default
+    chat protocol opt-in (ADR-055 Text.protocol(...)). An empty token keeps the
+    default (cfg unchanged). A provider that does not expose the requested
+    protocol raises ValidationError(field="protocol") — the loud, uniform error
+    the ADR requires — before any network call. cfg is a frozen dataclass; the
+    override is a copy, so it never leaks to other calls.
+    """
+    if not token:
+        return cfg
+    want = _protocol_wire_shape(token)
+    if not want:
+        raise ValidationError(field="protocol", message=f"unknown protocol: {token}")
+    for cp in cfg.chat_protocols:
+        if cp.wire_shape == want:
+            return dataclasses.replace(
+                cfg, endpoint=cp.endpoint, chat_wire_shape=cp.wire_shape
+            )
+    raise ValidationError(
+        field="protocol",
+        message=f"provider {cfg.name!r} does not support protocol {token!r}",
+    )
+
+
 def prompt(
     provider: Provider,
     request: Request,
@@ -73,6 +113,7 @@ def prompt(
     middleware: list | None = None,
     request_timeout: float = 600.0,
     raw: bool = False,
+    protocol: str = "",
 ) -> Response:
     """Send a one-shot request to an LLM provider."""
     opts = Options(
@@ -101,6 +142,11 @@ def prompt(
     cfg = PROVIDERS.get(provider.name)
     if cfg is None:
         raise ValidationError(field="provider", message=f"unknown: {provider.name}")
+
+    # ADR-055: opt into a non-default chat protocol (Responses). Overrides the
+    # endpoint + wire shape on this call's cfg copy; empty keeps the default.
+    # Raises ValidationError(field="protocol") before any network call.
+    cfg = resolve_chat_protocol(cfg, protocol)
 
     # Carrier-validate at the single boundary before firing middleware, so a
     # malformed message rejects without a dangling pre-hook (PIPE-008).
@@ -157,7 +203,7 @@ def prompt(
         _fire_post_err(opts.middleware, base_event, exc, start)
         raise
 
-    resp = _parse_response(provider.name, resp_body)
+    resp = _parse_response(provider.name, resp_body, cfg.chat_wire_shape)
     if opts.raw:
         try:
             resp.raw = json.loads(resp_body)
@@ -634,6 +680,14 @@ def _build_request(
     # ADR-052: additive; never clobbers the provider auth / required header above.
     merge_caller_headers(headers, p.headers)
 
+    # ADR-055 Responses wire-shape body fixup: the Responses API names the
+    # output-token cap max_output_tokens and rejects max_tokens with a 400
+    # (live-verified 2026-07-02). Every other body field is shared with Chat
+    # Completions, so this single rename is the only option-key divergence.
+    # Behavior held by responses-openai.json, not the ontology.
+    if cfg.chat_wire_shape == "ChatResponsesOpenAI" and "max_tokens" in body:
+        body["max_output_tokens"] = body.pop("max_tokens")
+
     return body, headers
 
 
@@ -749,7 +803,7 @@ def _add_structured_output(
 # =============================================================================
 
 
-def _parse_response(provider: str, body: bytes) -> Response:
+def _parse_response(provider: str, body: bytes, chat_wire_shape: str = "") -> Response:
     try:
         raw = json.loads(body)
     except ValueError as exc:
@@ -758,6 +812,12 @@ def _parse_response(provider: str, body: bytes) -> Response:
             message=f"unmarshal response: {exc}",
             status_code=0,
         ) from exc
+
+    # ADR-055: chat_wire_shape is the EFFECTIVE wire shape for this request (after
+    # Text.protocol(...) resolution). Only ChatResponsesOpenAI diverges (the
+    # output[] envelope); every other value uses the declared response paths.
+    if chat_wire_shape == "ChatResponsesOpenAI":
+        return _parse_responses_envelope(raw)
 
     cfg = PROVIDERS[provider]
     text = extract_path(raw, cfg.response_text_path)
@@ -795,6 +855,49 @@ def _parse_response(provider: str, body: bytes) -> Response:
         finish_reason=finish_reason,
         finish_message=finish_message,
     )
+
+
+def _parse_responses_envelope(raw: dict[str, Any]) -> Response:
+    """Extract text + usage from OpenAI's Responses reply (ADR-055). Unlike Chat
+    Completions (choices[].message.content), the reply is an output[] array whose
+    message item carries content[] blocks of type "output_text"; usage is
+    input_tokens/output_tokens with cached + reasoning sub-details. Live-anchored
+    2026-07-02. Hand-coded per wire shape, symmetric with transform_responses_input.
+    """
+    return Response(
+        text=_extract_responses_text(raw),
+        usage=Usage(
+            input=extract_int_path(raw, "usage.input_tokens"),
+            output=extract_int_path(raw, "usage.output_tokens"),
+            cache_read=extract_int_path(raw, "usage.input_tokens_details.cached_tokens"),
+            reasoning=extract_int_path(
+                raw, "usage.output_tokens_details.reasoning_tokens"
+            ),
+        ),
+        finish_reason=extract_path(raw, "status"),
+    )
+
+
+def _extract_responses_text(raw: dict[str, Any]) -> str:
+    """Walk the Responses output[] array for the first message item and return its
+    first output_text block. Iterating (rather than a fixed output[0].content[0]
+    path) tolerates a leading reasoning item."""
+    output = raw.get("output")
+    if not isinstance(output, list):
+        return ""
+    for item in output:
+        if not isinstance(item, dict) or item.get("type") != "message":
+            continue
+        content = item.get("content")
+        if not isinstance(content, list):
+            continue
+        for c in content:
+            if not isinstance(c, dict) or c.get("type") != "output_text":
+                continue
+            text = c.get("text")
+            if isinstance(text, str):
+                return text
+    return ""
 
 
 def _extract_cache_usage(raw: dict[str, Any], provider: str) -> tuple[int, int]:
