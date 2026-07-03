@@ -439,6 +439,28 @@ await c.text.add_middleware([log_usage]).prompt("...")
 
 Pre-phase middleware can veto by returning a non-None error message; post-phase runs for observation only. Wired at six sites: text prompt, text stream, agent LLM call, agent tool execution, upload, batch submit, Google resource caching pre-flight.
 
+## Telemetry
+
+Opt-in OpenTelemetry. Attach a `Telemetry` and every call — success and rejection alike — produces one OTEL GenAI span (operation, provider, model, token usage, and `error.type` on failure) as standards-compliant OTLP/JSON bytes. llmkit builds the span; you decide where the bytes go. Off unless attached.
+
+```python
+from llmkit import Telemetry, http_export, add_telemetry
+from llmkit.builders import openai
+
+# Batteries: POST every span to an OTLP collector.
+client = add_telemetry(
+    openai(os.environ["OPENAI_API_KEY"]),
+    Telemetry(export=http_export("https://collector:4318")),
+)
+
+# Or bring your own transport — hand the bytes to your OTEL SDK:
+add_telemetry(client, Telemetry(export=lambda b: batch_processor.enqueue(b)))
+
+resp = await client.text.prompt("Hello")
+```
+
+`http_export` is a synchronous, fail-open POST — convenient for low volume; for high volume hand your own callback into your OTEL SDK's batch processor. The same OTLP span shape is emitted byte-for-byte across all four SDKs. A `Telemetry` with no `export` raises a `ValidationError`.
+
 ## Self-hosted endpoints
 
 ```python
