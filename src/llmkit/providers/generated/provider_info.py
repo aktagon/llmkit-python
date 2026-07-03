@@ -20,6 +20,8 @@ class ProviderInfo:
     env_var: str
     default_model: str
     base_url: str
+    # ADR-035: host serves CORS for direct browser calls (coarse).
+    browser_callable: bool
 
 
 _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
@@ -29,6 +31,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="AI21_API_KEY",
         default_model="jamba-1.5-large",
         base_url="https://api.ai21.com",
+        browser_callable=False,
     ),
     ProviderName.ANTHROPIC: ProviderInfo(
         id=ProviderName.ANTHROPIC,
@@ -36,6 +39,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="ANTHROPIC_API_KEY",
         default_model="claude-sonnet-4-6",
         base_url="https://api.anthropic.com",
+        browser_callable=False,
     ),
     ProviderName.ASSEMBLYAI: ProviderInfo(
         id=ProviderName.ASSEMBLYAI,
@@ -43,6 +47,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="ASSEMBLYAI_API_KEY",
         default_model="best",
         base_url="https://api.assemblyai.com",
+        browser_callable=False,
     ),
     ProviderName.AZURE: ProviderInfo(
         id=ProviderName.AZURE,
@@ -50,6 +55,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="AZURE_OPENAI_API_KEY",
         default_model="gpt-4o",
         base_url="https://REPLACE-WITH-YOUR-RESOURCE.openai.azure.com",
+        browser_callable=False,
     ),
     ProviderName.BEDROCK: ProviderInfo(
         id=ProviderName.BEDROCK,
@@ -57,6 +63,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="AWS_ACCESS_KEY_ID",
         default_model="anthropic.claude-sonnet-4-20250514-v1:0",
         base_url="https://bedrock-runtime.{region}.amazonaws.com",
+        browser_callable=False,
     ),
     ProviderName.CEREBRAS: ProviderInfo(
         id=ProviderName.CEREBRAS,
@@ -64,6 +71,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="CEREBRAS_API_KEY",
         default_model="llama-3.3-70b",
         base_url="https://api.cerebras.ai",
+        browser_callable=False,
     ),
     ProviderName.COHERE: ProviderInfo(
         id=ProviderName.COHERE,
@@ -71,6 +79,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="COHERE_API_KEY",
         default_model="command-r-plus",
         base_url="https://api.cohere.com/compatibility",
+        browser_callable=False,
     ),
     ProviderName.DEEPSEEK: ProviderInfo(
         id=ProviderName.DEEPSEEK,
@@ -78,6 +87,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="DEEPSEEK_API_KEY",
         default_model="deepseek-chat",
         base_url="https://api.deepseek.com",
+        browser_callable=False,
     ),
     ProviderName.DOUBAO: ProviderInfo(
         id=ProviderName.DOUBAO,
@@ -85,6 +95,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="ARK_API_KEY",
         default_model="doubao-1.5-pro-32k-250115",
         base_url="https://ark.cn-beijing.volces.com/api/v3",
+        browser_callable=False,
     ),
     ProviderName.ERNIE: ProviderInfo(
         id=ProviderName.ERNIE,
@@ -92,6 +103,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="QIANFAN_API_KEY",
         default_model="ernie-4.0-8k",
         base_url="https://qianfan.baidubce.com/v2",
+        browser_callable=False,
     ),
     ProviderName.FIREWORKS: ProviderInfo(
         id=ProviderName.FIREWORKS,
@@ -99,6 +111,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="FIREWORKS_API_KEY",
         default_model="accounts/fireworks/models/llama-v3p3-70b-instruct",
         base_url="https://api.fireworks.ai/inference",
+        browser_callable=False,
     ),
     ProviderName.GOOGLE: ProviderInfo(
         id=ProviderName.GOOGLE,
@@ -106,6 +119,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="GOOGLE_API_KEY",
         default_model="gemini-2.5-flash",
         base_url="https://generativelanguage.googleapis.com",
+        browser_callable=True,
     ),
     ProviderName.GROK: ProviderInfo(
         id=ProviderName.GROK,
@@ -113,6 +127,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="XAI_API_KEY",
         default_model="grok-3-fast",
         base_url="https://api.x.ai",
+        browser_callable=False,
     ),
     ProviderName.GROQ: ProviderInfo(
         id=ProviderName.GROQ,
@@ -120,6 +135,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="GROQ_API_KEY",
         default_model="llama-3.3-70b-versatile",
         base_url="https://api.groq.com/openai",
+        browser_callable=False,
     ),
     ProviderName.INWORLD: ProviderInfo(
         id=ProviderName.INWORLD,
@@ -127,6 +143,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="INWORLD_API_KEY",
         default_model="inworld-tts-2",
         base_url="https://api.inworld.ai",
+        browser_callable=False,
     ),
     ProviderName.JAN: ProviderInfo(
         id=ProviderName.JAN,
@@ -134,6 +151,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="JAN_API_KEY",
         default_model="",
         base_url="http://localhost:1337",
+        browser_callable=False,
     ),
     ProviderName.LLAMACPP: ProviderInfo(
         id=ProviderName.LLAMACPP,
@@ -141,6 +159,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="LLAMACPP_API_KEY",
         default_model="",
         base_url="http://localhost:8080",
+        browser_callable=False,
     ),
     ProviderName.LMSTUDIO: ProviderInfo(
         id=ProviderName.LMSTUDIO,
@@ -148,6 +167,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="LM_STUDIO_API_KEY",
         default_model="",
         base_url="http://localhost:1234",
+        browser_callable=False,
     ),
     ProviderName.MINIMAX: ProviderInfo(
         id=ProviderName.MINIMAX,
@@ -155,6 +175,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="MINIMAX_API_KEY",
         default_model="MiniMax-Text-01",
         base_url="https://api.minimax.chat",
+        browser_callable=False,
     ),
     ProviderName.MISTRAL: ProviderInfo(
         id=ProviderName.MISTRAL,
@@ -162,6 +183,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="MISTRAL_API_KEY",
         default_model="mistral-large-latest",
         base_url="https://api.mistral.ai",
+        browser_callable=False,
     ),
     ProviderName.MOONSHOT: ProviderInfo(
         id=ProviderName.MOONSHOT,
@@ -169,6 +191,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="MOONSHOT_API_KEY",
         default_model="moonshot-v1-8k",
         base_url="https://api.moonshot.ai",
+        browser_callable=False,
     ),
     ProviderName.OLLAMA: ProviderInfo(
         id=ProviderName.OLLAMA,
@@ -176,6 +199,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="OLLAMA_API_KEY",
         default_model="",
         base_url="http://localhost:11434",
+        browser_callable=False,
     ),
     ProviderName.OPENAI: ProviderInfo(
         id=ProviderName.OPENAI,
@@ -183,6 +207,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="OPENAI_API_KEY",
         default_model="gpt-4o-2024-08-06",
         base_url="https://api.openai.com",
+        browser_callable=False,
     ),
     ProviderName.OPENROUTER: ProviderInfo(
         id=ProviderName.OPENROUTER,
@@ -190,6 +215,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="OPENROUTER_API_KEY",
         default_model="openai/gpt-4o",
         base_url="https://openrouter.ai/api",
+        browser_callable=False,
     ),
     ProviderName.PERPLEXITY: ProviderInfo(
         id=ProviderName.PERPLEXITY,
@@ -197,6 +223,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="PERPLEXITY_API_KEY",
         default_model="sonar-pro",
         base_url="https://api.perplexity.ai",
+        browser_callable=False,
     ),
     ProviderName.PIXVERSE: ProviderInfo(
         id=ProviderName.PIXVERSE,
@@ -204,6 +231,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="PIXVERSE_API_KEY",
         default_model="v4.5",
         base_url="https://app-api.pixverse.ai",
+        browser_callable=False,
     ),
     ProviderName.QWEN: ProviderInfo(
         id=ProviderName.QWEN,
@@ -211,6 +239,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="DASHSCOPE_API_KEY",
         default_model="qwen-plus",
         base_url="https://dashscope-intl.aliyuncs.com/compatible-mode",
+        browser_callable=False,
     ),
     ProviderName.RECRAFT: ProviderInfo(
         id=ProviderName.RECRAFT,
@@ -218,6 +247,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="RECRAFT_API_TOKEN",
         default_model="recraftv3",
         base_url="https://external.api.recraft.ai",
+        browser_callable=False,
     ),
     ProviderName.SAMBANOVA: ProviderInfo(
         id=ProviderName.SAMBANOVA,
@@ -225,6 +255,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="SAMBANOVA_API_KEY",
         default_model="Meta-Llama-3.3-70B-Instruct",
         base_url="https://api.sambanova.ai",
+        browser_callable=False,
     ),
     ProviderName.TOGETHER: ProviderInfo(
         id=ProviderName.TOGETHER,
@@ -232,6 +263,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="TOGETHER_API_KEY",
         default_model="meta-llama/Llama-3.3-70B-Instruct-Turbo",
         base_url="https://api.together.xyz",
+        browser_callable=False,
     ),
     ProviderName.VERTEX: ProviderInfo(
         id=ProviderName.VERTEX,
@@ -239,6 +271,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="VERTEX_BEARER_TOKEN",
         default_model="imagen-3.0-generate-002",
         base_url="https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/google/models",
+        browser_callable=False,
     ),
     ProviderName.VIDU: ProviderInfo(
         id=ProviderName.VIDU,
@@ -246,6 +279,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="VIDU_API_KEY",
         default_model="viduq3-pro",
         base_url="https://api.vidu.com",
+        browser_callable=False,
     ),
     ProviderName.VLLM: ProviderInfo(
         id=ProviderName.VLLM,
@@ -253,6 +287,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="VLLM_API_KEY",
         default_model="",
         base_url="http://localhost:8000",
+        browser_callable=False,
     ),
     ProviderName.WORKERSAI: ProviderInfo(
         id=ProviderName.WORKERSAI,
@@ -260,6 +295,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="CLOUDFLARE_API_TOKEN",
         default_model="@cf/meta/llama-3.1-8b-instruct",
         base_url="https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1",
+        browser_callable=False,
     ),
     ProviderName.YI: ProviderInfo(
         id=ProviderName.YI,
@@ -267,6 +303,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="YI_API_KEY",
         default_model="yi-large",
         base_url="https://api.01.ai",
+        browser_callable=False,
     ),
     ProviderName.ZHIPU: ProviderInfo(
         id=ProviderName.ZHIPU,
@@ -274,6 +311,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         env_var="ZHIPU_API_KEY",
         default_model="glm-4-plus",
         base_url="https://open.bigmodel.cn/api/paas",
+        browser_callable=False,
     ),
 }
 
