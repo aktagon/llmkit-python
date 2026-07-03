@@ -1,6 +1,6 @@
 """Opt-in, OTEL-aligned telemetry (ADR-059, superseding ADR-054's transport half).
 
-Attach a :class:`Telemetry` to a client with :func:`with_telemetry`: on every
+Attach a :class:`Telemetry` to a client with :func:`add_telemetry`: on every
 provider call that fires middleware — success and rejection alike — llmkit builds
 an OTEL GenAI-aligned OTLP span (proto3 JSON) and hands the finished bytes to the
 ``export`` callback. llmkit does no telemetry network I/O and spawns no thread;
@@ -65,10 +65,10 @@ class Telemetry:
     capture_content: bool = False
 
 
-def with_telemetry(client, telemetry: Telemetry):
+def add_telemetry(client, telemetry: Telemetry):
     """Enable opt-in telemetry on ``client``; returns the same client for chaining.
 
-    Mirrors the Go ``Client.WithTelemetry``: the builder rides the middleware
+    Mirrors the Go ``Client.AddTelemetry``: the builder rides the middleware
     seam, so every capability path that fires middleware emits one OTEL span on
     the post phase. A missing ``export`` callback is fail-loud — a
     :class:`ValidationError` naming ``telemetry.export`` is raised immediately
