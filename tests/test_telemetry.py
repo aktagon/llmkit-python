@@ -30,7 +30,7 @@ from llmkit.telemetry import (
     build_otlp_traces,
     http_export,
     make_telemetry_middleware,
-    with_telemetry,
+    add_telemetry,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -207,12 +207,12 @@ def test_http_export_posts_to_collector() -> None:
 
 
 def test_exporter_wired_on_chat_path() -> None:
-    # End-to-end: with_telemetry attaches the exporter to the Text builder seam,
+    # End-to-end: add_telemetry attaches the exporter to the Text builder seam,
     # so a real prompt call emits one span to the collector on the post phase.
     with _ProviderServer() as provider, _CollectorServer() as collector:
         client = openai("key")
         client.provider.base_url = provider.url
-        with_telemetry(client, Telemetry(export=http_export(collector.url)))
+        add_telemetry(client, Telemetry(export=http_export(collector.url)))
         asyncio.run(client.text.prompt("hello"))
         assert provider.hit
         assert collector.received.wait(timeout=2.0), "export did not reach collector"
@@ -222,10 +222,10 @@ def test_exporter_wired_on_chat_path() -> None:
         assert attrs["gen_ai.system"] == {"stringValue": "openai"}
 
 
-def test_with_telemetry_missing_export_raises() -> None:
+def test_add_telemetry_missing_export_raises() -> None:
     # TEL-017 honest-contract guard: enabled telemetry with no sink fails loud.
     with pytest.raises(ValidationError) as exc:
-        with_telemetry(openai("key"), Telemetry(export=None))  # type: ignore[arg-type]
+        add_telemetry(openai("key"), Telemetry(export=None))  # type: ignore[arg-type]
     assert exc.value.field == "telemetry.export"
 
 
