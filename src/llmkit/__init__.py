@@ -91,7 +91,7 @@ from .providers.generated.middleware import (
     Usage,
 )
 from .providers.generated.providers import ProviderName
-from .telemetry import Telemetry, http_export, with_telemetry
+from .telemetry import Telemetry, http_export, add_telemetry
 from .types import (
     Capability,
     File,
@@ -180,7 +180,7 @@ __all__ = [
     # Telemetry (ADR-054/059, opt-in).
     "Telemetry",
     "http_export",
-    "with_telemetry",
+    "add_telemetry",
     # Errors.
     "APIError",
     "MiddlewareVetoError",
