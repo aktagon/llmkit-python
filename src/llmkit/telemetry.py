@@ -1,11 +1,15 @@
-"""Opt-in, OTEL-aligned telemetry (ADR-054).
+"""Opt-in, OTEL-aligned telemetry (ADR-059, superseding ADR-054's transport half).
 
-Attach a :class:`Telemetry` to a client with :func:`with_telemetry` to export an
-OTEL GenAI-aligned span over OTLP/HTTP (JSON) on every provider call that fires
-middleware — success and rejection alike. Off unless attached; an empty endpoint
-is a :class:`ValidationError` (the honest-contract lineage: no enabled-but-no-sink
-state). A sibling of the ADR-052 base-URL / custom-header runtime overrides — a
-handwritten config value, not modelled in the ontology.
+Attach a :class:`Telemetry` to a client with :func:`with_telemetry`: on every
+provider call that fires middleware — success and rejection alike — llmkit builds
+an OTEL GenAI-aligned OTLP span (proto3 JSON) and hands the finished bytes to the
+``export`` callback. llmkit does no telemetry network I/O and spawns no thread;
+what the callback does — enqueue into an OTEL SDK, POST, drop — plus all batching,
+backpressure, and shutdown is the caller's concern. Off unless attached; a missing
+``export`` is a :class:`ValidationError` (the honest-contract lineage: no
+enabled-but-no-sink state). Use :func:`http_export` for a batteries POST. A sibling
+of the ADR-052 base-URL / custom-header runtime overrides — a handwritten config
+value, not modelled in the ontology.
 
 The pure :func:`build_otlp_traces` builder is asserted value-identical across all
 four SDKs against the shared goldens at
@@ -16,13 +20,12 @@ from __future__ import annotations
 
 import json
 import os
-import threading
 import time
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from .errors import ValidationError
-from .middleware import _copy_event
 from .providers.generated.middleware import Event, MiddlewareFn, MiddlewarePhase
 from .providers.generated.telemetry import (
     OTEL_ATTR_ERR,
@@ -41,39 +44,40 @@ from .providers.generated.telemetry import (
 # when that seam lands — the same deferral the Go reference documents.
 _TELEMETRY_BUILDERS = ("text", "image", "music", "video", "agent", "upload")
 
-# The export POST is bounded so a slow/hung collector never stalls a call.
+# The batteries http_export POST is bounded so a slow/hung collector never
+# stalls a call for longer than this.
 _EXPORT_TIMEOUT_SECONDS = 5.0
 
 
 @dataclass
 class Telemetry:
-    """Opt-in observability config (ADR-054).
+    """Opt-in observability config (ADR-059).
 
-    ``endpoint`` is the OTLP/HTTP collector base URL (mandatory); the exporter
-    POSTs proto3-JSON to ``endpoint`` + ``/v1/traces``. ``headers`` are added to
-    every export POST (e.g. authorization). ``capture_content`` gates tier-2
-    message payloads (default False for privacy); the middleware Event does not
-    carry payloads yet, so this reserves the semantics for a deferred follow-up.
+    ``export`` receives the finished OTLP/HTTP proto3-JSON bytes for one span,
+    called synchronously on the post phase (mandatory). Use :func:`http_export`
+    for the batteries POST, or supply your own to bridge into an existing OTEL
+    stack. ``capture_content`` gates tier-2 message payloads (default False for
+    privacy); the middleware Event does not carry payloads yet, so this reserves
+    the semantics for a deferred follow-up.
     """
 
-    endpoint: str
-    headers: dict[str, str] | None = None
+    export: Callable[[bytes], None]
     capture_content: bool = False
 
 
 def with_telemetry(client, telemetry: Telemetry):
     """Enable opt-in telemetry on ``client``; returns the same client for chaining.
 
-    Mirrors the Go ``Client.WithTelemetry``: the exporter rides the middleware
+    Mirrors the Go ``Client.WithTelemetry``: the builder rides the middleware
     seam, so every capability path that fires middleware emits one OTEL span on
-    the post phase. Empty endpoint is fail-loud — a :class:`ValidationError`
-    naming ``telemetry.endpoint`` is raised immediately (Python validates at
-    attach time rather than deferring to first call).
+    the post phase. A missing ``export`` callback is fail-loud — a
+    :class:`ValidationError` naming ``telemetry.export`` is raised immediately
+    (Python validates at attach time rather than deferring to first call).
     """
-    if not telemetry.endpoint:
+    if not callable(getattr(telemetry, "export", None)):
         raise ValidationError(
-            field="telemetry.endpoint",
-            message="endpoint is required when telemetry is enabled",
+            field="telemetry.export",
+            message="export is required when telemetry is enabled (use http_export for a batteries POST)",
         )
     mw = make_telemetry_middleware(telemetry)
     # Inject into every builder prototype that carries a middleware seam. Chain
@@ -86,63 +90,80 @@ def with_telemetry(client, telemetry: Telemetry):
 
 
 def make_telemetry_middleware(telemetry: Telemetry) -> MiddlewareFn:
-    """Build the export hook. The post phase exports fail-open: a telemetry
-    failure never propagates or blocks the call."""
+    """Build the export hook. The post phase builds the OTLP payload and calls
+    ``export`` SYNCHRONOUSLY (ADR-059) — no thread. Fail-open: a raising callback
+    is swallowed so telemetry never propagates or blocks the call."""
 
     def _hook(event: Event) -> Exception | None:
         if event.phase != MiddlewarePhase.POST:
             return None
-        # Fire-and-forget on a daemon thread (FU-2): a slow/hung collector must
-        # never block the caller, and daemon=True means it never holds up
-        # interpreter exit. _export is itself fail-open. One thread per export
-        # for now; a shared worker + bounded channel is the FU-6 upgrade.
-        # Snapshot the event first: fire_post shares one Event across all post
-        # hooks, so a later hook could mutate it while this thread reads it (Go
-        # copies by value and Rust clones scalars for the same reason).
-        threading.Thread(
-            target=_export, args=(telemetry, _copy_event(event)), daemon=True
-        ).start()
+        try:
+            telemetry.export(_build_payload(event))
+        except Exception:
+            # Fail-open: telemetry never affects the caller.
+            pass
         return None
 
     return _hook
 
 
-def _export(telemetry: Telemetry, event: Event) -> None:
-    """Serialize the post-phase Event to an OTLP traces payload and POST it.
+def _build_payload(event: Event) -> bytes:
+    """Classify the post-phase Event and render it to OTLP traces bytes.
 
-    Fail-open: every error (bad endpoint, timeout, malformed value) is swallowed.
+    Span identity + timing are stamped here (the pure builder takes them as
+    arguments so the parity goldens can inject fixed values).
     """
-    try:
-        operation_name = TELEMETRY_OPERATION_NAME.get(event.op, event.op.value)
-        input_tokens = event.usage.input if event.usage is not None else 0
-        output_tokens = event.usage.output if event.usage is not None else 0
-        error_type = _error_type(event)
-        now = str(time.time_ns())
-        payload = build_otlp_traces(
-            operation_name,
-            event.provider,
-            event.model,
-            input_tokens,
-            output_tokens,
-            error_type,
-            os.urandom(16).hex(),
-            os.urandom(8).hex(),
-            now,
-            now,
-        )
+    operation_name = TELEMETRY_OPERATION_NAME.get(event.op, event.op.value)
+    input_tokens = event.usage.input if event.usage is not None else 0
+    output_tokens = event.usage.output if event.usage is not None else 0
+    error_type = _error_type(event)
+    now = str(time.time_ns())
+    return build_otlp_traces(
+        operation_name,
+        event.provider,
+        event.model,
+        input_tokens,
+        output_tokens,
+        error_type,
+        os.urandom(16).hex(),
+        os.urandom(8).hex(),
+        now,
+        now,
+    )
 
-        headers = {"Content-Type": "application/json"}
-        headers.update(telemetry.headers or {})
-        url = telemetry.endpoint.rstrip("/") + TELEMETRY_TRACES_PATH
 
-        req = urllib.request.Request(url, data=payload, method="POST")
-        for key, value in headers.items():
-            req.add_header(key, value)
-        with urllib.request.urlopen(req, timeout=_EXPORT_TIMEOUT_SECONDS) as resp:
-            resp.read()
-    except Exception:
-        # Fail-open: telemetry never affects the caller.
-        pass
+def http_export(
+    endpoint: str, headers: dict[str, str] | None = None
+) -> Callable[[bytes], None]:
+    """Return an ``export`` callback that POSTs each OTLP payload to
+    ``endpoint`` + ``/v1/traces`` with a bounded timeout, fail-open (every
+    network error is swallowed). It spawns no background worker and needs no
+    close.
+
+    Low-volume only: the POST is SYNCHRONOUS on the request path, so a slow or
+    hung collector adds up to ``_EXPORT_TIMEOUT_SECONDS`` of latency to the call.
+    For high volume, hand your own callback that enqueues into your OTEL SDK's
+    batch processor instead.
+    """
+    url = endpoint.rstrip("/") + TELEMETRY_TRACES_PATH
+    base_headers = {"Content-Type": "application/json"}
+    if headers:
+        base_headers.update(headers)
+
+    def _post(payload: bytes) -> None:
+        try:
+            req = urllib.request.Request(url, data=payload, method="POST")
+            for key, value in base_headers.items():
+                req.add_header(key, value)
+            with urllib.request.urlopen(
+                req, timeout=_EXPORT_TIMEOUT_SECONDS
+            ) as resp:
+                resp.read()
+        except Exception:
+            # Fail-open: telemetry never affects the caller.
+            pass
+
+    return _post
 
 
 def _error_type(event: Event) -> str:

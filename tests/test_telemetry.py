@@ -28,6 +28,7 @@ from llmkit.providers.generated.middleware import (
 from llmkit.telemetry import (
     Telemetry,
     build_otlp_traces,
+    http_export,
     make_telemetry_middleware,
     with_telemetry,
 )
@@ -163,10 +164,39 @@ def _post_event() -> Event:
     )
 
 
-def test_exporter_posts_to_collector() -> None:
+def test_export_callback_invoked_synchronously() -> None:
+    # ADR-059: the post phase hands finished OTLP bytes to the callback exactly
+    # once, synchronously — no thread is spawned. The pre phase never exports.
+    got: list[bytes] = []
+    mw = make_telemetry_middleware(Telemetry(export=got.append))
+
+    pre = Event(op=MiddlewareOp.LLM_REQUEST, phase=MiddlewarePhase.PRE, provider="openai", model="gpt-4o")
+    assert mw(pre) is None
+    assert got == []
+
+    before = threading.active_count()
+    for _ in range(50):
+        assert mw(_post_event()) is None
+    assert threading.active_count() <= before, "export must spawn no thread"
+    assert len(got) == 50
+    assert isinstance(got[0], bytes)
+    assert "resourceSpans" in json.loads(got[0])
+
+
+def test_export_throwing_callback_fails_open() -> None:
+    def boom(_payload: bytes) -> None:
+        raise RuntimeError("callback blew up")
+
+    mw = make_telemetry_middleware(Telemetry(export=boom))
+    assert mw(_post_event()) is None
+
+
+def test_http_export_posts_to_collector() -> None:
     with _CollectorServer() as collector:
         mw = make_telemetry_middleware(
-            Telemetry(endpoint=collector.url, headers={"authorization": "Bearer tok-123"})
+            Telemetry(
+                export=http_export(collector.url, {"authorization": "Bearer tok-123"})
+            )
         )
         assert mw(_post_event()) is None
         assert collector.received.wait(timeout=2.0), "export did not reach collector"
@@ -182,7 +212,7 @@ def test_exporter_wired_on_chat_path() -> None:
     with _ProviderServer() as provider, _CollectorServer() as collector:
         client = openai("key")
         client.provider.base_url = provider.url
-        with_telemetry(client, Telemetry(endpoint=collector.url))
+        with_telemetry(client, Telemetry(export=http_export(collector.url)))
         asyncio.run(client.text.prompt("hello"))
         assert provider.hit
         assert collector.received.wait(timeout=2.0), "export did not reach collector"
@@ -192,13 +222,14 @@ def test_exporter_wired_on_chat_path() -> None:
         assert attrs["gen_ai.system"] == {"stringValue": "openai"}
 
 
-def test_with_telemetry_empty_endpoint_raises() -> None:
+def test_with_telemetry_missing_export_raises() -> None:
+    # TEL-017 honest-contract guard: enabled telemetry with no sink fails loud.
     with pytest.raises(ValidationError) as exc:
-        with_telemetry(openai("key"), Telemetry(endpoint=""))
-    assert exc.value.field == "telemetry.endpoint"
+        with_telemetry(openai("key"), Telemetry(export=None))  # type: ignore[arg-type]
+    assert exc.value.field == "telemetry.export"
 
 
-def test_exporter_fail_open_on_bad_endpoint() -> None:
+def test_http_export_fail_open_on_bad_endpoint() -> None:
     # Port 1 is not listening -> connection refused -> swallowed, never raised.
-    mw = make_telemetry_middleware(Telemetry(endpoint="http://127.0.0.1:1"))
+    mw = make_telemetry_middleware(Telemetry(export=http_export("http://127.0.0.1:1")))
     assert mw(_post_event()) is None
