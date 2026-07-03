@@ -65,7 +65,7 @@ class Telemetry:
     capture_content: bool = False
 
 
-def with_telemetry(client, telemetry: Telemetry):
+def add_telemetry(client, telemetry: Telemetry):
     """
 
 
