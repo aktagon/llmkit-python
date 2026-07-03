@@ -10,19 +10,22 @@
 
 
 
+
+
+
+
 """
 
 from __future__ import annotations
 
 import json
 import os
-import threading
 import time
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from .errors import ValidationError
-from .middleware import _copy_event
 from .providers.generated.middleware import Event, MiddlewareFn, MiddlewarePhase
 from .providers.generated.telemetry import (
     OTEL_ATTR_ERR,
@@ -42,6 +45,7 @@ from .providers.generated.telemetry import (
 _TELEMETRY_BUILDERS = ("text", "image", "music", "video", "agent", "upload")
 
 #
+#
 _EXPORT_TIMEOUT_SECONDS = 5.0
 
 
@@ -54,10 +58,10 @@ class Telemetry:
 
 
 
+
 """
 
-    endpoint: str
-    headers: dict[str, str] | None = None
+    export: Callable[[bytes], None]
     capture_content: bool = False
 
 
@@ -70,10 +74,10 @@ def with_telemetry(client, telemetry: Telemetry):
 
 
 """
-    if not telemetry.endpoint:
+    if not callable(getattr(telemetry, "export", None)):
         raise ValidationError(
-            field="telemetry.endpoint",
-            message="endpoint is required when telemetry is enabled",
+            field="telemetry.export",
+            message="export is required when telemetry is enabled (use http_export for a batteries POST)",
         )
     mw = make_telemetry_middleware(telemetry)
     #
@@ -87,62 +91,79 @@ def with_telemetry(client, telemetry: Telemetry):
 
 def make_telemetry_middleware(telemetry: Telemetry) -> MiddlewareFn:
     """
+
 """
 
     def _hook(event: Event) -> Exception | None:
         if event.phase != MiddlewarePhase.POST:
             return None
-        #
-        #
-        #
-        #
-        #
-        #
-        #
-        threading.Thread(
-            target=_export, args=(telemetry, _copy_event(event)), daemon=True
-        ).start()
+        try:
+            telemetry.export(_build_payload(event))
+        except Exception:
+            #
+            pass
         return None
 
     return _hook
 
 
-def _export(telemetry: Telemetry, event: Event) -> None:
+def _build_payload(event: Event) -> bytes:
     """
 
 
+
 """
-    try:
-        operation_name = TELEMETRY_OPERATION_NAME.get(event.op, event.op.value)
-        input_tokens = event.usage.input if event.usage is not None else 0
-        output_tokens = event.usage.output if event.usage is not None else 0
-        error_type = _error_type(event)
-        now = str(time.time_ns())
-        payload = build_otlp_traces(
-            operation_name,
-            event.provider,
-            event.model,
-            input_tokens,
-            output_tokens,
-            error_type,
-            os.urandom(16).hex(),
-            os.urandom(8).hex(),
-            now,
-            now,
-        )
+    operation_name = TELEMETRY_OPERATION_NAME.get(event.op, event.op.value)
+    input_tokens = event.usage.input if event.usage is not None else 0
+    output_tokens = event.usage.output if event.usage is not None else 0
+    error_type = _error_type(event)
+    now = str(time.time_ns())
+    return build_otlp_traces(
+        operation_name,
+        event.provider,
+        event.model,
+        input_tokens,
+        output_tokens,
+        error_type,
+        os.urandom(16).hex(),
+        os.urandom(8).hex(),
+        now,
+        now,
+    )
 
-        headers = {"Content-Type": "application/json"}
-        headers.update(telemetry.headers or {})
-        url = telemetry.endpoint.rstrip("/") + TELEMETRY_TRACES_PATH
 
-        req = urllib.request.Request(url, data=payload, method="POST")
-        for key, value in headers.items():
-            req.add_header(key, value)
-        with urllib.request.urlopen(req, timeout=_EXPORT_TIMEOUT_SECONDS) as resp:
-            resp.read()
-    except Exception:
-        #
-        pass
+def http_export(
+    endpoint: str, headers: dict[str, str] | None = None
+) -> Callable[[bytes], None]:
+    """
+
+
+
+
+
+
+
+
+"""
+    url = endpoint.rstrip("/") + TELEMETRY_TRACES_PATH
+    base_headers = {"Content-Type": "application/json"}
+    if headers:
+        base_headers.update(headers)
+
+    def _post(payload: bytes) -> None:
+        try:
+            req = urllib.request.Request(url, data=payload, method="POST")
+            for key, value in base_headers.items():
+                req.add_header(key, value)
+            with urllib.request.urlopen(
+                req, timeout=_EXPORT_TIMEOUT_SECONDS
+            ) as resp:
+                resp.read()
+        except Exception:
+            #
+            pass
+
+    return _post
 
 
 def _error_type(event: Event) -> str:
