@@ -91,7 +91,7 @@ from .providers.generated.middleware import (
     Usage,
 )
 from .providers.generated.providers import ProviderName
-from .telemetry import Telemetry, with_telemetry
+from .telemetry import Telemetry, http_export, with_telemetry
 from .types import (
     Capability,
     File,
@@ -179,6 +179,7 @@ __all__ = [
     "Usage",
     #
     "Telemetry",
+    "http_export",
     "with_telemetry",
     #
     "APIError",
