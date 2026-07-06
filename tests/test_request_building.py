@@ -30,6 +30,46 @@ def test_anthropic_builds_top_level_system() -> None:
     assert headers["anthropic-version"] == "2023-06-01"
 
 
+def test_anthropic_file_request_adds_files_beta_header() -> None:
+    # BUG-017: a text request referencing an uploaded file emits a
+    # document/source:file block, which Anthropic rejects unless the Messages
+    # request carries the Files API beta the upload path already sends.
+    cfg = PROVIDERS["anthropic"]
+    _, headers = _build_request(
+        llmkit.Provider(
+            name="anthropic", api_key="sk-ant-test", model="claude-sonnet-4-6"
+        ),
+        llmkit.Request(
+            user="Summarize this file.",
+            files=[llmkit.File(id="file-abc123")],
+        ),
+        llmkit.Options(max_tokens=100),
+        cfg,
+    )
+    assert headers["anthropic-beta"] == "files-api-2025-04-14"
+
+
+def test_anthropic_file_request_composes_files_beta_with_structured_output() -> None:
+    # The Files API beta must compose with the structured-output beta rather
+    # than overwrite it: both features share the anthropic-beta header.
+    cfg = PROVIDERS["anthropic"]
+    _, headers = _build_request(
+        llmkit.Provider(
+            name="anthropic", api_key="sk-ant-test", model="claude-sonnet-4-6"
+        ),
+        llmkit.Request(
+            user="Summarize this file.",
+            files=[llmkit.File(id="file-abc123")],
+            schema='{"type":"object","properties":{"title":{"type":"string"}}}',
+        ),
+        llmkit.Options(max_tokens=100),
+        cfg,
+    )
+    betas = [v.strip() for v in headers["anthropic-beta"].split(",")]
+    assert "files-api-2025-04-14" in betas
+    assert "structured-outputs-2025-11-13" in betas
+
+
 # The thinking-budget dotted-path nesting test and the per-model
 # max-tokens key table (BUG-001 / ADR-024) migrated to the
 # wire-conformance suite (ADR-028 M2): the options-anthropic and
@@ -161,8 +201,8 @@ def test_sigv4_headers_have_required_fields() -> None:
     headers = sign_sigv4(
         url=url,
         body=body,
-        access_key="AKIAIOSFODNN7EXAMPLE",
-        secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        access_key="AKIAIOSFODNN7EXAMPLE",  # AWS docs canonical example #gitleaks:allow
+        secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",  # AWS docs canonical example #gitleaks:allow
         session_token="",
         region="us-east-1",
         service="bedrock",
@@ -171,7 +211,7 @@ def test_sigv4_headers_have_required_fields() -> None:
     assert headers["X-Amz-Content-Sha256"]
     assert headers["X-Amz-Date"]
     assert headers["Authorization"].startswith(
-        "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE"
+        "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE"  # AWS docs canonical example #gitleaks:allow
     )
     assert "SignedHeaders=" in headers["Authorization"]
     assert "Signature=" in headers["Authorization"]
