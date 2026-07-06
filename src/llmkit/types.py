@@ -43,10 +43,11 @@ class Capability(str):
 class InputImage:
     """Image attached to a text-generation request (vision input).
 
-    Distinct from llmkit.Image() — that's the Part constructor used for
-    image-generation calls. The two concepts target different capabilities;
-    aligning text generation onto Part-based vocabulary is tracked
-    separately (ADR-008 OQ-2).
+    The Text builder's .image(mime, bytes) part lowers into this carrier as a
+    base64 data URI and reaches the wire as the provider's native image block
+    (ADR-060). Distinct from llmkit.Image() — that's the Part constructor used
+    for image-generation calls. Unifying text-gen input onto Part vocabulary
+    wholesale remains future work.
     """
 
     url: str

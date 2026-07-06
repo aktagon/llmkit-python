@@ -347,6 +347,62 @@ def test_openai_text_document_matches_shared_golden() -> None:
         _assert_wire_golden("openai-text-document", server.last_body)
 
 
+def test_anthropic_text_image_matches_shared_golden() -> None:
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = anthropic("key")
+        c.provider.base_url = server.url
+        data = base64.b64decode(wi.WIRE_ANTHROPIC_TEXT_IMAGE_IMAGE_BASE64)
+        asyncio.run(
+            c.text.model(wi.WIRE_ANTHROPIC_TEXT_IMAGE_MODEL)
+            .image(wi.WIRE_ANTHROPIC_TEXT_IMAGE_IMAGE_MIME, data)
+            .prompt(wi.WIRE_ANTHROPIC_TEXT_IMAGE_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("anthropic-text-image", server.last_body)
+
+
+def test_openai_text_image_matches_shared_golden() -> None:
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = openai("key")
+        c.provider.base_url = server.url
+        data = base64.b64decode(wi.WIRE_OPENAI_TEXT_IMAGE_IMAGE_BASE64)
+        asyncio.run(
+            c.text.model(wi.WIRE_OPENAI_TEXT_IMAGE_MODEL)
+            .image(wi.WIRE_OPENAI_TEXT_IMAGE_IMAGE_MIME, data)
+            .prompt(wi.WIRE_OPENAI_TEXT_IMAGE_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("openai-text-image", server.last_body)
+
+
+def test_google_text_image_matches_shared_golden() -> None:
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = google("key")
+        c.provider.base_url = server.url
+        data = base64.b64decode(wi.WIRE_GOOGLE_TEXT_IMAGE_IMAGE_BASE64)
+        asyncio.run(
+            c.text.model(wi.WIRE_GOOGLE_TEXT_IMAGE_MODEL)
+            .image(wi.WIRE_GOOGLE_TEXT_IMAGE_IMAGE_MIME, data)
+            .prompt(wi.WIRE_GOOGLE_TEXT_IMAGE_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("google-text-image", server.last_body)
+
+
+def test_bedrock_text_image_matches_shared_golden() -> None:
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = bedrock("key")
+        c.provider.base_url = server.url
+        data = base64.b64decode(wi.WIRE_BEDROCK_TEXT_IMAGE_IMAGE_BASE64)
+        asyncio.run(
+            c.text.model(wi.WIRE_BEDROCK_TEXT_IMAGE_MODEL)
+            .image(wi.WIRE_BEDROCK_TEXT_IMAGE_IMAGE_MIME, data)
+            .prompt(wi.WIRE_BEDROCK_TEXT_IMAGE_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("bedrock-text-image", server.last_body)
+
+
 def test_options_anthropic_adaptive_matches_shared_golden() -> None:
     with _CaptureServer(_CANNED_RESP) as server:
         c = anthropic("key")
