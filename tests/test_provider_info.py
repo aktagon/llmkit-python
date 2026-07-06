@@ -37,8 +37,9 @@ def test_info_projects_exactly_the_contract_fields() -> None:
 
 
 def test_browser_callable_is_the_cors_fact() -> None:
-    # ADR-035: true only for google (CORS-verified), false otherwise.
+    # ADR-035: true for google + openai (CORS-preflight verified), false otherwise.
     assert providers.info(ProviderName.GOOGLE).browser_callable is True
+    assert providers.info(ProviderName.OPENAI).browser_callable is True
     assert providers.info(ProviderName.GROK).browser_callable is False
 
 
