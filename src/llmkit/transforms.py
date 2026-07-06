@@ -404,13 +404,47 @@ def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Req
                 case _:
                     _assert_never(m)
     elif req.user:
+        if req.images:
+            content = _build_bedrock_content_parts(req)
+        else:
+            content = [{"text": req.user}]
         out.append(
             {
                 "role": map_role("user", cfg.role_mappings),
-                "content": [{"text": req.user}],
+                "content": content,
             }
         )
     body["messages"] = out
+
+
+def _build_bedrock_content_parts(req: "Request") -> list[dict[str, Any]]:
+    """Converse content array with image blocks (ADR-060). Each image emits
+    {image:{format,source:{bytes}}}; the prompt text follows as a trailing
+    {text} block, preserving caller order among images. Mirrors go/transforms.go
+    buildBedrockContentParts."""
+    parts: list[dict[str, Any]] = []
+    for img in req.images:
+        mime_type, data = parse_data_uri(img.url)
+        if not mime_type:
+            mime_type = img.mime_type
+        parts.append(
+            {
+                "image": {
+                    "format": _bedrock_image_format(mime_type),
+                    "source": {"bytes": data},
+                }
+            }
+        )
+    parts.append({"text": req.user})
+    return parts
+
+
+def _bedrock_image_format(mime_type: str) -> str:
+    """Derive the Converse `format` token from a MIME type (image/png -> "png")."""
+    i = mime_type.rfind("/")
+    if i >= 0:
+        return mime_type[i + 1:]
+    return mime_type
 
 
 # =============================================================================
