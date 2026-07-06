@@ -668,6 +668,16 @@ def _build_request(
     if req.schema:
         _add_structured_output(body, headers, req.schema, p.name, cfg)
 
+    # Files API beta (BUG-017): a document/source:file block referencing an
+    # uploaded file requires the same anthropic-beta the upload used. Compose
+    # with any existing value (e.g. structured output) rather than overwrite.
+    if req.files:
+        fu = file_upload_config(ProviderName(p.name))
+        if fu is not None and fu.beta_header:
+            headers["anthropic-beta"] = _append_beta(
+                headers.get("anthropic-beta", ""), fu.beta_header
+            )
+
     scheme = auth_scheme(ProviderName(p.name))
     if scheme == AuthScheme.BEARER_TOKEN:
         headers[cfg.auth_header] = cfg.auth_prefix + " " + p.api_key
@@ -748,6 +758,22 @@ def _add_options(
         put(OptionKey.THINKING_BUDGET, opts.thinking_budget)
     if opts.reasoning_effort:
         put(OptionKey.REASONING_EFFORT, opts.reasoning_effort)
+
+
+def _append_beta(existing: str, add: str) -> str:
+    """Compose a comma-separated anthropic-beta header value.
+
+    Multiple features that each require a beta (structured output, Files API)
+    coexist instead of clobbering one another. Idempotent on repeats.
+    """
+    if not add:
+        return existing
+    if not existing:
+        return add
+    for v in existing.split(","):
+        if v.strip() == add:
+            return existing
+    return existing + "," + add
 
 
 def _add_structured_output(
