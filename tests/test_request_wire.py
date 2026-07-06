@@ -56,6 +56,18 @@ def _assert_wire_golden(fixture: str, body: dict[str, Any]) -> None:
     assert body == golden
 
 
+def _assert_wire_headers(fixture: str, headers: dict[str, str]) -> None:
+    """Drop the per-SDK request-header artifact (lowercased keys) for the
+    cross-SDK comparator's opt-in header subset-match (HANDOFF-028), closing
+    BUG-017's deferred golden header lock. A fixture with a companion
+    <fixture>.headers.json golden has each named header asserted value-equal
+    across all four SDKs."""
+    artifact = ARTIFACT_ROOT / fixture / "python.headers.json"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    flat = {k.lower(): v for k, v in headers.items()}
+    artifact.write_text(json.dumps(flat, indent=2))
+
+
 class _CaptureServer:
     """Single-shot mock that records the outbound POST body and headers
     (headers feed the in-driver asserts for load-bearing headers, e.g.
@@ -167,6 +179,7 @@ def test_structured_output_anthropic_matches_shared_golden() -> None:
             == "structured-outputs-2025-11-13"
         )
         _assert_wire_golden("structured-output-anthropic", server.last_body)
+        _assert_wire_headers("structured-output-anthropic", server.last_headers)
 
 
 # === Plan 039: nested-schema fixtures — the recursive normalization walk
@@ -332,6 +345,10 @@ def test_anthropic_text_document_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("anthropic-text-document", server.last_body)
+        # BUG-017 / HANDOFF-028: the Files API beta must ride on the Messages
+        # request referencing an uploaded file — golden-locked across all four
+        # SDKs via the companion anthropic-text-document.headers.json.
+        _assert_wire_headers("anthropic-text-document", server.last_headers)
 
 
 def test_openai_text_document_matches_shared_golden() -> None:
