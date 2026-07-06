@@ -9,10 +9,11 @@ via PYTHON_BUILDER_SKIP_TERMINALS. The bridge is sync→async: legacy
 from __future__ import annotations
 
 import asyncio
+import base64
 from typing import TYPE_CHECKING
 
 from ..client import prompt as legacy_prompt
-from ..types import Message, Provider, Request, Response
+from ..types import InputImage, Message, Provider, Request, Response
 
 if TYPE_CHECKING:
     from . import Text
@@ -36,14 +37,23 @@ def _build_request(b: "Text", final_text: str) -> Request:
     if b._system:
         req.system = b._system
 
-    # Concatenate accumulated text Parts + final prompt.
+    # Concatenate accumulated text Parts + final prompt; collect image
+    # Parts as InputImage data URIs (ADR-060). Mirrors go/text.go
+    # splitTextAndImages — caller order preserved.
     parts_text: list[str] = []
+    images: list[InputImage] = []
     for p in b._parts:
-        if p.text:
+        if p.image is not None:
+            mime = p.image.mime_type
+            data = base64.b64encode(p.image.bytes).decode()
+            images.append(InputImage(url=f"data:{mime};base64,{data}", mime_type=mime))
+        elif p.text:
             parts_text.append(p.text)
     if final_text:
         parts_text.append(final_text)
     user = "".join(parts_text)
+    if images:
+        req.images = images
 
     # Legacy Request: messages + user are mutually exclusive in the
     # downstream body builder. Append the final user turn to messages
