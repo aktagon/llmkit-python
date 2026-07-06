@@ -5,6 +5,10 @@ from ontology/wire-fixtures.ttl. Consumed by the request-wire
 conformance drivers; codegen/lint_wire_witness.py derives witness
 coverage from the same facts."""
 
+WIRE_ANTHROPIC_SCHEMA_DOCUMENT_MODEL = "claude-opus-4-8"
+WIRE_ANTHROPIC_SCHEMA_DOCUMENT_PROMPT = "Summarize the attached document as structured data."
+WIRE_ANTHROPIC_SCHEMA_DOCUMENT_SCHEMA = "{\"type\":\"object\",\"properties\":{\"summary\":{\"type\":\"string\"}},\"additionalProperties\":false}"
+WIRE_ANTHROPIC_SCHEMA_DOCUMENT_FILE_ID = "file_011CMZq8h5VnVe8jL3qK7p2R"
 WIRE_ANTHROPIC_TEXT_DOCUMENT_MODEL = "claude-opus-4-8"
 WIRE_ANTHROPIC_TEXT_DOCUMENT_PROMPT = "Summarize the attached document in three sentences."
 WIRE_ANTHROPIC_TEXT_DOCUMENT_FILE_ID = "file_011CMZq8h5VnVe8jL3qK7p2R"

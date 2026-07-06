@@ -182,6 +182,23 @@ def test_structured_output_anthropic_matches_shared_golden() -> None:
         _assert_wire_headers("structured-output-anthropic", server.last_headers)
 
 
+def test_anthropic_schema_document_composes_both_betas() -> None:
+    # BUG-017/HANDOFF-028: schema + file id in one request composes the
+    # structured-output beta and the files-api beta into one anthropic-beta.
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = anthropic("key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.text.model(wi.WIRE_ANTHROPIC_SCHEMA_DOCUMENT_MODEL)
+            .schema(wi.WIRE_ANTHROPIC_SCHEMA_DOCUMENT_SCHEMA)
+            .file(wi.WIRE_ANTHROPIC_SCHEMA_DOCUMENT_FILE_ID)
+            .prompt(wi.WIRE_ANTHROPIC_SCHEMA_DOCUMENT_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("anthropic-schema-document", server.last_body)
+        _assert_wire_headers("anthropic-schema-document", server.last_headers)
+
+
 # === Plan 039: nested-schema fixtures — the recursive normalization walk
 # (witness-lint first catch; see the Go drivers for the rationale). ===
 
