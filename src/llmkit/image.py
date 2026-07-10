@@ -339,7 +339,7 @@ def generate_image(
                 raise err from raw_err
             raise
 
-        result = _parse_image_response(provider.name, resp_body, cfg)
+        result = _parse_image_response(provider.name, resp_body, img_cfg)
         if raw:
             try:
                 result.raw = json.loads(resp_body)
@@ -729,7 +729,11 @@ def _image_auth_headers(p: Provider, cfg: Any, pname: ProviderName) -> dict[str,
     return headers
 
 
-def _parse_image_response(provider_name: str, body: bytes, cfg: Any) -> ImageResponse:
+def _parse_image_response(provider_name: str, body: bytes, img_cfg: Any) -> ImageResponse:
+    """
+
+
+"""
     from .structs import ImageResponse  # deferred to break import cycle
     try:
         raw = json.loads(body)
@@ -740,27 +744,20 @@ def _parse_image_response(provider_name: str, body: bytes, cfg: Any) -> ImageRes
             status_code=0,
         ) from exc
 
-    if provider_name == "openai":
-        return _parse_image_response_data_array(raw, "input_tokens", "output_tokens")
-    if provider_name == "grok":
+    if img_cfg.response_shape == "DataArrayB64Json":
         #
         #
-        #
-        return _parse_image_response_data_array(raw, "", "")
-    if provider_name == "recraft":
-        #
-        #
-        #
-        #
-        #
-        return _parse_image_response_data_array(raw, "", "")
-    if provider_name == "vertex":
+        return _parse_image_response_data_array(
+            raw, img_cfg.usage_input_path, img_cfg.usage_output_path
+        )
+    if img_cfg.response_shape == "VertexPredictions":
         return _parse_vertex_image_response(raw)
 
+    #
     images, text, finish_reason, finish_message = _extract_google_image_parts(raw)
     tokens = Usage(
-        input=extract_int_path(raw, cfg.usage_input_path),
-        output=extract_int_path(raw, cfg.usage_output_path),
+        input=extract_int_path(raw, img_cfg.usage_input_path),
+        output=extract_int_path(raw, img_cfg.usage_output_path),
     )
     return ImageResponse(
         images=images,
@@ -773,10 +770,11 @@ def _parse_image_response(provider_name: str, body: bytes, cfg: Any) -> ImageRes
 
 def _parse_image_response_data_array(
     raw: dict[str, Any],
-    input_token_field: str,
-    output_token_field: str,
+    input_path: str,
+    output_path: str,
 ) -> ImageResponse:
     """
+
 
 
 
@@ -812,12 +810,8 @@ def _parse_image_response_data_array(
             rp = entry.get("revised_prompt")
             if isinstance(rp, str) and rp:
                 revised.append(rp)
-    usage = raw.get("usage") if isinstance(raw, dict) else None
-    if isinstance(usage, dict):
-        in_tokens = int(usage.get(input_token_field, 0)) if input_token_field else 0
-        out_tokens = int(usage.get(output_token_field, 0)) if output_token_field else 0
-    else:
-        in_tokens = out_tokens = 0
+    in_tokens = extract_int_path(raw, input_path) if input_path else 0
+    out_tokens = extract_int_path(raw, output_path) if output_path else 0
     tokens = Usage(input=in_tokens, output=out_tokens)
     return ImageResponse(images=images, text="\n".join(revised), usage=tokens)
 
