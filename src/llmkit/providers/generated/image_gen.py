@@ -23,6 +23,11 @@ class ImageModelDef:
 class ImageGenDef:
     input_mode: str
     output_mode: str
+    # Response wire family selecting the response parser (BUG-024).
+    response_shape: str
+    # Dotted-from-root usage-token paths; empty when unreported.
+    usage_input_path: str
+    usage_output_path: str
     max_input_count: int
     gen_endpoint: str
     edit_endpoint: str
@@ -33,6 +38,9 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
     ProviderName.GOOGLE: ImageGenDef(
         input_mode="InlineParts",
         output_mode="Base64Inline",
+        response_shape="GoogleParts",
+        usage_input_path="usageMetadata.promptTokenCount",
+        usage_output_path="usageMetadata.candidatesTokenCount",
         max_input_count=14,
         gen_endpoint="",
         edit_endpoint="",
@@ -56,6 +64,9 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
     ProviderName.GROK: ImageGenDef(
         input_mode="JSONInlineRefs",
         output_mode="Base64Inline",
+        response_shape="DataArrayB64Json",
+        usage_input_path="",
+        usage_output_path="",
         max_input_count=16,
         gen_endpoint="/v1/images/generations",
         edit_endpoint="/v1/images/edits",
@@ -72,6 +83,9 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
     ProviderName.OPENAI: ImageGenDef(
         input_mode="MultipartForm",
         output_mode="Base64Inline",
+        response_shape="DataArrayB64Json",
+        usage_input_path="usage.input_tokens",
+        usage_output_path="usage.output_tokens",
         max_input_count=16,
         gen_endpoint="/v1/images/generations",
         edit_endpoint="/v1/images/edits",
@@ -109,6 +123,9 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
     ProviderName.RECRAFT: ImageGenDef(
         input_mode="JSONGenerations",
         output_mode="Base64Inline",
+        response_shape="DataArrayB64Json",
+        usage_input_path="",
+        usage_output_path="",
         max_input_count=0,
         gen_endpoint="/v1/images/generations",
         edit_endpoint="",
@@ -132,6 +149,9 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
     ProviderName.VERTEX: ImageGenDef(
         input_mode="JSONPredict",
         output_mode="Base64Inline",
+        response_shape="VertexPredictions",
+        usage_input_path="",
+        usage_output_path="",
         max_input_count=1,
         gen_endpoint="",
         edit_endpoint="",
