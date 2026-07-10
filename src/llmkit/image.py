@@ -339,7 +339,7 @@ def generate_image(
                 raise err from raw_err
             raise
 
-        result = _parse_image_response(provider.name, resp_body, cfg)
+        result = _parse_image_response(provider.name, resp_body, img_cfg)
         if raw:
             try:
                 result.raw = json.loads(resp_body)
@@ -729,7 +729,11 @@ def _image_auth_headers(p: Provider, cfg: Any, pname: ProviderName) -> dict[str,
     return headers
 
 
-def _parse_image_response(provider_name: str, body: bytes, cfg: Any) -> ImageResponse:
+def _parse_image_response(provider_name: str, body: bytes, img_cfg: Any) -> ImageResponse:
+    """Decode an image-gen response. The parser is selected by the config's
+    response wire family (img_cfg.response_shape), never by provider name
+    (BUG-024). img_cfg.usage_input_path/usage_output_path are dotted-from-root
+    and empty when the endpoint reports no usage."""
     from .structs import ImageResponse  # deferred to break import cycle
     try:
         raw = json.loads(body)
@@ -740,27 +744,20 @@ def _parse_image_response(provider_name: str, body: bytes, cfg: Any) -> ImageRes
             status_code=0,
         ) from exc
 
-    if provider_name == "openai":
-        return _parse_image_response_data_array(raw, "input_tokens", "output_tokens")
-    if provider_name == "grok":
-        # xAI reports usage.cost_in_usd_ticks instead of token counts;
-        # passing empty field names yields zero tokens (correct, no
-        # fabricated values).
-        return _parse_image_response_data_array(raw, "", "")
-    if provider_name == "recraft":
-        # Recraft returns the same data[].b64_json shape as OpenAI/xAI (the
-        # SDK forces response_format=b64_json) but carries no usage object,
-        # so token fields are empty (zero tokens — no fabricated values). SVG
-        # bytes (vector models) are sniffed to image/svg+xml inside
-        # _parse_image_response_data_array.
-        return _parse_image_response_data_array(raw, "", "")
-    if provider_name == "vertex":
+    if img_cfg.response_shape == "DataArrayB64Json":
+        # OpenAI/xAI/Recraft data[].b64_json shape. SVG bytes (Recraft vector
+        # models) are sniffed to image/svg+xml inside the parser.
+        return _parse_image_response_data_array(
+            raw, img_cfg.usage_input_path, img_cfg.usage_output_path
+        )
+    if img_cfg.response_shape == "VertexPredictions":
         return _parse_vertex_image_response(raw)
 
+    # GoogleParts: candidates[].content.parts inline data.
     images, text, finish_reason, finish_message = _extract_google_image_parts(raw)
     tokens = Usage(
-        input=extract_int_path(raw, cfg.usage_input_path),
-        output=extract_int_path(raw, cfg.usage_output_path),
+        input=extract_int_path(raw, img_cfg.usage_input_path),
+        output=extract_int_path(raw, img_cfg.usage_output_path),
     )
     return ImageResponse(
         images=images,
@@ -773,14 +770,15 @@ def _parse_image_response(provider_name: str, body: bytes, cfg: Any) -> ImageRes
 
 def _parse_image_response_data_array(
     raw: dict[str, Any],
-    input_token_field: str,
-    output_token_field: str,
+    input_path: str,
+    output_path: str,
 ) -> ImageResponse:
     """Walk the data[] array shape used by both OpenAI's and xAI's image
     APIs. Decodes data[i].b64_json into ImageData; honors data[i].mime_type
     when echoed back (xAI does, OpenAI does not), defaulting to image/png.
-    Concatenates any data[i].revised_prompt into text. Pass empty token-
-    field names for providers that don't report counts (xAI reports
+    Concatenates any data[i].revised_prompt into text. input_path/output_path
+    are dotted-from-root token paths (e.g. "usage.input_tokens"); pass empty
+    strings for providers that don't report counts (xAI reports
     usage.cost_in_usd_ticks instead).
     """
     from .structs import ImageResponse  # deferred to break import cycle
@@ -812,12 +810,8 @@ def _parse_image_response_data_array(
             rp = entry.get("revised_prompt")
             if isinstance(rp, str) and rp:
                 revised.append(rp)
-    usage = raw.get("usage") if isinstance(raw, dict) else None
-    if isinstance(usage, dict):
-        in_tokens = int(usage.get(input_token_field, 0)) if input_token_field else 0
-        out_tokens = int(usage.get(output_token_field, 0)) if output_token_field else 0
-    else:
-        in_tokens = out_tokens = 0
+    in_tokens = extract_int_path(raw, input_path) if input_path else 0
+    out_tokens = extract_int_path(raw, output_path) if output_path else 0
     tokens = Usage(input=in_tokens, output=out_tokens)
     return ImageResponse(images=images, text="\n".join(revised), usage=tokens)
 
