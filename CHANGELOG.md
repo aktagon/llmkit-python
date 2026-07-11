@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.1] — 2026-07-11
+
+### Fixed
+
+- `providers.info(ProviderName.OPENAI).browser_callable` is now `False` (was `True`). OpenAI's API host answers the CORS preflight but omits `Access-Control-Allow-Origin` on the actual response, so a browser cannot read it directly. The flag now reflects the real response, not the preflight — a browser app that reads it to decide direct-call-vs-proxy will correctly route OpenAI through a proxy. Google stays `True` (its responses carry the header). No API change.
+
 ## [2.4.0] — 2026-07-06
 
 ### Added
