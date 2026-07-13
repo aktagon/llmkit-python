@@ -8,7 +8,6 @@
 
 
 
-
 """
 
 from __future__ import annotations
@@ -20,7 +19,6 @@ from ..batch import (
     DEFAULT_POLL_DEADLINE,
     DEFAULT_POLL_INTERVAL,
     _new_batch_adapter,
-    prompt_batch as legacy_prompt_batch,
     submit_batch as legacy_submit_batch,
 )
 from ..errors import ValidationError
@@ -35,6 +33,10 @@ if TYPE_CHECKING:
 
 class BatchHandle(_BatchHandleData):
     """
+
+
+
+
 
 
 """
@@ -159,18 +161,12 @@ def _option_kwargs(b: "Text") -> dict:
     return kwargs
 
 
-async def text_batch(b: "Text", *prompts: str) -> list[Response]:
-    provider = _provider_for(b)
-    requests = [_build_request_for(b, p) for p in prompts]
-    return await asyncio.to_thread(
-        legacy_prompt_batch,
-        provider,
-        requests,
-        **_option_kwargs(b),
-    )
+async def text_batch(b: "Text", *prompts: str) -> BatchHandle:
+    """
 
 
-async def text_submit_batch(b: "Text", *prompts: str) -> BatchHandle:
+
+"""
     provider = _provider_for(b)
     requests = [_build_request_for(b, p) for p in prompts]
     legacy = await asyncio.to_thread(
