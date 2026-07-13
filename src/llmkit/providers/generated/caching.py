@@ -22,6 +22,7 @@ class ResourceLifecycleDef:
     polling_endpoint: str = ""
     polling_status_path: str = ""
     polling_done_value: str = ""
+    polling_error_values: tuple[str, ...] = ()
     result_endpoint: str = ""
     result_response_path: str = ""
     result_file_id_path: str = ""
@@ -61,6 +62,7 @@ _CACHING: dict[ProviderName, CachingDef] = {
                 polling_endpoint="",
                 polling_status_path="",
                 polling_done_value="",
+                polling_error_values=(),
                 result_endpoint="",
                 result_response_path="",
                 result_file_id_path="",
