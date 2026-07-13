@@ -119,7 +119,17 @@ def submit_batch(
             }
             json_body = json.dumps(body).encode("utf-8")
         else:
-            body = _build_batch_body(requests, opts, provider, cfg, bc)
+            from .client import _append_beta
+
+            body, beta_headers = _build_batch_body(requests, opts, provider, cfg, bc)
+            # The per-request bodies may require a contract-bearing anthropic-beta
+            # (files-api / structured output) that _build_auth_headers does not
+            # set — ride it onto the batch CREATE request, else a file-referencing
+            # batch item silently drops the beta (batch-modality witness family).
+            for k, v in beta_headers.items():
+                headers[k] = (
+                    _append_beta(headers.get(k, ""), v) if k == "anthropic-beta" else v
+                )
             json_body = json.dumps(body).encode("utf-8")
 
         create_url = base + bc.lifecycle.create_endpoint
@@ -275,13 +285,24 @@ def _build_batch_body(
     provider: Provider,
     cfg: ProviderSpec,
     bc: BatchDef,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Returns the batch payload plus the contract-bearing anthropic-beta values
+    the per-request bodies require (files-api / structured output), composed
+    across items, so the caller can attach them to the batch CREATE request
+    (_build_request returns them per request; the batch submit otherwise sends
+    only auth headers)."""
     from .caching import apply_caching
-    from .client import _build_request
+    from .client import _append_beta, _build_request
 
     items: list[dict[str, Any]] = []
+    beta_headers: dict[str, str] = {}
     for i, req in enumerate(reqs):
-        req_body, _ = _build_request(provider, req, opts, cfg)
+        req_body, req_headers = _build_request(provider, req, opts, cfg)
+        beta = req_headers.get("anthropic-beta")
+        if beta:
+            beta_headers["anthropic-beta"] = _append_beta(
+                beta_headers.get("anthropic-beta", ""), beta
+            )
         if opts.caching:
             apply_caching(req_body, provider, opts, cfg)
         if bc.item_body_field:
@@ -292,9 +313,8 @@ def _build_batch_body(
         else:
             item = req_body
         items.append(item)
-    if bc.request_wrapper:
-        return {bc.request_wrapper: items}
-    return {"requests": items}
+    payload = {bc.request_wrapper: items} if bc.request_wrapper else {"requests": items}
+    return payload, beta_headers
 
 
 def _build_batch_jsonl(
