@@ -56,7 +56,8 @@ from .builders import (
     yi,
     zhipu,
 )
-from .errors import APIError, MiddlewareVetoError, ValidationError
+from .errors import APIError, MiddlewareVetoError, PollTimeoutError, ValidationError
+from .job import JobFailure, JobState, JobStatus
 from .image import (
     ImageData,
     ImageRequest,
@@ -184,7 +185,12 @@ __all__ = [
     # Errors.
     "APIError",
     "MiddlewareVetoError",
+    "PollTimeoutError",
     "ValidationError",
+    # Async job poll surface (ADR-062 / ADR-063).
+    "JobState",
+    "JobStatus",
+    "JobFailure",
     # Provider identity (for use with `new_client`). The internal 37-field
     # wire/transform spec (ProviderSpec / PROVIDERS) is NOT public surface
     # (ADR-038 PMD-004); read provider metadata via the `providers` namespace —
