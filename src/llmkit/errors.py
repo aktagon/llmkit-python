@@ -39,6 +39,20 @@ class MiddlewareVetoError(Exception):
         return f"middleware veto: {self.cause!s}"
 
 
+@dataclass
+class PollTimeoutError(Exception):
+    """Raised by a blocking ``wait`` / ``wait_batch`` when the deadline backstop
+    fires (ADR-063 POLL-008). Distinguishable from a provider-reported failure
+    (which raises an APIError): a consumer's retry-on-timeout vs
+    alert-on-provider-failure is a real branch. Reachable only from ``wait`` —
+    a single ``poll`` is one round-trip and never times out."""
+
+    message: str = ""
+
+    def __str__(self) -> str:
+        return self.message or "poll: deadline exceeded"
+
+
 def parse_error(
     provider: str,
     status_code: int,

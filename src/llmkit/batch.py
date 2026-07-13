@@ -8,6 +8,13 @@ from typing import Any
 
 from .errors import APIError, ValidationError
 from .http import do_get, do_multipart_post, do_post, merge_caller_headers
+from .job import (
+    LifecycleConfig,
+    PollBody,
+    classify_by_config,
+    poll_job,
+    _Classification,
+)
 from .middleware import fire_post, fire_pre, resolve_model
 from .paths import extract_path
 from .providers.generated.batch import BatchDef, BatchInputMode, batch_config
@@ -16,6 +23,15 @@ from .providers.generated.providers import PROVIDERS, ProviderSpec, ProviderName
 from .providers.generated.request import AuthScheme, auth_scheme
 from .structs import BatchHandle
 from .types import Options, Provider, Request, Response
+
+# Batch poll cadence + deadline (ADR-062 OQ-1). The DEFAULT_POLL_DEADLINE is the
+# OVERALL wall-clock backstop for the poll LOOP — the drift this slice closes:
+# Go/TS/Python batch loops were unbounded; converge on ~10 min. It is a SEPARATE
+# concept from ``request_timeout`` (the per-HTTP-request timeout passed to each
+# do_get/do_post) — never conflate the two (S05). Per-call overridable up to the
+# provider's 24h window via the ``poll_deadline`` kwarg.
+DEFAULT_POLL_DEADLINE = 600.0
+DEFAULT_POLL_INTERVAL = 2.0
 
 
 def prompt_batch(
@@ -166,21 +182,87 @@ def submit_batch(
     return BatchHandle(id=batch_id, provider=provider, raw=raw)
 
 
-def wait_batch(
+class _BatchAdapter:
+    """Binds the batch capability to the job engine's four seams. Closes over the
+    resolved http timeout + raw flag + provider config so ``result`` can perform
+    batch's two-hop (output_file_id -> GET /content). Mirror of go batchAdapter."""
+
+    def __init__(
+        self,
+        lc: LifecycleConfig,
+        handle: BatchHandle,
+        base: str,
+        bc: BatchDef,
+        headers: dict[str, str],
+        poll_url: str,
+        request_timeout: float,
+        raw: bool,
+    ) -> None:
+        self._lc = lc
+        self._handle = handle
+        self._base = base
+        self._bc = bc
+        self._headers = headers
+        self._poll_url = poll_url
+        self._request_timeout = request_timeout
+        self._raw = raw
+
+    def config(self) -> LifecycleConfig:
+        return self._lc
+
+    def poll(self) -> PollBody:
+        resp_body = do_get(self._poll_url, self._headers, timeout=self._request_timeout)
+        try:
+            raw = json.loads(resp_body)
+        except ValueError as exc:
+            raise APIError(
+                provider=self._handle.provider.name,
+                message=f"unmarshal batch poll response: {exc}",
+                status_code=0,
+            ) from exc
+        return PollBody(raw=raw)
+
+    def classify(self, body: PollBody) -> _Classification:
+        return classify_by_config(self._lc, body)
+
+    def result(self, body: PollBody) -> list[Response]:
+        # The poll body is already decoded — hand it to _fetch_batch_results so a
+        # two-hop provider (OpenAI: output_file_id lives in this same status body)
+        # skips a redundant status GET (S1).
+        return _fetch_batch_results(
+            self._handle,
+            self._base,
+            self._bc,
+            self._headers,
+            self._request_timeout,
+            self._raw,
+            status_raw=body.raw,
+        )
+
+
+def _new_batch_adapter(
     handle: BatchHandle,
-    *,
-    request_timeout: float = 600.0,
-    poll_interval: float = 2.0,
-    raw: bool = False,
-) -> list[Response]:
-    """Block until the batch finishes and return parsed results."""
+    request_timeout: float,
+    poll_interval: float,
+    poll_deadline: float,
+    raw: bool,
+) -> _BatchAdapter:
+    """Assemble the batch adapter + its LifecycleConfig from the batch facts.
+    error_values comes from the provider's polling_error_values fact (OpenAI:
+    failed/expired/cancelled); when absent (Anthropic — failures are per-request)
+    it is empty and a stuck batch terminates at the deadline backstop rather than
+    mislabelling a FAILED terminal. Mirror of go newBatchAdapter."""
     p = handle.provider
     cfg = PROVIDERS.get(p.name)
     if cfg is None:
         raise ValidationError(field="provider", message=f"unknown: {p.name}")
     bc = batch_config(ProviderName(p.name))
     if bc is None or bc.lifecycle is None:
-        raise APIError(provider=p.name, message=f"batch polling not available for {p.name}", status_code=0)
+        raise APIError(
+            provider=p.name,
+            message=f"batch polling not available for {p.name}",
+            status_code=0,
+        )
 
     base = p.base_url or cfg.base_url
     headers = _build_auth_headers(p, cfg)
@@ -190,17 +272,46 @@ def wait_batch(
     else:
         poll_url = base + bc.lifecycle.create_endpoint + "/" + handle.id
 
-    # ADR-014 cross-process resume: a handle that remembers raw (set
-    # either by submit_batch or by a caller reconstructing the dataclass)
-    # takes effect at wait time even if raw kwarg was not passed.
-    raw = raw or handle.raw
-    while True:
-        resp_body = do_get(poll_url, headers, timeout=request_timeout)
-        status_raw = json.loads(resp_body)
-        status = extract_path(status_raw, bc.lifecycle.polling_status_path)
-        if status == bc.lifecycle.polling_done_value:
-            return _fetch_batch_results(handle, base, bc, headers, request_timeout, raw)
-        time.sleep(poll_interval)
+    lc = LifecycleConfig(
+        noun="batch",
+        status_path=bc.lifecycle.polling_status_path,
+        done_values=_non_empty(bc.lifecycle.polling_done_value),
+        error_values=tuple(bc.lifecycle.polling_error_values),
+        poll_interval=poll_interval,
+        poll_timeout=poll_deadline,
+    )
+    return _BatchAdapter(
+        lc, handle, base, bc, headers, poll_url, request_timeout, raw
+    )
+
+
+def _non_empty(*values: str) -> tuple[str, ...]:
+    """Filter out empty strings so a provider that leaves a status value unset
+    contributes an empty set. Mirror of go nonEmptyValues."""
+    return tuple(v for v in values if v)
+
+
+def wait_batch(
+    handle: BatchHandle,
+    *,
+    request_timeout: float = 600.0,
+    poll_interval: float = DEFAULT_POLL_INTERVAL,
+    poll_deadline: float = DEFAULT_POLL_DEADLINE,
+    raw: bool = False,
+) -> list[Response]:
+    """Block until the batch finishes and return parsed results. A thin
+    delegation to the shared job engine (ADR-062) — ``poll_job`` owns the loop,
+    deadline, and state machine; the batch adapter carries the batch-specific
+    seams. Signature additive-only (``poll_deadline`` is the NEW overall
+    wall-clock backstop, distinct from the per-request ``request_timeout``, S05).
+
+    ADR-014 cross-process resume: a handle that remembers raw (set by submit_batch
+    or by a caller reconstructing the dataclass) takes effect at wait time even if
+    the raw kwarg was not passed."""
+    adapter = _new_batch_adapter(
+        handle, request_timeout, poll_interval, poll_deadline, raw or handle.raw
+    )
+    return poll_job(adapter)
 
 
 def _build_batch_body(
@@ -288,16 +399,23 @@ def _fetch_batch_results(
     headers: dict[str, str],
     timeout: float,
     raw: bool = False,
+    status_raw: dict[str, Any] | None = None,
 ) -> list[Response]:
+    """Fetch and parse completed batch results. ``status_raw`` is the
+    already-decoded poll body when the caller has it (the poll engine does); the
+    two-hop result fetch reads output_file_id from it instead of re-GETting the
+    status. When None (no prior poll), the status is fetched. Mirror of go
+    fetchBatchResults."""
     from .client import _parse_response
 
     lc = bc.lifecycle
     assert lc is not None
 
     if lc.result_file_id_path:
-        poll_url = base + lc.create_endpoint + "/" + handle.id
-        status_body = do_get(poll_url, headers, timeout=timeout)
-        status_raw = json.loads(status_body)
+        if status_raw is None:
+            poll_url = base + lc.create_endpoint + "/" + handle.id
+            status_body = do_get(poll_url, headers, timeout=timeout)
+            status_raw = json.loads(status_body)
         file_id = extract_path(status_raw, lc.result_file_id_path)
         if not file_id:
             raise APIError(provider=handle.provider.name, message="batch results: empty output file ID", status_code=0)
