@@ -13,6 +13,7 @@ which makes the cross-symbol coverage clear."""
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -250,6 +251,31 @@ def test_text_batch_compose_wait_round_trips_two_prompts() -> None:
         "second prompt" in (m.get("content") or "")
         for m in items[1]["params"].get("messages", [])
     )
+
+
+def test_text_batch_carries_image_parts_into_wire_body() -> None:
+    """Batch reuses the Text.prompt request builder, so an image Part chained
+    before ``.batch`` must reach the wire body — same as ``Text.prompt`` and the
+    Go/TS/Rust batch paths (ADR-060 + ADR-012 REQ-PROP-003). Regression for the
+    Python-only drop where batch's local request builder read only ``p.text``
+    and silently discarded ``p.image``."""
+
+    png_bytes = b"\x89PNG\r\n\x1a\nFAKEIMAGEDATA"
+    png_b64 = base64.b64encode(png_bytes).decode()
+
+    with _AnthropicBatchServer(batch_id="batch_img", result_lines=[]) as server:
+        c = new_client("anthropic", "test-key")
+        c.provider.base_url = server.url
+        asyncio.run(
+            c.text.model("claude-sonnet-4-6")
+            .image("image/png", png_bytes)
+            .batch("describe this image")
+        )
+
+    # The image's base64 must appear in the submitted create body — Anthropic
+    # renders it as an image block's source.data inside the request params.
+    assert server.create_body is not None
+    assert png_b64 in json.dumps(server.create_body)
 
 
 def test_text_batch_through_typed_builder_returns_typed_batch_handle() -> None:
