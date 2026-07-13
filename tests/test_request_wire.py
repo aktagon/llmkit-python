@@ -279,6 +279,28 @@ def test_caching_batch_anthropic_matches_shared_golden() -> None:
         _assert_wire_golden("caching-batch-anthropic", server.last_body)
 
 
+def test_batch_multimodal_anthropic_matches_shared_golden() -> None:
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = anthropic("key")
+        c.provider.base_url = server.url
+        data = base64.b64decode(wi.WIRE_BATCH_MULTIMODAL_ANTHROPIC_IMAGE_BASE64)
+        asyncio.run(
+            c.text.model(wi.WIRE_BATCH_MULTIMODAL_ANTHROPIC_MODEL)
+            .image(wi.WIRE_BATCH_MULTIMODAL_ANTHROPIC_IMAGE_MIME, data)
+            .file(wi.WIRE_BATCH_MULTIMODAL_ANTHROPIC_FILE_ID)
+            .batch(wi.WIRE_BATCH_MULTIMODAL_ANTHROPIC_PROMPT)
+        )
+        assert server.last_body is not None
+        _assert_wire_golden("batch-multimodal-anthropic", server.last_body)
+        # Referencing an uploaded file id in a batch item requires the files-api
+        # beta on the batch CREATE request (batch-modality witness) — golden-locked
+        # across all four SDKs via batch-multimodal-anthropic.headers.json.
+        assert (
+            server.last_headers.get("anthropic-beta") == "files-api-2025-04-14"
+        )
+        _assert_wire_headers("batch-multimodal-anthropic", server.last_headers)
+
+
 # === M2: options fixtures, one per model family (see the Go drivers — the
 # minting reference — for WIRE-005 provenance and the live rejection matrix
 # that shaped each option chain). ===
