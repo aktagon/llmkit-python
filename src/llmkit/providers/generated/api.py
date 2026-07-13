@@ -251,6 +251,11 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         comment="Constructs a stateful Agent that drives a multi-turn tool-calling loop. Per-language naming: Go NewAgent, TS class Agent, Python class Agent, Rust struct Agent.",
     ),
     APIEntryPointDef(
+        py_func="batch",
+        py_param_type="list[Request]",
+        comment="Queues a batch and returns a BatchHandle immediately (ADR-064). A text execution mode on the *Text builder (parallel to Stream); the chain's accumulated config (System, Schema, Model, ...) applies to every prompt in the variadic. Use the handle's Wait to block for results, or Poll to drive the loop from your own orchestrator.",
+    ),
+    APIEntryPointDef(
         py_func="generate_image",
         py_param_type="ImageRequest",
         comment="Synchronous text-to-image and image-to-image. Input is ImageRequest{ Model, Prompt, Parts []Part } where Parts is a positionally-ordered sequence of llm:Part (text or image MediaRef). Prompt is a sugar field for the text-only case (XOR with Parts; runtime synthesises []Part{Text(Prompt)} when only Prompt is set). Returns ImageResponse{ Images []ImageData, Text string, Usage }.",
@@ -276,11 +281,6 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         comment="One-shot synchronous request. Returns Response with text + Usage tokens.",
     ),
     APIEntryPointDef(
-        py_func="prompt_batch",
-        py_param_type="list[Request]",
-        comment="Blocks until all responses ready. Handles async polling internally.",
-    ),
-    APIEntryPointDef(
         py_func="prompt_stream",
         py_param_type="Request",
         comment="Streaming variant. Calls a per-chunk callback as deltas arrive; returns the accumulated Response on stream close.",
@@ -294,11 +294,6 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         py_func="submit",
         py_param_type="VideoRequest",
         comment="Asynchronous text/image-to-video submit. Input is VideoRequest{ Model, Prompt, Parts []Part } where Parts is a positionally-ordered sequence of llm:Part (text prompt or image-to-video reference). Prompt is a sugar field for the prompt-only case (XOR with Parts; runtime synthesises []Part{Text(Prompt)} when only Prompt is set). Returns a VideoHandle immediately; poll it with Wait.",
-    ),
-    APIEntryPointDef(
-        py_func="submit_batch",
-        py_param_type="list[Request]",
-        comment="Returns BatchHandle immediately. Use WaitBatch to get results.",
     ),
     APIEntryPointDef(
         py_func="supports",
@@ -317,6 +312,11 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
     ),
     APIEntryPointDef(
         py_func="wait",
+        py_param_type="BatchHandle",
+        comment="Polls the provider until the batch handle reaches terminal state, then returns the ordered list of Responses. Hand-written on BatchHandle (mirrors VideoHandle.Wait / TranscriptionHandle.Wait), not a builder terminal.",
+    ),
+    APIEntryPointDef(
+        py_func="wait",
         py_param_type="TranscriptionHandle",
         comment="Polls the provider (per the handle's poll endpoint + status mapping) until the job reaches status=completed, then returns a TranscriptionResponse carrying the transcript text and timing segments. A status=error job surfaces as an error (never a silent empty success). Hand-written on TranscriptionHandle (not a *Transcription builder terminal), mirroring VideoHandle.Wait / BatchHandle.Wait.",
     ),
@@ -324,11 +324,6 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         py_func="wait",
         py_param_type="VideoHandle",
         comment="Polls the provider (per the handle's submit endpoint + wire shape) until the job reaches a terminal state (status=done), then returns a VideoResponse. Poll cadence + timeout use per-provider defaults, overridable via chain option (ADR-034 D2). A failed/expired job surfaces as an error. Hand-written on VideoHandle (not a *Video builder terminal), mirroring BatchHandle.Wait.",
-    ),
-    APIEntryPointDef(
-        py_func="wait_batch",
-        py_param_type="BatchHandle",
-        comment="Polls the provider until the batch handle reaches terminal state, then returns the ordered list of Responses.",
     ),
 )
 
