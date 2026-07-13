@@ -17,11 +17,14 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from ..batch import (
+    DEFAULT_POLL_DEADLINE,
+    DEFAULT_POLL_INTERVAL,
+    _new_batch_adapter,
     prompt_batch as legacy_prompt_batch,
     submit_batch as legacy_submit_batch,
-    wait_batch as legacy_wait_batch,
 )
 from ..errors import ValidationError
+from ..job import JobStatus, poll_engine_once, poll_job_async
 from ..providers.generated.providers import ProviderName
 from ..structs import BatchHandle as _BatchHandleData
 from ..types import Provider, Request, Response
@@ -32,20 +35,39 @@ if TYPE_CHECKING:
 
 class BatchHandle(_BatchHandleData):
     """Typed-builder BatchHandle. Inherits the ontology-generated data
-    shape (id, provider, raw) and adds a ``wait()`` method so callers
+    shape (id, provider, raw) and adds ``wait()`` + ``poll()`` methods so callers
     can chain ``handle = await text.submit_batch(...); await handle.wait()``
     without reaching for the ``wait_batch`` free function."""
 
     async def wait(
-        self, *, poll_interval: float = 2.0, request_timeout: float = 600.0
+        self,
+        *,
+        poll_interval: float = DEFAULT_POLL_INTERVAL,
+        request_timeout: float = 600.0,
+        poll_deadline: float = DEFAULT_POLL_DEADLINE,
     ) -> list[Response]:
-        return await asyncio.to_thread(
-            legacy_wait_batch,
-            self,
-            poll_interval=poll_interval,
-            request_timeout=request_timeout,
-            raw=self.raw,
+        """Block until the batch finishes. A thin loop over ``poll`` (ADR-063
+        POLL-003) via the shared engine — the between-poll wait is a cancellable
+        ``asyncio.sleep`` so ``asyncio.CancelledError`` propagates (S06)."""
+        adapter = _new_batch_adapter(
+            self, request_timeout, poll_interval, poll_deadline, self.raw
         )
+        return await poll_job_async(adapter)
+
+    async def poll(
+        self,
+        *,
+        request_timeout: float = 600.0,
+        poll_deadline: float = DEFAULT_POLL_DEADLINE,
+    ) -> JobStatus[list[Response]]:
+        """Perform exactly ONE provider round-trip and return the normalized
+        JobStatus (ADR-063 POLL-001). On a completed batch JobStatus.result carries
+        the ordered responses (two-hop fetch inline); a provider-reported failure
+        yields JobState.FAILED with the status on JobStatus.cause."""
+        adapter = _new_batch_adapter(
+            self, request_timeout, DEFAULT_POLL_INTERVAL, poll_deadline, self.raw
+        )
+        return await poll_engine_once(adapter)
 
 
 def _provider_for(b: "Text") -> Provider:

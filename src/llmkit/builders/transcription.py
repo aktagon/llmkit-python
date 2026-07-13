@@ -16,12 +16,20 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
 from typing import TYPE_CHECKING, Any
 
 from ..errors import APIError, ValidationError
 from ..http import do_get, do_post
 from ..image import Part, _image_auth_headers
+from ..job import (
+    JobStatus,
+    LifecycleConfig,
+    PollBody,
+    classify_by_config,
+    poll_engine_once,
+    poll_job_async,
+    _Classification,
+)
 from ..providers.generated.providers import PROVIDERS, ProviderName
 from ..providers.generated.transcription_gen import (
     TranscriptionDef,
@@ -43,6 +51,10 @@ if TYPE_CHECKING:
 # elapses. Mirror of go/transcription.go transcriptionPollInterval / Timeout.
 _DEFAULT_POLL_INTERVAL = 3.0
 _DEFAULT_REQUEST_TIMEOUT = 600.0
+# The OVERALL poll-loop wall-clock backstop (seconds) — distinct from the
+# per-HTTP-request _DEFAULT_REQUEST_TIMEOUT (S05). Mirror of go
+# transcriptionPollTimeout (10 min).
+_DEFAULT_POLL_DEADLINE = 600.0
 
 
 class TranscriptionHandle(_TranscriptionHandleData):
@@ -57,10 +69,33 @@ class TranscriptionHandle(_TranscriptionHandleData):
         *,
         poll_interval: float = _DEFAULT_POLL_INTERVAL,
         request_timeout: float = _DEFAULT_REQUEST_TIMEOUT,
+        poll_deadline: float = _DEFAULT_POLL_DEADLINE,
     ) -> TranscriptionResponse:
-        return await asyncio.to_thread(
-            _wait_transcription, self, poll_interval, request_timeout
+        """Poll until the transcription job reaches a terminal state, then return
+        the finished response. A thin loop over ``poll`` (ADR-063 POLL-003) via the
+        shared engine; the between-poll wait is a cancellable ``asyncio.sleep`` so
+        ``asyncio.CancelledError`` propagates (S06). ``poll_deadline`` is the NEW
+        overall wall-clock backstop, distinct from the per-request
+        ``request_timeout`` (S05)."""
+        adapter = _new_transcription_adapter(
+            self, poll_interval, request_timeout, poll_deadline
         )
+        return await poll_job_async(adapter)
+
+    async def poll(
+        self,
+        *,
+        request_timeout: float = _DEFAULT_REQUEST_TIMEOUT,
+        poll_deadline: float = _DEFAULT_POLL_DEADLINE,
+    ) -> JobStatus[TranscriptionResponse]:
+        """Perform exactly ONE provider round-trip and return the normalized
+        JobStatus (ADR-063 POLL-001). On a completed job JobStatus.result carries
+        the finished TranscriptionResponse; a failed job populates JobStatus.cause
+        (the provider error rides on cause.message, preserving the wait surface)."""
+        adapter = _new_transcription_adapter(
+            self, _DEFAULT_POLL_INTERVAL, request_timeout, poll_deadline
+        )
+        return await poll_engine_once(adapter)
 
 
 async def transcription_submit(
@@ -158,17 +193,59 @@ def _submit_transcription(
     return TranscriptionHandle(id=handle_id, provider=provider)
 
 
-def _wait_transcription(
+class _TranscriptionAdapter:
+    """Binds async transcription to the job engine's four seams. classify uses the
+    config-backed default (status vs done/error values); result decodes the
+    finished transcript per wire shape (no second hop). Mirror of go
+    transcriptionAdapter."""
+
+    def __init__(
+        self,
+        lc: LifecycleConfig,
+        headers: dict[str, str],
+        poll_url: str,
+        tc_cfg: TranscriptionDef,
+        request_timeout: float,
+    ) -> None:
+        self._lc = lc
+        self._headers = headers
+        self._poll_url = poll_url
+        self._tc_cfg = tc_cfg
+        self._request_timeout = request_timeout
+
+    def config(self) -> LifecycleConfig:
+        return self._lc
+
+    def poll(self) -> PollBody:
+        resp_body = do_get(self._poll_url, self._headers, timeout=self._request_timeout)
+        try:
+            raw = json.loads(resp_body)
+        except ValueError as exc:
+            raise APIError(
+                message=f"unmarshal transcription poll response: {exc}",
+                status_code=0,
+            ) from exc
+        return PollBody(raw=raw)
+
+    def classify(self, body: PollBody) -> _Classification:
+        return classify_by_config(self._lc, body)
+
+    def result(self, body: PollBody) -> TranscriptionResponse:
+        return _transcription_result(self._tc_cfg, body.raw)
+
+
+def _new_transcription_adapter(
     handle: TranscriptionHandle,
     poll_interval: float,
     request_timeout: float,
-) -> TranscriptionResponse:
-    """Poll the provider until the transcription job reaches a terminal state,
-    then return the finished TranscriptionResponse. A status=error job surfaces
-    as an error (never a silent empty success). The status-to-terminal mapping
-    is read from config (STT-005); only result extraction is wire-shape-keyed.
-    The handle carries the transcript id and provider config, so wait works
-    across process boundaries. Mirror of go TranscriptionHandle.Wait."""
+    poll_deadline: float,
+) -> _TranscriptionAdapter:
+    """Assemble the transcription adapter + its LifecycleConfig. The
+    status-to-terminal mapping stays config (status_path / done_status /
+    error_status, STT-005); the provider error message rides on
+    cfg.error_message_path so wait still surfaces it (S02). The handle carries the
+    transcript id and provider config, so wait works across process boundaries.
+    Mirror of go newTranscriptionAdapter."""
     p = handle.provider
     cfg = PROVIDERS.get(p.name)
     if cfg is None:
@@ -185,31 +262,16 @@ def _wait_transcription(
     headers = _image_auth_headers(p, cfg, pname)
     poll_url = base + tc_cfg.poll_endpoint.replace("{id}", handle.id)
 
-    deadline = time.monotonic() + request_timeout
-    while True:
-        if time.monotonic() > deadline:
-            raise APIError(
-                message=f"transcription poll: timed out after {request_timeout}s waiting for {handle.id}",
-                status_code=0,
-            )
-        resp_body = do_get(poll_url, headers)
-        try:
-            raw = json.loads(resp_body)
-        except ValueError as exc:
-            raise APIError(
-                message=f"unmarshal transcription poll response: {exc}",
-                status_code=0,
-            ) from exc
-        status = _lookup_handle_field(raw, tc_cfg.status_path)
-        if status == tc_cfg.done_status:
-            return _transcription_result(tc_cfg, raw)
-        if status == tc_cfg.error_status:
-            msg = _lookup_handle_field(raw, cfg.error_message_path)
-            if not msg:
-                msg = "transcription failed"
-            raise APIError(message=f"transcription failed: {msg}", status_code=0)
-        # queued, processing (or any non-terminal status): keep polling.
-        time.sleep(poll_interval)
+    lc = LifecycleConfig(
+        noun="transcription",
+        status_path=tc_cfg.status_path,
+        done_values=tuple(v for v in (tc_cfg.done_status,) if v),
+        error_values=tuple(v for v in (tc_cfg.error_status,) if v),
+        error_message_path=cfg.error_message_path,
+        poll_interval=poll_interval,
+        poll_timeout=poll_deadline,
+    )
+    return _TranscriptionAdapter(lc, headers, poll_url, tc_cfg, request_timeout)
 
 
 async def transcription_transcribe(
