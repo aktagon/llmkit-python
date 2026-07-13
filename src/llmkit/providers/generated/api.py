@@ -266,6 +266,11 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         comment="Synchronous text-to-speech. Input is SpeechRequest{ Model, Voice, Text } \u2014 Text is the single utterance to speak (single-turn; no Message/Role wrapper, ADR-049 SPK-003), Voice is the request-data selector (ADR-021) validated pre-flight against the provider's availableVoice catalogue. Returns SpeechResponse{ Audio AudioData, Usage }.",
     ),
     APIEntryPointDef(
+        py_func="poll",
+        py_param_type="BatchHandle",
+        comment="Performs exactly ONE provider round-trip and returns the normalized JobStatus{state, result?, cause?, rawStatus} (ADR-063 POLL-001) \u2014 the enterprise seam for callers driving the poll loop from their own orchestrator. Wait is a thin loop over Poll (POLL-003). The shared poll primitive: the same method is on TranscriptionHandle (POLL-007 holds it across all four SDKs).",
+    ),
+    APIEntryPointDef(
         py_func="prompt",
         py_param_type="Request",
         comment="One-shot synchronous request. Returns Response with text + Usage tokens.",
