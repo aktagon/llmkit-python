@@ -23,9 +23,9 @@ from ..batch import (
 )
 from ..errors import ValidationError
 from ..job import JobStatus, poll_engine_once, poll_job_async
-from ..providers.generated.providers import ProviderName
 from ..structs import BatchHandle as _BatchHandleData
-from ..types import Provider, Request, Response
+from ..types import Provider, Response
+from .text import _build_request
 
 if TYPE_CHECKING:
     from . import Text
@@ -85,36 +85,6 @@ def _provider_for(b: "Text") -> Provider:
     return p
 
 
-def _build_request_for(b: "Text", prompt: str) -> Request:
-    """Mirror of the TS buildRequest / Go buildRequest — builds a
-    legacy ``Request`` from chained config + a final user message.
-    Local copy here (not imported from text.py) so batch.py stays
-    self-contained for the file-by-file phase 3 layout."""
-    req = Request()
-    if b._system:
-        req.system = b._system
-    # Concatenate accumulated text Parts + final prompt.
-    parts_text: list[str] = []
-    for p in b._parts:
-        if p.text:
-            parts_text.append(p.text)
-    if prompt:
-        parts_text.append(prompt)
-    user = "".join(parts_text)
-    if b._history:
-        msgs = list(b._history)
-        if user:
-            from ..types import Message
-
-            msgs.append(Message(role="user", content=user))
-        req.messages = msgs
-    elif user:
-        req.user = user
-    if b._schema:
-        req.schema = b._schema
-    return req
-
-
 def _option_kwargs(b: "Text") -> dict:
     """Mirror of text.py's option-threading. Every chain-set field on the
     Text builder is propagated into the underlying batch call so the wire
@@ -168,7 +138,11 @@ async def text_batch(b: "Text", *prompts: str) -> BatchHandle:
     BatchHandle so ``handle.wait()`` honors it (ADR-014). The blocking one-liner
     is the explicit compose ``(await c.text.batch(...)).wait()``."""
     provider = _provider_for(b)
-    requests = [_build_request_for(b, p) for p in prompts]
+    # Reuse the prompt path's request builder so batch is byte-identical to
+    # Text.prompt (images + files + history + schema), matching the Go/TS/Rust
+    # batchInputs -> buildRequest reuse. ADR-012 REQ-PROP-003: one builder, no
+    # drift between the prompt and batch wire bodies.
+    requests = [_build_request(b, p) for p in prompts]
     legacy = await asyncio.to_thread(
         legacy_submit_batch,
         provider,
