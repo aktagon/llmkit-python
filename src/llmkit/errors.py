@@ -39,6 +39,20 @@ class MiddlewareVetoError(Exception):
         return f"middleware veto: {self.cause!s}"
 
 
+@dataclass
+class PollTimeoutError(Exception):
+    """
+
+
+
+"""
+
+    message: str = ""
+
+    def __str__(self) -> str:
+        return self.message or "poll: deadline exceeded"
+
+
 def parse_error(
     provider: str,
     status_code: int,

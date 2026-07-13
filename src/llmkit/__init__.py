@@ -56,7 +56,8 @@ from .builders import (
     yi,
     zhipu,
 )
-from .errors import APIError, MiddlewareVetoError, ValidationError
+from .errors import APIError, MiddlewareVetoError, PollTimeoutError, ValidationError
+from .job import JobFailure, JobState, JobStatus
 from .image import (
     ImageData,
     ImageRequest,
@@ -184,7 +185,12 @@ __all__ = [
     #
     "APIError",
     "MiddlewareVetoError",
+    "PollTimeoutError",
     "ValidationError",
+    #
+    "JobState",
+    "JobStatus",
+    "JobFailure",
     #
     #
     #
