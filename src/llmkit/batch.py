@@ -1,4 +1,4 @@
-"""Batch API: prompt_batch, submit_batch, wait_batch. Mirrors go/batch.go."""
+"""Batch API: submit_batch, wait_batch. Mirrors go/batch.go."""
 
 from __future__ import annotations
 
@@ -32,51 +32,6 @@ from .types import Options, Provider, Request, Response
 # provider's 24h window via the ``poll_deadline`` kwarg.
 DEFAULT_POLL_DEADLINE = 600.0
 DEFAULT_POLL_INTERVAL = 2.0
-
-
-def prompt_batch(
-    provider: Provider,
-    requests: list[Request],
-    *,
-    temperature: float | None = None,
-    top_p: float | None = None,
-    top_k: int | None = None,
-    max_tokens: int | None = None,
-    stop_sequences: list[str] | None = None,
-    seed: int | None = None,
-    frequency_penalty: float | None = None,
-    presence_penalty: float | None = None,
-    thinking_budget: int | None = None,
-    reasoning_effort: str = "",
-    caching: bool = False,
-    cache_ttl: float = 0.0,
-    middleware: list | None = None,
-    safety_settings: list | None = None,
-    request_timeout: float = 600.0,
-    poll_interval: float = 2.0,
-    raw: bool = False,
-) -> list[Response]:
-    """Submit a batch and block until all results are ready."""
-    handle = submit_batch(
-        provider,
-        requests,
-        temperature=temperature,
-        top_p=top_p,
-        top_k=top_k,
-        max_tokens=max_tokens,
-        stop_sequences=stop_sequences,
-        seed=seed,
-        frequency_penalty=frequency_penalty,
-        presence_penalty=presence_penalty,
-        thinking_budget=thinking_budget,
-        reasoning_effort=reasoning_effort,
-        caching=caching,
-        cache_ttl=cache_ttl,
-        middleware=middleware,
-        safety_settings=safety_settings,
-        request_timeout=request_timeout,
-    )
-    return wait_batch(handle, request_timeout=request_timeout, poll_interval=poll_interval, raw=raw)
 
 
 def submit_batch(
