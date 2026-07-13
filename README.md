@@ -355,7 +355,7 @@ file2 = await (
 
 <!-- llmkit:include python/examples/batch.py#batch -->
 ```python
-results = await (
+handle = await (
     c.text
     .model("claude-sonnet-4-6")
     .system("Be brief")
@@ -365,11 +365,12 @@ results = await (
         "Translate hello to German",
     )
 )
+results = await handle.wait()
 for r in results:
     print(r.text)
 ```
 
-`.batch(prompts)` is `.submit_batch(prompts)` + `handle.wait()`. Use `.submit_batch(prompts)` to get a `BatchHandle` you can persist, then call `await handle.wait()` later. Both inline (Anthropic) and file-reference (OpenAI two-hop) flows are handled internally.
+`c.text.<config>.batch(prompts)` returns a `BatchHandle` you can persist; call `await handle.wait()` to block for every result, or `await handle.poll()` for a single round-trip. The blocking one-liner is the compose `(await c.text.batch(prompts)).wait()`. Both inline (Anthropic) and file-reference (OpenAI two-hop) flows are handled internally.
 
 ### Caching
 

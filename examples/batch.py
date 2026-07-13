@@ -5,6 +5,7 @@
 
 
 
+
 """
 import asyncio
 import os
@@ -15,7 +16,7 @@ from llmkit.builders import anthropic
 async def main() -> None:
     c = anthropic(os.environ.get("ANTHROPIC_API_KEY", "sk-test"))
     #
-    results = await (
+    handle = await (
         c.text
         .model("claude-sonnet-4-6")
         .system("Be brief")
@@ -25,6 +26,7 @@ async def main() -> None:
             "Translate hello to German",
         )
     )
+    results = await handle.wait()
     for r in results:
         print(r.text)
     #
