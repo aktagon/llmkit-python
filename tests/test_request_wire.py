@@ -273,7 +273,7 @@ def test_caching_batch_anthropic_matches_shared_golden() -> None:
         c = anthropic("key")
         c.provider.base_url = server.url
         asyncio.run(
-            c.text.system(wi.WIRE_CACHING_SYSTEM).caching().submit_batch(wi.WIRE_CACHING_PROMPT)
+            c.text.system(wi.WIRE_CACHING_SYSTEM).caching().batch(wi.WIRE_CACHING_PROMPT)
         )
         assert server.last_body is not None
         _assert_wire_golden("caching-batch-anthropic", server.last_body)

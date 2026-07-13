@@ -1,14 +1,13 @@
-"""Phase 3 slice 2a — wires Text.batch + Text.submit_batch + BatchHandle.wait.
+"""Wires the ``Text.batch`` execution-mode terminal + BatchHandle.wait/poll.
 
-The codegen-emitted Text.batch / Text.submit_batch methods delegate to
-``text_batch(self, ...prompts)`` and ``text_submit_batch(self, ...)``
-(see PYTHON_BUILDER_SKIP_TERMINALS in codegen/generate.py).
+Batch is a text execution mode (parallel to ``stream``): the codegen-emitted
+``Text.batch`` method delegates to ``text_batch(self, *prompts)``. The terminal
+queues the batch and RETURNS a handle without blocking; the blocking one-liner
+is the explicit compose ``(await c.text.batch(...)).wait()``.
 
-BatchHandle is promoted to a typed-builder-owned class with a
-``wait()`` method. Mirrors the TS slice 2a approach: legacy
-``llmkit.batch.BatchHandle`` is a plain dataclass; we wrap legacy
-results into the new class so callers get ``handle.wait()`` for free,
-matching Go's ``BatchHandle.Wait`` value-receiver shape.
+BatchHandle is a typed-builder-owned class with ``wait()`` / ``poll()``
+methods. It MUST NOT be awaitable (AJU-007): a result-resolving thenable
+would silently run a minutes-long job on a stray ``await``.
 """
 
 from __future__ import annotations
@@ -20,7 +19,6 @@ from ..batch import (
     DEFAULT_POLL_DEADLINE,
     DEFAULT_POLL_INTERVAL,
     _new_batch_adapter,
-    prompt_batch as legacy_prompt_batch,
     submit_batch as legacy_submit_batch,
 )
 from ..errors import ValidationError
@@ -36,8 +34,12 @@ if TYPE_CHECKING:
 class BatchHandle(_BatchHandleData):
     """Typed-builder BatchHandle. Inherits the ontology-generated data
     shape (id, provider, raw) and adds ``wait()`` + ``poll()`` methods so callers
-    can chain ``handle = await text.submit_batch(...); await handle.wait()``
-    without reaching for the ``wait_batch`` free function."""
+    can chain ``handle = await c.text.batch(...); await handle.wait()``
+    without reaching for the ``wait_batch`` free function.
+
+    AJU-007: this handle is deliberately NOT awaitable (no ``__await__``) —
+    a result-resolving thenable would run a minutes-long job on a stray
+    ``await``. The blocking path is the explicit ``(await c.text.batch(...)).wait()``."""
 
     async def wait(
         self,
@@ -159,18 +161,12 @@ def _option_kwargs(b: "Text") -> dict:
     return kwargs
 
 
-async def text_batch(b: "Text", *prompts: str) -> list[Response]:
-    provider = _provider_for(b)
-    requests = [_build_request_for(b, p) for p in prompts]
-    return await asyncio.to_thread(
-        legacy_prompt_batch,
-        provider,
-        requests,
-        **_option_kwargs(b),
-    )
-
-
-async def text_submit_batch(b: "Text", *prompts: str) -> BatchHandle:
+async def text_batch(b: "Text", *prompts: str) -> BatchHandle:
+    """Queue a batch and return a handle without blocking. The chain's
+    accumulated config (system, max_tokens, schema, ...) applies to every prompt
+    in the variadic. The chain's ``.raw()`` opt-in is remembered on the returned
+    BatchHandle so ``handle.wait()`` honors it (ADR-014). The blocking one-liner
+    is the explicit compose ``(await c.text.batch(...)).wait()``."""
     provider = _provider_for(b)
     requests = [_build_request_for(b, p) for p in prompts]
     legacy = await asyncio.to_thread(

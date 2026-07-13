@@ -1,4 +1,4 @@
-"""Unit tests for llmkit.batch (prompt_batch / submit_batch / wait_batch)
+"""Unit tests for llmkit.batch (submit_batch / wait_batch)
 and the typed-builder Text.batch / text_batch wire. Uses a stateful
 Anthropic mock that handles the three-endpoint batch lifecycle:
 
@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 from urllib.parse import urlparse
 
-from llmkit.batch import BatchHandle, prompt_batch, submit_batch, wait_batch
+from llmkit.batch import BatchHandle, submit_batch, wait_batch
 from llmkit.builders import new_client
 from llmkit.types import Provider, Request
 
@@ -197,32 +197,17 @@ def test_wait_batch_polls_then_fetches_results_and_parses_via_result_body_path()
     assert responses[1].usage.input == 8
 
 
-def test_prompt_batch_end_to_end_submit_then_wait() -> None:
-    """prompt_batch is the convenience wrapper: submits + waits."""
-
-    results = [_anthropic_result_line("req-0", "the answer is 42")]
-    with _AnthropicBatchServer(batch_id="batch_e2e", result_lines=results) as server:
-        provider = _anthropic_provider(server.url)
-        responses = prompt_batch(
-            provider,
-            [Request(user="answer me")],
-            poll_interval=0.01,
-        )
-
-    assert len(responses) == 1
-    assert responses[0].text == "the answer is 42"
-
-
 # =============================================================================
-# Typed-builder wire (Text.batch → text_batch → legacy prompt_batch)
+# Typed-builder wire (Text.batch → text_batch → legacy submit_batch)
 # =============================================================================
 
 
-def test_text_batch_through_typed_builder_round_trips_two_prompts() -> None:
-    """Closes the Text.batch + text_batch coverage warnings. Builder's
-    system, sampling options, and per-prompt user content must all flow
-    through the wire body. ADR-012 REQ-PROP-003 forbids drift between
-    Text.prompt and Text.batch on which chain fields propagate."""
+def test_text_batch_compose_wait_round_trips_two_prompts() -> None:
+    """The blocking compose ``(await c.text.batch(...)).wait()``. Batch is a
+    Text execution mode: the chain's system, sampling options, and per-prompt
+    user content must all flow through the wire body. ADR-012 REQ-PROP-003
+    forbids drift between Text.prompt and the batch path on which chain fields
+    propagate."""
 
     results = [
         _anthropic_result_line("req-0", "alpha"),
@@ -231,15 +216,20 @@ def test_text_batch_through_typed_builder_round_trips_two_prompts() -> None:
     with _AnthropicBatchServer(batch_id="batch_typed", result_lines=results) as server:
         c = new_client("anthropic", "test-key")
         c.provider.base_url = server.url
-        responses = asyncio.run(
-            c.text.model("claude-sonnet-4-6")
-            .system("You are terse.")
-            .max_tokens(64)
-            .temperature(0.3)
-            .top_p(0.9)
-            .stop_sequences("END")
-            .batch("first prompt", "second prompt")
-        )
+
+        async def _run() -> list:
+            handle = await (
+                c.text.model("claude-sonnet-4-6")
+                .system("You are terse.")
+                .max_tokens(64)
+                .temperature(0.3)
+                .top_p(0.9)
+                .stop_sequences("END")
+                .batch("first prompt", "second prompt")
+            )
+            return await handle.wait()
+
+        responses = asyncio.run(_run())
 
     assert [r.text for r in responses] == ["alpha", "beta"]
 
@@ -262,18 +252,21 @@ def test_text_batch_through_typed_builder_round_trips_two_prompts() -> None:
     )
 
 
-def test_text_submit_batch_through_typed_builder_returns_typed_batch_handle() -> None:
-    """Text.submit_batch returns a builders.batch.BatchHandle (typed-builder
+def test_text_batch_through_typed_builder_returns_typed_batch_handle() -> None:
+    """c.text.batch returns a builders.batch.BatchHandle (typed-builder
     class) that exposes ``.wait()`` — distinct from the legacy free-function
-    BatchHandle dataclass."""
+    BatchHandle dataclass. AJU-007: the handle is NOT awaitable."""
 
     from llmkit.builders.batch import BatchHandle as TypedHandle
 
     with _AnthropicBatchServer(batch_id="batch_submit_typed", result_lines=[]) as server:
         c = new_client("anthropic", "test-key")
         c.provider.base_url = server.url
-        handle = asyncio.run(c.text.model("claude-sonnet-4-6").submit_batch("hello"))
+        handle = asyncio.run(c.text.model("claude-sonnet-4-6").batch("hello"))
 
     assert isinstance(handle, TypedHandle)
     assert handle.id == "batch_submit_typed"
     assert hasattr(handle, "wait")
+    # AJU-007: the handle must NOT be awaitable — a result-resolving thenable
+    # would run a minutes-long job on a stray ``await``.
+    assert not hasattr(handle, "__await__")
