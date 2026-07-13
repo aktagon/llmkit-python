@@ -385,7 +385,7 @@ def test_phase3_text_batch_submits_and_returns_handle() -> None:
     with _MockServer(submit_resp) as server:
         c = anthropic("k")
         c.provider.base_url = server.url
-        handle = asyncio.run(c.text.system("s").submit_batch("p1", "p2"))
+        handle = asyncio.run(c.text.system("s").batch("p1", "p2"))
         assert isinstance(handle, BatchHandle)
         assert handle.id == "msgbatch_123"
         body = server.last_body
@@ -830,9 +830,9 @@ def test_agent_sampling_hyperparameters_round_trip() -> None:
 
 
 def test_text_batch_method_exists_and_is_async() -> None:
-    """Smoke-only: .batch is the multi-prompt convenience that runs
-    submit_batch + wait under the hood. End-to-end exercise lives in
-    plan-018 integration tests (real provider batch lifecycle); here we
+    """Smoke-only: .batch is the Text execution-mode terminal that queues a
+    batch and returns a BatchHandle (parallel to .stream). End-to-end exercise
+    lives in plan-018 integration tests (real provider batch lifecycle); here we
     just confirm the method is wired and async."""
     import inspect
 

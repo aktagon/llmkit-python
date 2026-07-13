@@ -40,7 +40,7 @@ class ProviderConfig:
     headers: dict[str, str] = field(default_factory=dict)
 
 from .agent import agent_prompt, agent_reset
-from .batch import text_batch, text_submit_batch
+from .batch import text_batch
 from .image import image_generate
 from .music import music_generate
 from .speech import speech_generate
@@ -195,11 +195,8 @@ class Text:
     def stream(self, msg: str) -> TextStream:
         return text_stream(self, msg)
 
-    async def batch(self, *prompts: str) -> list[Response]:
+    async def batch(self, *prompts: str) -> BatchHandle:
         return await text_batch(self, *prompts)
-
-    async def submit_batch(self, *prompts: str) -> BatchHandle:
-        return await text_submit_batch(self, *prompts)
 
 
 # === Image — ImageGeneration builder ===
