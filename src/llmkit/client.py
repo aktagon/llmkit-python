@@ -294,6 +294,9 @@ def prompt_stream(
 
     if stream_cfg.param:
         body[stream_cfg.param] = True
+    # BUG-028: opt into a streamed usage frame where the provider requires it.
+    if stream_cfg.usage_opt_in:
+        body["stream_options"] = {"include_usage": True}
 
     json_body = json.dumps(body).encode("utf-8")
     url = _build_url(provider, cfg)

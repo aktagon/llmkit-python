@@ -8,6 +8,7 @@ carries the provider stop signal after iteration completes.
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -26,10 +27,10 @@ class _SSEServer:
 
             def do_POST(self):
                 # Drain the request body so the client doesn't see a reset
-                # while we're emitting events.
+                # while we're emitting events; keep it for body assertions.
                 length = int(self.headers.get("Content-Length", "0"))
-                if length:
-                    self.rfile.read(length)
+                raw = self.rfile.read(length) if length else b""
+                outer.captured_body = json.loads(raw) if raw else {}
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
                 self.end_headers()
@@ -38,6 +39,7 @@ class _SSEServer:
                     self.wfile.flush()
 
         self.events = events
+        self.captured_body: dict = {}
         self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
         self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
 
@@ -133,6 +135,29 @@ def test_pathless_provider_stream_finish_reason_stays_empty() -> None:
         asyncio.run(_drain(stream))
         assert stream.response is not None
         assert stream.response.finish_reason == ""
+
+
+# BUG-028: OpenAI only emits streamed usage when the request opts in with
+# stream_options.include_usage. Assert llmkit sends it for OpenAI (usage_opt_in
+# True) and NOT for an unverified compat-fleet provider (Grok).
+def test_openai_stream_sends_stream_options_include_usage() -> None:
+    events = ["data: [DONE]", ""]
+    with _SSEServer(events) as server:
+        c = openai("k")
+        c.provider.base_url = server.url
+        stream = c.text.model("m").stream("hi")
+        asyncio.run(_drain(stream))
+        assert server.captured_body.get("stream_options") == {"include_usage": True}
+
+
+def test_grok_stream_omits_stream_options() -> None:
+    events = ["data: [DONE]", ""]
+    with _SSEServer(events) as server:
+        c = grok("k")
+        c.provider.base_url = server.url
+        stream = c.text.model("m").stream("hi")
+        asyncio.run(_drain(stream))
+        assert "stream_options" not in server.captured_body
 
 
 def test_grok_stream_finish_reason() -> None:
