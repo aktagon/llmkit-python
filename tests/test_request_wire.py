@@ -344,6 +344,21 @@ def test_options_openai_gpt4o_matches_shared_golden() -> None:
         _assert_wire_golden("options-openai-gpt4o", server.last_body)
 
 
+# BUG-028: stream_options.include_usage on the OpenAI streaming request body.
+def test_stream_openai_matches_shared_golden() -> None:
+    async def _drive(c) -> None:
+        stream = c.text.model(wi.WIRE_STREAM_OPENAI_MODEL).stream(wi.WIRE_STREAM_OPENAI_PROMPT)
+        async for _ in stream:
+            pass
+
+    with _CaptureServer(_CANNED_RESP) as server:
+        c = openai("key")
+        c.provider.base_url = server.url
+        asyncio.run(_drive(c))
+        assert server.last_body is not None
+        _assert_wire_golden("stream-openai", server.last_body)
+
+
 def test_options_anthropic_matches_shared_golden() -> None:
     with _CaptureServer(_CANNED_RESP) as server:
         c = anthropic("key")
