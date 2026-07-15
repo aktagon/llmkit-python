@@ -20,6 +20,7 @@ class StreamDef:
     usage_event: str = ""
     usage_input_path: str = ""
     usage_output_path: str = ""
+    usage_opt_in: bool = False
 
 
 _STREAMS: dict[ProviderName, StreamDef] = {
@@ -35,6 +36,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.ANTHROPIC: StreamDef(
         endpoint="",
@@ -48,6 +50,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="message_delta",
         usage_input_path="usage.input_tokens",
         usage_output_path="usage.output_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.AZURE: StreamDef(
         endpoint="",
@@ -61,6 +64,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.CEREBRAS: StreamDef(
         endpoint="",
@@ -74,6 +78,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.COHERE: StreamDef(
         endpoint="",
@@ -87,6 +92,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.DEEPSEEK: StreamDef(
         endpoint="",
@@ -100,6 +106,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.DOUBAO: StreamDef(
         endpoint="",
@@ -113,6 +120,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.ERNIE: StreamDef(
         endpoint="",
@@ -126,6 +134,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.FIREWORKS: StreamDef(
         endpoint="",
@@ -139,6 +148,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.GOOGLE: StreamDef(
         endpoint="/v1beta/models/{model}:streamGenerateContent?alt=sse",
@@ -152,6 +162,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usageMetadata.promptTokenCount",
         usage_output_path="usageMetadata.candidatesTokenCount",
+        usage_opt_in=False,
     ),
     ProviderName.GROK: StreamDef(
         endpoint="",
@@ -165,6 +176,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.GROQ: StreamDef(
         endpoint="",
@@ -178,6 +190,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.JAN: StreamDef(
         endpoint="",
@@ -191,6 +204,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.LLAMACPP: StreamDef(
         endpoint="",
@@ -204,6 +218,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.LMSTUDIO: StreamDef(
         endpoint="",
@@ -217,6 +232,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.MINIMAX: StreamDef(
         endpoint="",
@@ -230,6 +246,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.MISTRAL: StreamDef(
         endpoint="",
@@ -243,6 +260,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.MOONSHOT: StreamDef(
         endpoint="",
@@ -256,6 +274,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.OLLAMA: StreamDef(
         endpoint="",
@@ -269,6 +288,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.OPENAI: StreamDef(
         endpoint="",
@@ -282,6 +302,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=True,
     ),
     ProviderName.OPENROUTER: StreamDef(
         endpoint="",
@@ -295,6 +316,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.PERPLEXITY: StreamDef(
         endpoint="",
@@ -308,6 +330,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.QWEN: StreamDef(
         endpoint="",
@@ -321,6 +344,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.SAMBANOVA: StreamDef(
         endpoint="",
@@ -334,6 +358,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.TOGETHER: StreamDef(
         endpoint="",
@@ -347,6 +372,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.VLLM: StreamDef(
         endpoint="",
@@ -360,6 +386,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.WORKERSAI: StreamDef(
         endpoint="",
@@ -373,6 +400,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.YI: StreamDef(
         endpoint="",
@@ -386,6 +414,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
     ProviderName.ZHIPU: StreamDef(
         endpoint="",
@@ -399,6 +428,7 @@ _STREAMS: dict[ProviderName, StreamDef] = {
         usage_event="",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_opt_in=False,
     ),
 }
 
