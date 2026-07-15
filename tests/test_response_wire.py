@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from llmkit.builders import new_client
-from llmkit.structs import Response
+from llmkit.structs import ImageResponse, Response
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BODY_DIR = REPO_ROOT / "codegen" / "testdata" / "wire" / "response" / "v1" / "bodies"
@@ -92,20 +92,57 @@ def _artifact_from(resp: Response) -> dict:
     }
 
 
-def _run_fixture(shape: str, provider: str) -> None:
-    body = (BODY_DIR / f"{shape}.json").read_bytes()
-    with _ResponseMockServer(body) as server:
-        c = new_client(provider, "k")
-        c.provider.base_url = server.url
-        resp = asyncio.run(c.text.prompt("ping"))
+def _image_artifact_from(resp: ImageResponse) -> dict:
+    """Projection for image responses. Content is the media discriminant
+    {kind,mimeType,byteLen,count} (RWR-004) — the four SDKs must agree the same
+    body decodes to the same images (the BUG-024 parse-drift class)."""
+    first = resp.images[0] if resp.images else None
+    u = resp.usage
+    return {
+        "usage": {
+            "input": u.input,
+            "output": u.output,
+            "cacheRead": u.cache_read,
+            "cacheWrite": u.cache_write,
+            "reasoning": u.reasoning,
+            "cost": u.cost,
+        },
+        "finishReason": resp.finish_reason,
+        "content": {
+            "kind": "image",
+            "mimeType": first.mime_type if first else "",
+            "byteLen": len(first.bytes) if first else 0,
+            "count": len(resp.images),
+        },
+        "error": None,
+    }
 
-    artifact = _artifact_from(resp)
+
+def _write_and_assert(shape: str, artifact: dict) -> None:
     out_dir = ARTIFACT_ROOT / shape
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "python.json").write_text(json.dumps(artifact, indent=2))
 
     golden = json.loads((GOLDEN_DIR / f"{shape}.json").read_text())
     assert artifact == golden
+
+
+def _run_fixture(shape: str, provider: str) -> None:
+    body = (BODY_DIR / f"{shape}.json").read_bytes()
+    with _ResponseMockServer(body) as server:
+        c = new_client(provider, "k")
+        c.provider.base_url = server.url
+        resp = asyncio.run(c.text.prompt("ping"))
+    _write_and_assert(shape, _artifact_from(resp))
+
+
+def _run_image_fixture(shape: str, provider: str, model: str) -> None:
+    body = (BODY_DIR / f"{shape}.json").read_bytes()
+    with _ResponseMockServer(body) as server:
+        c = new_client(provider, "k")
+        c.provider.base_url = server.url
+        resp = asyncio.run(c.image.model(model).generate("a cat"))
+    _write_and_assert(shape, _image_artifact_from(resp))
 
 
 def test_response_chat_openai() -> None:
@@ -118,3 +155,17 @@ def test_response_chat_anthropic() -> None:
 
 def test_response_chat_google() -> None:
     _run_fixture("chat-google", "google")
+
+
+# Phase 2: image response dispatch (BUG-024 surface) — one golden per
+# llm:imageResponseShape (GoogleParts / DataArrayB64Json / VertexPredictions).
+def test_response_image_google() -> None:
+    _run_image_fixture("image-google", "google", "gemini-3.1-flash-image-preview")
+
+
+def test_response_image_openai() -> None:
+    _run_image_fixture("image-openai", "openai", "gpt-image-1")
+
+
+def test_response_image_vertex() -> None:
+    _run_image_fixture("image-vertex", "vertex", "imagen-3.0-generate-002")
