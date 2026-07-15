@@ -23,7 +23,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from llmkit.builders import new_client
-from llmkit.structs import ImageResponse, Response
+from llmkit.image import audio_bytes
+from llmkit.structs import ImageResponse, Response, SpeechResponse, TranscriptionResponse
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BODY_DIR = REPO_ROOT / "codegen" / "testdata" / "wire" / "response" / "v1" / "bodies"
@@ -118,6 +119,51 @@ def _image_artifact_from(resp: ImageResponse) -> dict:
     }
 
 
+def _speech_artifact_from(resp: SpeechResponse) -> dict:
+    """Projection for speech (TTS) responses — the media discriminant
+    {kind,mimeType,byteLen} (the ADR-018 bytes/mime accessor contract)."""
+    u = resp.usage
+    return {
+        "usage": {
+            "input": u.input,
+            "output": u.output,
+            "cacheRead": u.cache_read,
+            "cacheWrite": u.cache_write,
+            "reasoning": u.reasoning,
+            "cost": u.cost,
+        },
+        "finishReason": "",
+        "content": {
+            "kind": "speech",
+            "mimeType": resp.audio.mime_type,
+            "byteLen": len(resp.audio.bytes),
+        },
+        "error": None,
+    }
+
+
+def _transcript_artifact_from(resp: TranscriptionResponse) -> dict:
+    """Projection for transcription (STT) responses — {kind,text,segments}."""
+    u = resp.usage
+    return {
+        "usage": {
+            "input": u.input,
+            "output": u.output,
+            "cacheRead": u.cache_read,
+            "cacheWrite": u.cache_write,
+            "reasoning": u.reasoning,
+            "cost": u.cost,
+        },
+        "finishReason": "",
+        "content": {
+            "kind": "transcript",
+            "text": resp.text,
+            "segments": len(resp.segments),
+        },
+        "error": None,
+    }
+
+
 def _write_and_assert(shape: str, artifact: dict) -> None:
     out_dir = ARTIFACT_ROOT / shape
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -145,6 +191,26 @@ def _run_image_fixture(shape: str, provider: str, model: str) -> None:
     _write_and_assert(shape, _image_artifact_from(resp))
 
 
+def _run_speech_fixture(shape: str, provider: str, model: str, voice: str) -> None:
+    body = (BODY_DIR / f"{shape}.json").read_bytes()
+    with _ResponseMockServer(body) as server:
+        c = new_client(provider, "k")
+        c.provider.base_url = server.url
+        resp = asyncio.run(c.speech.model(model).voice(voice).generate("hello"))
+    _write_and_assert(shape, _speech_artifact_from(resp))
+
+
+def _run_transcript_fixture(shape: str, provider: str, model: str) -> None:
+    body = (BODY_DIR / f"{shape}.json").read_bytes()
+    with _ResponseMockServer(body) as server:
+        c = new_client(provider, "k")
+        c.provider.base_url = server.url
+        resp = asyncio.run(
+            c.transcription.model(model).transcribe([audio_bytes("audio/wav", b"RIFF")])
+        )
+    _write_and_assert(shape, _transcript_artifact_from(resp))
+
+
 def test_response_chat_openai() -> None:
     _run_fixture("chat-openai", "openai")
 
@@ -169,3 +235,12 @@ def test_response_image_openai() -> None:
 
 def test_response_image_vertex() -> None:
     _run_image_fixture("image-vertex", "vertex", "imagen-3.0-generate-002")
+
+
+# Speech (TTS) + transcription (STT) — the media/transcript accessor contract.
+def test_response_speech_inworld() -> None:
+    _run_speech_fixture("speech-inworld", "inworld", "inworld-tts-2", "Dennis")
+
+
+def test_response_transcription_openai() -> None:
+    _run_transcript_fixture("transcription-openai", "openai", "whisper-1")
