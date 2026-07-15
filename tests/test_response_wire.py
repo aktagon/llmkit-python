@@ -37,7 +37,7 @@ class _ResponseMockServer:
     path is single-hop, so a catch-all is enough. The parser dispatches on the
     client's provider, not the URL."""
 
-    def __init__(self, body: bytes) -> None:
+    def __init__(self, body: bytes, content_type: str = "application/json") -> None:
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -46,7 +46,7 @@ class _ResponseMockServer:
 
             def _send(self) -> None:
                 self.send_response(200)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -211,6 +211,27 @@ def _run_transcript_fixture(shape: str, provider: str, model: str) -> None:
     _write_and_assert(shape, _transcript_artifact_from(resp))
 
 
+def _run_stream_fixture(shape: str, provider: str) -> None:
+    """B-stream: drive the real streaming path against the SSE mock, drain the
+    async chunk iterator, then project the trailing handle's accumulated Response
+    — the same projection as the sync chat artifact. Data-only SSE only (OpenAI /
+    Google); Anthropic event-typed stream deferred (see PROVENANCE.md)."""
+    body = (BODY_DIR / f"{shape}.sse").read_bytes()
+    with _ResponseMockServer(body, content_type="text/event-stream") as server:
+        c = new_client(provider, "k")
+        c.provider.base_url = server.url
+        stream = c.text.stream("ping")
+
+        async def _drain() -> None:
+            async for _ in stream:
+                pass
+
+        asyncio.run(_drain())
+        resp = stream.response
+    assert resp is not None
+    _write_and_assert(shape, _artifact_from(resp))
+
+
 def test_response_chat_openai() -> None:
     _run_fixture("chat-openai", "openai")
 
@@ -244,3 +265,12 @@ def test_response_speech_inworld() -> None:
 
 def test_response_transcription_openai() -> None:
     _run_transcript_fixture("transcription-openai", "openai", "whisper-1")
+
+
+# B-stream: streaming (SSE) response parity — data-only shapes.
+def test_response_stream_openai() -> None:
+    _run_stream_fixture("stream-openai", "openai")
+
+
+def test_response_stream_google() -> None:
+    _run_stream_fixture("stream-google", "google")
