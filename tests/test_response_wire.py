@@ -24,6 +24,12 @@ from pathlib import Path
 
 from llmkit.builders import new_client
 from llmkit.image import audio_bytes
+from llmkit.providers.generated.models_parsers import (
+    ParsedModelsPage,
+    parse_anthropic_models_response,
+    parse_google_models_response,
+    parse_openai_cohort_models_response,
+)
 from llmkit.structs import ImageResponse, Response, SpeechResponse, TranscriptionResponse
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -164,6 +170,31 @@ def _transcript_artifact_from(resp: TranscriptionResponse) -> dict:
     }
 
 
+def _models_artifact_from(page: ParsedModelsPage) -> dict:
+    """Projection for catalogue (/models) responses. Content is the catalogue
+    discriminant {kind:"models", count, firstId, lastId, nextCursor, first{...}}
+    (ADR-067 Fix B) — the same body must decode to the same model list +
+    pagination cursor across all five SDKs. No usage / finishReason: a catalogue
+    is not a generation response."""
+    first = page.records[0] if page.records else None
+    last = page.records[-1] if page.records else None
+    return {
+        "content": {
+            "count": len(page.records),
+            "first": {
+                "contextWindow": first.context_window if first else 0,
+                "displayName": first.display_name if first else "",
+                "maxOutput": first.max_output if first else 0,
+            },
+            "firstId": first.id if first else "",
+            "kind": "models",
+            "lastId": last.id if last else "",
+            "nextCursor": page.next_cursor,
+        },
+        "error": None,
+    }
+
+
 def _write_and_assert(shape: str, artifact: dict) -> None:
     out_dir = ARTIFACT_ROOT / shape
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -232,6 +263,13 @@ def _run_stream_fixture(shape: str, provider: str) -> None:
     _write_and_assert(shape, _artifact_from(resp))
 
 
+def _run_models_fixture(shape, parse) -> None:
+    """Catalogue parse seam is driven DIRECTLY (no HTTP path): feed the anchored
+    /models body to the handwritten parser and project the ParsedModelsPage."""
+    body = (BODY_DIR / f"{shape}.json").read_bytes()
+    _write_and_assert(shape, _models_artifact_from(parse(body)))
+
+
 def test_response_chat_openai() -> None:
     _run_fixture("chat-openai", "openai")
 
@@ -274,3 +312,17 @@ def test_response_stream_openai() -> None:
 
 def test_response_stream_google() -> None:
     _run_stream_fixture("stream-google", "google")
+
+
+# Catalogue (/models) response parity (ADR-067 Fix B) — one golden per provider
+# parse shape (anthropic cursor / openai-cohort / google cursor).
+def test_response_models_anthropic() -> None:
+    _run_models_fixture("models-anthropic", parse_anthropic_models_response)
+
+
+def test_response_models_openai() -> None:
+    _run_models_fixture("models-openai", parse_openai_cohort_models_response)
+
+
+def test_response_models_google() -> None:
+    _run_models_fixture("models-google", parse_google_models_response)
