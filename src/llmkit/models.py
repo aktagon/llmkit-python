@@ -145,7 +145,7 @@ async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
     effective = _effective_provider(scoped)
     try:
         records = await asyncio.to_thread(
-            _paginate_sync, effective, pcfg, cfg.endpoint, cfg.pagination, cfg.parser_kind
+            _paginate_sync, effective, pcfg, cfg.endpoint, cfg.cursor_param, cfg.parser_kind
         )
     except BaseException as exc:
         post = Event(
@@ -225,7 +225,7 @@ def _paginate_sync(
     provider: Provider,
     pcfg: ProviderSpec,
     endpoint: str,
-    pagination: str,
+    cursor_param: str,
     parser_kind: str,
 ) -> list[ParsedModelRecord]:
     """Synchronous pagination loop. Runs in a worker thread per
@@ -237,7 +237,7 @@ def _paginate_sync(
     all_records: list[ParsedModelRecord] = []
     while True:
         req_url = _append_cursor(
-            _build_catalogue_url(provider, pcfg, endpoint), pagination, cursor
+            _build_catalogue_url(provider, pcfg, endpoint), cursor_param, cursor
         )
         body = _http_get(req_url, headers)
         page = _dispatch_parser(parser_kind, body)
@@ -311,15 +311,14 @@ def _parse_single_record(kind: str, body: bytes) -> ParsedModelRecord:
     return page.records[0]
 
 
-def _append_cursor(raw_url: str, pagination: str, cursor: str) -> str:
-    if not cursor:
+def _append_cursor(raw_url: str, cursor_param: str, cursor: str) -> str:
+    # Splices the pagination cursor into the URL using the cursor query-param
+    # name carried by the generated CatalogueConfig (ADR-067 Fix A). An empty
+    # cursor or an empty cursor_param (PaginationNone) leaves the URL unchanged.
+    if not cursor or not cursor_param:
         return raw_url
     sep = "&" if "?" in raw_url else "?"
-    if pagination == "CursorByLastID":
-        return f"{raw_url}{sep}after_id={urllib.parse.quote(cursor, safe='')}"
-    if pagination == "CursorOpaqueToken":
-        return f"{raw_url}{sep}pageToken={urllib.parse.quote(cursor, safe='')}"
-    return raw_url
+    return f"{raw_url}{sep}{cursor_param}={urllib.parse.quote(cursor, safe='')}"
 
 
 def _build_catalogue_url(provider: Provider, pcfg: ProviderSpec, endpoint: str) -> str:
