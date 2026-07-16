@@ -75,27 +75,28 @@ ontology_capabilities: dict[str, dict[str, list[Capability]]] = {
 class CatalogueConfig:
     endpoint: str
     pagination: str
+    cursor_param: str = ""
     parser_kind: str = ""
     spec_url: str = ""
     spec_format: str = ""
 
 catalogue_by_provider: dict[str, CatalogueConfig] = {
-    "anthropic": CatalogueConfig(endpoint="/v1/models", pagination="CursorByLastID", parser_kind="ParseAnthropicModels", spec_url="https://github.com/anthropics/anthropic-sdk-typescript/blob/main/api.md", spec_format="OpenAPI3"),
-    "cerebras": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels"),
-    "deepseek": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels"),
-    "fireworks": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels"),
-    "google": CatalogueConfig(endpoint="/v1beta/models", pagination="CursorOpaqueToken", parser_kind="ParseGoogleModels", spec_url="https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta", spec_format="GoogleDiscovery"),
-    "grok": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels"),
-    "groq": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels"),
-    "jan": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels"),
-    "llamacpp": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels"),
-    "lmstudio": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels"),
-    "mistral": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels", spec_url="https://raw.githubusercontent.com/mistralai/platform-docs-public/main/openapi.yaml", spec_format="OpenAPI3"),
-    "moonshot": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels"),
-    "ollama": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels", spec_url="https://raw.githubusercontent.com/ollama/ollama/main/docs/openapi.yaml", spec_format="OpenAPI3"),
-    "openai": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels", spec_url="https://github.com/openai/openai-openapi/blob/master/openapi.yaml", spec_format="OpenAPI3"),
-    "openrouter": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels", spec_url="https://openrouter.ai/openapi.json", spec_format="OpenAPI3"),
-    "qwen": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels"),
-    "together": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels", spec_url="https://raw.githubusercontent.com/togethercomputer/openapi/main/openapi.yaml", spec_format="OpenAPI3"),
-    "vllm": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", parser_kind="ParseOpenAICohortModels"),
+    "anthropic": CatalogueConfig(endpoint="/v1/models", pagination="CursorByLastID", cursor_param="after_id", parser_kind="ParseAnthropicModels", spec_url="https://github.com/anthropics/anthropic-sdk-typescript/blob/main/api.md", spec_format="OpenAPI3"),
+    "cerebras": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
+    "deepseek": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
+    "fireworks": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
+    "google": CatalogueConfig(endpoint="/v1beta/models", pagination="CursorOpaqueToken", cursor_param="pageToken", parser_kind="ParseGoogleModels", spec_url="https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta", spec_format="GoogleDiscovery"),
+    "grok": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
+    "groq": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
+    "jan": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
+    "llamacpp": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
+    "lmstudio": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
+    "mistral": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels", spec_url="https://raw.githubusercontent.com/mistralai/platform-docs-public/main/openapi.yaml", spec_format="OpenAPI3"),
+    "moonshot": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
+    "ollama": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels", spec_url="https://raw.githubusercontent.com/ollama/ollama/main/docs/openapi.yaml", spec_format="OpenAPI3"),
+    "openai": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels", spec_url="https://github.com/openai/openai-openapi/blob/master/openapi.yaml", spec_format="OpenAPI3"),
+    "openrouter": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels", spec_url="https://openrouter.ai/openapi.json", spec_format="OpenAPI3"),
+    "qwen": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
+    "together": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels", spec_url="https://raw.githubusercontent.com/togethercomputer/openapi/main/openapi.yaml", spec_format="OpenAPI3"),
+    "vllm": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
 }
