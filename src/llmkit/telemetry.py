@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from .errors import ValidationError
 from .providers.generated.middleware import Event, MiddlewareFn, MiddlewarePhase
 from .providers.generated.telemetry import (
-    OTEL_ATTR_ERR,
+    OTEL_ATTR_ERR_TYPE,
     OTEL_ATTR_MODEL,
     OTEL_ATTR_OP,
     OTEL_ATTR_PROVIDER,
@@ -112,27 +112,39 @@ def make_telemetry_middleware(telemetry: Telemetry) -> MiddlewareFn:
 
 
 def _build_payload(event: Event) -> bytes:
-    """Classify the post-phase Event and render it to OTLP traces bytes.
+    """Production wrapper: stamp span identity + timing, then render the Event."""
+    now = str(time.time_ns())
+    return _build_payload_at(
+        event, os.urandom(16).hex(), os.urandom(8).hex(), now, now
+    )
 
-    Span identity + timing are stamped here (the pure builder takes them as
-    arguments so the parity goldens can inject fixed values).
-    """
+
+def _build_payload_at(
+    event: Event,
+    trace_id: str,
+    span_id: str,
+    start_nano: str,
+    end_nano: str,
+) -> bytes:
+    """Pure event-level payload builder: render a post-phase Event to OTLP
+    traces bytes with injected span identity + timing (the telemetry-error
+    golden drives it end-to-end). ``error.type`` is ``event.err_type``
+    verbatim — stamped structurally at the erasure seam (ADR-071), never
+    re-derived here from the message string."""
     operation_name = TELEMETRY_OPERATION_NAME.get(event.op, event.op.value)
     input_tokens = event.usage.input if event.usage is not None else 0
     output_tokens = event.usage.output if event.usage is not None else 0
-    error_type = _error_type(event)
-    now = str(time.time_ns())
     return build_otlp_traces(
         operation_name,
         event.provider,
         event.model,
         input_tokens,
         output_tokens,
-        error_type,
-        os.urandom(16).hex(),
-        os.urandom(8).hex(),
-        now,
-        now,
+        event.err_type,
+        trace_id,
+        span_id,
+        start_nano,
+        end_nano,
     )
 
 
@@ -170,16 +182,6 @@ def http_export(
     return _post
 
 
-def _error_type(event: Event) -> str:
-    """Map a post-phase Event to a stable OTEL ``error.type`` value.
-
-    The Python middleware Event carries the error as a string (not a typed
-    exception), so classification collapses to a single stable token; the exact
-    provider error code (e.g. ``rate_limit_exceeded``) is not recoverable here.
-    """
-    return "error" if event.err else ""
-
-
 def build_otlp_traces(
     operation_name: str,
     provider: str,
@@ -215,7 +217,7 @@ def build_otlp_traces(
         )
     if error_type != "":
         attributes.append(
-            {"key": OTEL_ATTR_ERR, "value": {"stringValue": error_type}}
+            {"key": OTEL_ATTR_ERR_TYPE, "value": {"stringValue": error_type}}
         )
 
     span = {
