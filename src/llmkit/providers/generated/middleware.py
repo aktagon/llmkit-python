@@ -57,6 +57,8 @@ class Event:
     #
     err: str | None = None
     #
+    err_type: str = ""
+    #
     duration: float = 0.0
 
 
