@@ -232,6 +232,38 @@ def test_models_live_partial_success_typed_provider_error() -> None:
         srv.shutdown()
 
 
+def test_scoped_list_applies_capability_filter() -> None:
+    """HANDOFF-036 A4: with_capability composes with provider(p).list() —
+    the scoped live list returns only models whose ontology-derived
+    capabilities contain the filter."""
+    body = json.dumps({
+        "object": "list",
+        "data": [
+            {"id": "gpt-4o-mini", "object": "model", "created": 1715367049, "owned_by": "system"},
+            {"id": "gpt-image-1", "object": "model", "created": 1715367049, "owned_by": "system"},
+        ],
+    }).encode()
+
+    def handler(path: str, raw_query: str, query: dict[str, list[str]], headers: dict[str, str]) -> tuple[int, bytes]:
+        return 200, body
+
+    srv, base, _calls = _start_server(handler)
+    try:
+        from llmkit import Capability
+
+        c = openai("test-key").base_url(base)
+        target = Provider(name="openai", api_key="test-key")
+        unfiltered = asyncio.run(c.models.provider(target).list())
+        assert [m.id for m in unfiltered] == ["gpt-4o-mini", "gpt-image-1"]
+
+        filtered = asyncio.run(
+            c.models.with_capability(Capability.IMAGE_GENERATION).provider(target).list()
+        )
+        assert [m.id for m in filtered] == ["gpt-image-1"]
+    finally:
+        srv.shutdown()
+
+
 def test_scoped_list_fires_client_middleware() -> None:
     """HANDOFF-036 A3: client-scoped hooks (the add_telemetry seam) observe
     catalogue calls — pre fires before the HTTP call, post fires after with
