@@ -23,7 +23,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from llmkit.builders import new_client
+from llmkit.builders.batch import BatchHandle
 from llmkit.image import audio_bytes
+from llmkit.types import Provider
 from llmkit.providers.generated.models_parsers import (
     ParsedModelsPage,
     parse_anthropic_models_response,
@@ -270,6 +272,98 @@ def _run_models_fixture(shape, parse) -> None:
     _write_and_assert(shape, _models_artifact_from(parse(body)))
 
 
+class _BatchResultsMockServer:
+    """Two-hop Anthropic batch mock (HANDOFF-036 A1): GET the batch status ->
+    processing_status "ended", then GET .../results -> the anchored JSONL
+    results file verbatim. Mirror of test_lifecycle_wire.py's mock, on the
+    Anthropic single-endpoint shape."""
+
+    def __init__(self, results: bytes) -> None:
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a, **_k):
+                pass
+
+            def _send(self, payload: bytes) -> None:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def do_GET(self):
+                if self.path.endswith("/results"):
+                    return self._send(results)
+                if self.path.startswith("/v1/messages/batches/"):
+                    return self._send(
+                        json.dumps({"id": "batch_1", "processing_status": "ended"}).encode("utf-8")
+                    )
+                self.send_response(404)
+                self.end_headers()
+
+        self._httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+
+    def __enter__(self) -> "_BatchResultsMockServer":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join(timeout=2)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_port}"
+
+
+def _batch_results_artifact(responses: list[Response]) -> dict:
+    """Projection for a completed batch's RESULTS file parse (HANDOFF-036 A1):
+    {kind:"batch_results", count, first{finishReason, text, usage}} — count is
+    the assertion: the errored line is SKIPPED and the successful subset
+    returned, never a thrown-away completed batch."""
+    first: dict = {}
+    if responses:
+        r = responses[0]
+        first = {
+            "finishReason": r.finish_reason,
+            "text": r.text,
+            "usage": {
+                "input": r.usage.input,
+                "output": r.usage.output,
+                "cacheRead": r.usage.cache_read,
+                "cacheWrite": r.usage.cache_write,
+                "reasoning": r.usage.reasoning,
+                "cost": r.usage.cost,
+            },
+        }
+    return {
+        "content": {
+            "count": len(responses),
+            "first": first,
+            "kind": "batch_results",
+        },
+        "error": None,
+    }
+
+
+def _run_batch_results_fixture(shape: str) -> None:
+    """Drive the real public path: BatchHandle.poll against the two-hop mock.
+    The parser INPUT is bodies/<shape>.jsonl (a JSONL results file — one
+    succeeded line + one errored line; Anthropic result.type=errored carries no
+    result.message). Known shared assumption (PROVENANCE.md): no SDK matches
+    results by custom_id — all assume file line order."""
+    results = (BODY_DIR / f"{shape}.jsonl").read_bytes()
+    with _BatchResultsMockServer(results) as server:
+        handle = BatchHandle(
+            id="batch_1",
+            provider=Provider(name="anthropic", api_key="test-key", base_url=server.url),
+        )
+        st = asyncio.run(handle.poll())
+    assert st.result is not None, f"expected a succeeded result, got state {st.state}"
+    _write_and_assert(shape, _batch_results_artifact(st.result))
+
+
 def test_response_chat_openai() -> None:
     _run_fixture("chat-openai", "openai")
 
@@ -312,6 +406,12 @@ def test_response_stream_openai() -> None:
 
 def test_response_stream_google() -> None:
     _run_stream_fixture("stream-google", "google")
+
+
+# Batch results parse (HANDOFF-036 A1) — errored line skipped, successful
+# subset returned.
+def test_response_batch_results_anthropic() -> None:
+    _run_batch_results_fixture("batch-results-anthropic")
 
 
 # Catalogue (/models) response parity (ADR-067 Fix B) — one golden per provider
