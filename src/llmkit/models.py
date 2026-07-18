@@ -72,13 +72,24 @@ def classify_catalogue_error(exc: BaseException) -> str:
     return "unavailable"
 
 
+def _apply_cap_filter(
+    models: list[ModelInfo], cap_filter: Capability | None
+) -> list[ModelInfo]:
+    """
+
+
+
+"""
+    if not cap_filter:
+        return list(models)
+    return [m for m in models if cap_filter in m.capabilities]
+
+
 def catalogue_filter(cap_filter: Capability | None) -> list[ModelInfo]:
     """
 
 """
-    if not cap_filter:
-        return list(compiled_in_models)
-    return [m for m in compiled_in_models if cap_filter in m.capabilities]
+    return _apply_cap_filter(compiled_in_models, cap_filter)
 
 
 def catalogue_lookup(id: str) -> ModelInfo | None:
@@ -91,6 +102,7 @@ def catalogue_lookup(id: str) -> ModelInfo | None:
 
 async def catalogue_run_live(models: "Models") -> LiveResult:
     """
+
 
 """
     from .builders.catalogue import ScopedModels as _ScopedModels
@@ -118,14 +130,14 @@ async def catalogue_run_live(models: "Models") -> LiveResult:
         else:
             all_models.extend(r)
 
-    if models.cap_filter:
-        all_models = [m for m in all_models if models.cap_filter in m.capabilities]
     all_models.sort(key=lambda m: (m.provider.name, m.id))
     return LiveResult(models=all_models, errors=errors)
 
 
 async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
     """
+
+
 
 
 """
@@ -166,7 +178,7 @@ async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
         duration=time.monotonic() - start,
     )
     fire_post(mws, post)
-    return _enrich(scoped, records)
+    return _apply_cap_filter(_enrich(scoped, records), scoped.cap_filter)
 
 
 async def catalogue_run_get(scoped: "ScopedModels", id: str) -> ModelInfo:
