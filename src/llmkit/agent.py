@@ -10,7 +10,7 @@ from typing import Any
 
 from .errors import APIError, ValidationError, parse_error
 from .http import do_post, do_sigv4_post
-from .middleware import fire_post, fire_pre, resolve_model
+from .middleware import fire_post, fire_pre, resolve_model, set_event_error
 from .paths import extract_float_path, extract_int_path, extract_path
 from .providers.generated.middleware import Event, MiddlewareOp, Usage
 from .providers.generated.providers import PROVIDERS, ProviderName
@@ -250,9 +250,11 @@ class Agent:
                     tool=tc.name,
                     args=dict(tc_args),
                     result=output,
-                    err=(str(run_err) if run_err else ""),
+                    err="",
                     duration=time.monotonic() - tool_start,
                 )
+                if run_err is not None:
+                    set_event_error(post_ev, run_err)
                 fire_post(self.opts.middleware, post_ev)
 
                 self.history.append(
@@ -278,5 +280,6 @@ class Agent:
 def _fire_post_err(mws: list, base_event: Event, exc: BaseException, start: float) -> None:
     import dataclasses
 
-    ev = dataclasses.replace(base_event, err=str(exc), duration=time.monotonic() - start)
+    ev = dataclasses.replace(base_event, duration=time.monotonic() - start)
+    set_event_error(ev, exc)
     fire_post(mws, ev)
