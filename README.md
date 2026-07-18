@@ -472,7 +472,7 @@ add_telemetry(client, Telemetry(export=lambda b: batch_processor.enqueue(b)))
 resp = await client.text.prompt("Hello")
 ```
 
-`http_export` is a synchronous, fail-open POST — convenient for low volume; for high volume hand your own callback into your OTEL SDK's batch processor. The same OTLP span shape is emitted byte-for-byte across all four SDKs. A `Telemetry` with no `export` raises a `ValidationError`.
+`http_export` is a synchronous, fail-open POST — convenient for low volume; for high volume hand your own callback into your OTEL SDK's batch processor. The same OTLP span shape is emitted byte-for-byte across all six SDKs. A `Telemetry` with no `export` raises a `ValidationError`.
 
 ## Self-hosted endpoints
 
