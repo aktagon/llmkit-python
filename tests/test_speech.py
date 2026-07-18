@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from llmkit import ValidationError
+from llmkit import APIError, ValidationError
 from llmkit.builders import new_client
 
 INWORLD_TTS2 = "inworld-tts-2"
@@ -220,3 +220,39 @@ def test_speech_generate_unsupported_provider_rejected() -> None:
     with pytest.raises(ValidationError) as exc:
         asyncio.run(c.speech.model(INWORLD_TTS2).voice("Dennis").generate("Hi"))
     assert exc.value.field == "provider"
+
+
+@pytest.mark.parametrize(
+    ("response", "want"),
+    [
+        ({"usage": {"processedCharactersCount": 8}}, "missing or empty audioContent"),
+        ({"audioContent": ""}, "missing or empty audioContent"),
+        ({"audioContent": "%%not-base64%%"}, "invalid base64"),
+    ],
+)
+def test_speech_malformed_2xx_is_decoding_error(response: dict[str, Any], want: str) -> None:
+    """HANDOFF-036 A5: a 2xx whose body does not parse to audio is a decoding
+    error naming the provider and field -- never silent empty audio."""
+    with _MockServer(response) as server:
+        c = new_client("inworld", "test-token")
+        c.provider.base_url = server.url
+        with pytest.raises(APIError) as exc:
+            asyncio.run(
+                c.speech.model(INWORLD_TTS2).voice("Dennis").generate("Hello from llmkit.")
+            )
+    assert want in exc.value.message
+    assert exc.value.provider == "inworld"
+
+
+def test_speech_non_json_2xx_is_decoding_error() -> None:
+    """HANDOFF-036 A5: a non-JSON 2xx body on the base64Envelope shape raises
+    a typed APIError instead of a raw json.JSONDecodeError."""
+    with _RawMockServer(b"<html>Bad Gateway</html>", "text/html") as server:
+        c = new_client("inworld", "test-token")
+        c.provider.base_url = server.url
+        with pytest.raises(APIError) as exc:
+            asyncio.run(
+                c.speech.model(INWORLD_TTS2).voice("Dennis").generate("Hello from llmkit.")
+            )
+    assert "not valid JSON" in exc.value.message
+    assert exc.value.provider == "inworld"
