@@ -17,17 +17,49 @@ def sign_sigv4(
     region: str,
     service: str,
     method: str = "POST",
+    content_type: str = "application/json",
+    now: _dt.datetime | None = None,
 ) -> dict[str, str]:
     """Return the SigV4 headers for a request, matching Go sigv4.go output.
 
     ``method`` defaults to POST (the chat path); the Bedrock video poll signs a
-    GET with an empty body. The canonical path is the ESCAPED path (what goes on
-    the wire) — mirroring go canonicalURI — so a percent-encoded path segment
-    (e.g. the GetAsyncInvoke ARN encoded as one segment) canonicalizes to the
-    same bytes the server receives. A no-op for the chat Converse path: its model
-    id's ':' is not escaped, so the escaped path equals the decoded path there.
+    GET with an empty body. ``content_type`` is signed ONLY when non-empty (the
+    pack contract, CR-002: sign content-type only when the request sends one) —
+    the POST default keeps the historical application/json behavior; GET callers
+    pass "" so no Content-Type is signed or sent. ``now`` is the injected
+    signing clock (the only non-deterministic input); production leaves it None.
     """
-    now = _dt.datetime.now(_dt.timezone.utc)
+    headers, _, _, _ = _sign_parts(
+        url, body, access_key, secret_key, session_token, region, service, method, content_type, now
+    )
+    return headers
+
+
+def _sign_parts(
+    url: str,
+    body: bytes,
+    access_key: str,
+    secret_key: str,
+    session_token: str,
+    region: str,
+    service: str,
+    method: str,
+    content_type: str,
+    now: _dt.datetime | None,
+) -> tuple[dict[str, str], str, str, str]:
+    """sign_sigv4 plus the intermediate signing artifacts
+    (headers, canonical_request, string_to_sign, authorization). Production
+    callers use the sign_sigv4 wrapper; the wire-conformance driver (CR-002)
+    asserts the artifacts byte-identically against the shared golden.
+
+    The canonical path is the ESCAPED path (what goes on the wire) — mirroring
+    go canonicalURI — so a percent-encoded path segment (e.g. the GetAsyncInvoke
+    ARN encoded as one segment) canonicalizes to the same bytes the server
+    receives. A no-op for the chat Converse path: its model id's ':' is not
+    escaped, so the escaped path equals the decoded path there.
+    """
+    if now is None:
+        now = _dt.datetime.now(_dt.timezone.utc)
     datestamp = now.strftime("%Y%m%d")
     amzdate = now.strftime("%Y%m%dT%H%M%SZ")
 
@@ -42,11 +74,12 @@ def sign_sigv4(
     payload_hash = _sha256_hex(body)
 
     headers: dict[str, str] = {
-        "Content-Type": "application/json",
         "Host": host,
         "X-Amz-Date": amzdate,
         "X-Amz-Content-Sha256": payload_hash,
     }
+    if content_type:
+        headers["Content-Type"] = content_type
     if session_token:
         headers["X-Amz-Security-Token"] = session_token
 
@@ -76,11 +109,12 @@ def sign_sigv4(
     signing_key = _derive_signing_key(secret_key, datestamp, region, service)
     signature = _hmac_sha256(signing_key, string_to_sign.encode("utf-8")).hex()
 
-    headers["Authorization"] = (
+    authorization = (
         f"AWS4-HMAC-SHA256 Credential={access_key}/{credential_scope}, "
         f"SignedHeaders={signed_headers}, Signature={signature}"
     )
-    return headers
+    headers["Authorization"] = authorization
+    return headers, canonical_request, string_to_sign, authorization
 
 
 def _canonical_query_string(query: str) -> str:
