@@ -18,7 +18,8 @@ from pathlib import Path
 import pytest
 
 from llmkit import openai
-from llmkit.errors import ValidationError
+from llmkit.errors import APIError, ValidationError
+from llmkit.middleware import set_event_error
 from llmkit.providers.generated.middleware import (
     Event,
     MiddlewareOp,
@@ -27,6 +28,7 @@ from llmkit.providers.generated.middleware import (
 )
 from llmkit.telemetry import (
     Telemetry,
+    _build_payload_at,
     build_otlp_traces,
     http_export,
     make_telemetry_middleware,
@@ -75,6 +77,50 @@ def test_build_otlp_traces_rejection_matches_golden() -> None:
         _END,
     )
     _assert_telemetry_golden("telemetry-rejection", payload)
+
+
+def test_telemetry_error_seam_matches_golden() -> None:
+    # ADR-071 ETY-004: the typed error travels the REAL seam — set_event_error
+    # erases it onto the post Event (err + err_type together), and the pure
+    # event-level builder renders error.type from err_type verbatim. Before
+    # ADR-071 this artifact read "error" for every failure.
+    ev = Event(
+        op=MiddlewareOp.LLM_REQUEST,
+        phase=MiddlewarePhase.POST,
+        provider="openai",
+        model="gpt-4o",
+    )
+    set_event_error(
+        ev,
+        APIError(
+            provider="openai", status_code=429, message="rate limited", retryable=True
+        ),
+    )
+    payload = _build_payload_at(ev, _TRACE_ID, _SPAN_ID, _START, _END)
+    _assert_telemetry_golden("telemetry-error", payload)
+
+
+def test_set_event_error_classifies_structurally() -> None:
+    # ADR-071 ETY-002: classification is isinstance on the typed error, never a
+    # re-parse of the message string; err keeps the exact str(exc) bytes.
+    cases = [
+        (
+            APIError(
+                provider="openai",
+                status_code=429,
+                message="rate limited",
+                retryable=True,
+            ),
+            "api_error",
+        ),
+        (ValidationError(field="model", message="model is required"), "validation_error"),
+        (RuntimeError("connection reset by peer"), "error"),
+    ]
+    for exc, expected_kind in cases:
+        ev = Event(phase=MiddlewarePhase.POST, provider="openai", model="gpt-4o")
+        set_event_error(ev, exc)
+        assert ev.err == str(exc)
+        assert ev.err_type == expected_kind
 
 
 class _CollectorServer:

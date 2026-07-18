@@ -17,7 +17,7 @@ from .http import (
     do_stream_post,
     merge_caller_headers,
 )
-from .middleware import fire_post, fire_pre, resolve_model
+from .middleware import fire_post, fire_pre, resolve_model, set_event_error
 from .paths import (
     contains_value,
     deep_merge,
@@ -943,7 +943,6 @@ def _fire_post_err(
 ) -> None:
     import dataclasses
 
-    ev = dataclasses.replace(
-        base_event, err=str(exc), duration=time.monotonic() - start
-    )
+    ev = dataclasses.replace(base_event, duration=time.monotonic() - start)
+    set_event_error(ev, exc)
     fire_post(mws, ev)

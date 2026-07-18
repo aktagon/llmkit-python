@@ -21,7 +21,7 @@ from typing import Any
 from .errors import APIError, ValidationError, parse_error
 from .http import do_post
 from .image import Part, _image_auth_headers
-from .middleware import fire_post, fire_pre
+from .middleware import fire_post, fire_pre, set_event_error
 from .providers.generated.middleware import Event, MiddlewareFn, MiddlewareOp, Usage
 from .providers.generated.music_gen import (
     MusicGenDef,
@@ -167,9 +167,9 @@ def generate_music(
     except Exception as exc:
         post_event = dataclasses.replace(
             base_event,
-            err=str(exc),
             duration=time.monotonic() - start,
         )
+        set_event_error(post_event, exc)
         fire_post(mws, post_event)
         raise
 
