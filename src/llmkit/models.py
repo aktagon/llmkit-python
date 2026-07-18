@@ -140,7 +140,10 @@ async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
         op=MiddlewareOp.MODELS_LIST,
         provider=scoped.target.name,
     )
-    fire_pre([], base_event)
+    # Client-scoped hooks (telemetry, ADR-054) observe catalogue calls too
+    # (HANDOFF-036 A3); the Swift seam is the reference.
+    mws = scoped.client._middleware
+    fire_pre(mws, base_event)
     start = time.monotonic()
     effective = _effective_provider(scoped)
     try:
@@ -154,7 +157,7 @@ async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
             err=str(exc),
             duration=time.monotonic() - start,
         )
-        fire_post([], post)
+        fire_post(mws, post)
         raise
 
     post = Event(
@@ -162,7 +165,7 @@ async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
         provider=scoped.target.name,
         duration=time.monotonic() - start,
     )
-    fire_post([], post)
+    fire_post(mws, post)
     return _enrich(scoped, records)
 
 
@@ -182,14 +185,36 @@ async def catalogue_run_get(scoped: "ScopedModels", id: str) -> ModelInfo:
         provider=scoped.target.name,
         model=id,
     )
-    fire_pre([], base_event)
+    # Client-scoped hooks observe catalogue calls (HANDOFF-036 A3).
+    mws = scoped.client._middleware
+    fire_pre(mws, base_event)
+    start = time.monotonic()
     effective = _effective_provider(scoped)
     try:
         record = await asyncio.to_thread(
             _get_sync, effective, pcfg, cfg.endpoint, id, cfg.parser_kind
         )
-    finally:
-        fire_post([], Event(op=MiddlewareOp.MODELS_LIST, provider=scoped.target.name, model=id))
+    except BaseException as exc:
+        fire_post(
+            mws,
+            Event(
+                op=MiddlewareOp.MODELS_LIST,
+                provider=scoped.target.name,
+                model=id,
+                err=str(exc),
+                duration=time.monotonic() - start,
+            ),
+        )
+        raise
+    fire_post(
+        mws,
+        Event(
+            op=MiddlewareOp.MODELS_LIST,
+            provider=scoped.target.name,
+            model=id,
+            duration=time.monotonic() - start,
+        ),
+    )
     return _enrich(scoped, [record])[0]
 
 

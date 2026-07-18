@@ -675,6 +675,10 @@ class Client:
 
     def __init__(self, name: ProviderName, api_key: str) -> None:
         self.provider = ProviderConfig(name=name, api_key=api_key)
+        # Client-scoped hook list (ADR-054): add_telemetry appends here
+        # so paths without a per-builder middleware seam (the models/
+        # catalogue runtime, HANDOFF-036 A3) still fire client hooks.
+        self._middleware: list[MiddlewareFn] = []
         self.text: Text = Text(self)
         self.image: Image = Image(self)
         self.music: Music = Music(self)
