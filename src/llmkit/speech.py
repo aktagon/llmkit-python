@@ -102,7 +102,7 @@ def generate_speech(
         ) from raw_err
 
     return _parse_speech_response(
-        sg_cfg.audio_response_encoding, model.output_mime, resp_body
+        provider.name, sg_cfg.audio_response_encoding, model.output_mime, resp_body
     )
 
 
@@ -162,21 +162,38 @@ def _build_inworld_speech_body(request: SpeechRequest) -> dict[str, Any]:
 # response body verbatim as the audio bytes; "base64Envelope" (Inworld) parses
 # a JSON envelope and base64-decodes the audio field.
 def _parse_speech_response(
-    audio_encoding: str, fallback_mime: str, resp_body: bytes
+    provider_name: str, audio_encoding: str, fallback_mime: str, resp_body: bytes
 ) -> SpeechResponse:
     if audio_encoding == "rawBody":
         return SpeechResponse(
             audio=AudioData(mime_type=fallback_mime, bytes=resp_body), usage=Usage()
         )
-    # base64Envelope: {"audioContent": "<base64>", "usage": {...}}.
-    raw = json.loads(resp_body)
-    audio = AudioData(mime_type=fallback_mime, bytes=b"")
-    content = raw.get("audioContent")
-    if isinstance(content, str) and content:
-        try:
-            audio = AudioData(
-                mime_type=fallback_mime, bytes=base64.b64decode(content)
-            )
-        except (ValueError, base64.binascii.Error):
-            pass
-    return SpeechResponse(audio=audio, usage=Usage())
+    # base64Envelope: {"audioContent": "<base64>", "usage": {...}}. A 2xx body
+    # that does not parse to audio is a decoding error (HANDOFF-036 A5) --
+    # never a silent empty clip.
+    try:
+        raw = json.loads(resp_body)
+    except json.JSONDecodeError as exc:
+        raise APIError(
+            provider=provider_name,
+            status_code=200,
+            message=f"speech response: not valid JSON: {exc}",
+        ) from exc
+    content = raw.get("audioContent") if isinstance(raw, dict) else None
+    if not isinstance(content, str) or not content:
+        raise APIError(
+            provider=provider_name,
+            status_code=200,
+            message="speech response: missing or empty audioContent",
+        )
+    try:
+        decoded = base64.b64decode(content, validate=True)
+    except (ValueError, base64.binascii.Error) as exc:
+        raise APIError(
+            provider=provider_name,
+            status_code=200,
+            message=f"speech response: invalid base64 in audioContent: {exc}",
+        ) from exc
+    return SpeechResponse(
+        audio=AudioData(mime_type=fallback_mime, bytes=decoded), usage=Usage()
+    )
