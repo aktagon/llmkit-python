@@ -8,7 +8,7 @@ from typing import Any
 
 from .errors import APIError, ValidationError, parse_error
 from .http import do_post, merge_caller_headers
-from .middleware import fire_post, fire_pre, resolve_model
+from .middleware import fire_post, fire_pre, resolve_model, set_event_error
 from .paths import extract_path
 from .providers.generated.caching import CachingDef, CachingMode, caching_config
 from .providers.generated.middleware import Event, MiddlewareOp
@@ -159,5 +159,6 @@ def _apply_resource(
 def _fire_post_err(mws: list, base_event: Event, exc: BaseException, start: float) -> None:
     import dataclasses
 
-    ev = dataclasses.replace(base_event, err=str(exc), duration=time.monotonic() - start)
+    ev = dataclasses.replace(base_event, duration=time.monotonic() - start)
+    set_event_error(ev, exc)
     fire_post(mws, ev)
