@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .errors import MiddlewareVetoError, ValidationError
+from .errors import APIError, MiddlewareVetoError, ValidationError
 from .providers.generated.middleware import Event, MiddlewareFn, MiddlewarePhase
 from .providers.generated.providers import ProviderSpec
 
@@ -37,6 +37,21 @@ def fire_post(mws: list[MiddlewareFn], base: Event) -> None:
             #
             #
             pass
+
+
+def set_event_error(ev: Event, exc: BaseException) -> None:
+    """
+
+
+"""
+    ev.err = str(exc)
+    if isinstance(exc, APIError):
+        ev.err_type = "api_error"
+    elif isinstance(exc, ValidationError):
+        ev.err_type = "validation_error"
+    else:
+        #
+        ev.err_type = "error"
 
 
 def resolve_model(provider: Provider, cfg: ProviderSpec) -> str:
