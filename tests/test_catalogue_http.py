@@ -230,3 +230,36 @@ def test_models_live_partial_success_typed_provider_error() -> None:
         assert err.kind == "unavailable"
     finally:
         srv.shutdown()
+
+
+def test_scoped_list_fires_client_middleware() -> None:
+    """HANDOFF-036 A3: client-scoped hooks (the add_telemetry seam) observe
+    catalogue calls — pre fires before the HTTP call, post fires after with
+    a duration."""
+    body = json.dumps({
+        "object": "list",
+        "data": [
+            {"id": "gpt-5", "object": "model", "created": 1715367049, "owned_by": "system"},
+        ],
+    }).encode()
+
+    def handler(path: str, raw_query: str, query: dict[str, list[str]], headers: dict[str, str]) -> tuple[int, bytes]:
+        return 200, body
+
+    srv, base, _calls = _start_server(handler)
+    try:
+        from llmkit.providers.generated.middleware import MiddlewareOp, MiddlewarePhase
+
+        events = []
+        c = openai("test-key").base_url(base)
+        c._middleware.append(lambda e: events.append(e))
+        models = asyncio.run(c.models.provider(Provider(name="openai", api_key="test-key")).list())
+        assert len(models) == 1
+        assert len(events) == 2
+        assert events[0].phase == MiddlewarePhase.PRE
+        assert events[1].phase == MiddlewarePhase.POST
+        assert events[0].op == MiddlewareOp.MODELS_LIST
+        assert events[1].op == MiddlewareOp.MODELS_LIST
+        assert events[1].duration >= 0
+    finally:
+        srv.shutdown()
