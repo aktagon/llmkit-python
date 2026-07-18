@@ -675,6 +675,10 @@ class Client:
 
     def __init__(self, name: ProviderName, api_key: str) -> None:
         self.provider = ProviderConfig(name=name, api_key=api_key)
+        #
+        #
+        #
+        self._middleware: list[MiddlewareFn] = []
         self.text: Text = Text(self)
         self.image: Image = Image(self)
         self.music: Music = Music(self)
