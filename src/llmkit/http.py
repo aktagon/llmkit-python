@@ -166,6 +166,14 @@ def do_sigv4_get(
         ) from exc
 
 
+def _escape_quotes(value: str) -> str:
+    """Mirror Go stdlib mime/multipart escapeQuotes and additionally strip
+    CR/LF: a quote or newline in a caller-controlled field name or filename
+    must not break out of the Content-Disposition part header
+    (HANDOFF-036 A2)."""
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "").replace("\n", "")
+
+
 def do_multipart_post(
     url: str,
     field_name: str,
@@ -185,7 +193,7 @@ def do_multipart_post(
     buf = io.BytesIO()
     for key, value in fields.items():
         buf.write(f"--{boundary}\r\n".encode())
-        buf.write(f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode())
+        buf.write(f'Content-Disposition: form-data; name="{_escape_quotes(key)}"\r\n\r\n'.encode())
         buf.write(value.encode("utf-8"))
         buf.write(b"\r\n")
 
@@ -193,7 +201,7 @@ def do_multipart_post(
         mime_type = detect_mime_type(filename)
     buf.write(f"--{boundary}\r\n".encode())
     buf.write(
-        f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode()
+        f'Content-Disposition: form-data; name="{_escape_quotes(field_name)}"; filename="{_escape_quotes(filename)}"\r\n'.encode()
     )
     buf.write(f"Content-Type: {mime_type}\r\n\r\n".encode())
     buf.write(data)
@@ -228,7 +236,7 @@ def do_multipart_post_multi(
     buf = io.BytesIO()
     for key, value in fields.items():
         buf.write(f"--{boundary}\r\n".encode())
-        buf.write(f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode())
+        buf.write(f'Content-Disposition: form-data; name="{_escape_quotes(key)}"\r\n\r\n'.encode())
         buf.write(value.encode("utf-8"))
         buf.write(b"\r\n")
     for field_name, filename, mime_type, data in files:
@@ -236,7 +244,7 @@ def do_multipart_post_multi(
             mime_type = detect_mime_type(filename)
         buf.write(f"--{boundary}\r\n".encode())
         buf.write(
-            f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode()
+            f'Content-Disposition: form-data; name="{_escape_quotes(field_name)}"; filename="{_escape_quotes(filename)}"\r\n'.encode()
         )
         buf.write(f"Content-Type: {mime_type}\r\n\r\n".encode())
         buf.write(data)
