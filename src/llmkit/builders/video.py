@@ -26,7 +26,7 @@ from urllib.parse import quote
 from ..errors import APIError, ValidationError
 from ..http import do_get, do_post, do_sigv4_get, do_sigv4_post
 from ..image import Part, _image_auth_headers
-from ..middleware import fire_post, fire_pre
+from ..middleware import fire_post, fire_pre, set_event_error
 from ..providers.generated.middleware import Event, MiddlewareFn, MiddlewareOp
 from ..providers.generated.providers import PROVIDERS, ProviderName
 from ..providers.generated.request import AuthScheme, auth_scheme
@@ -210,12 +210,11 @@ def _submit_video(
             headers,
         )
     except Exception as exc:
-        fire_post(
-            mws,
-            dataclasses.replace(
-                base_event, err=str(exc), duration=time.monotonic() - start
-            ),
+        post_event = dataclasses.replace(
+            base_event, duration=time.monotonic() - start
         )
+        set_event_error(post_event, exc)
+        fire_post(mws, post_event)
         raise
 
     fire_post(

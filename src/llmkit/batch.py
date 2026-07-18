@@ -15,7 +15,7 @@ from .job import (
     poll_job,
     _Classification,
 )
-from .middleware import fire_post, fire_pre, resolve_model
+from .middleware import fire_post, fire_pre, resolve_model, set_event_error
 from .paths import extract_path
 from .providers.generated.batch import BatchDef, BatchInputMode, batch_config
 from .providers.generated.middleware import Event, MiddlewareOp
@@ -100,9 +100,11 @@ def submit_batch(
 
         ev = dataclasses.replace(
             base_event,
-            err=(str(exc) if exc else ""),
+            err="",
             duration=time.monotonic() - start,
         )
+        if exc is not None:
+            set_event_error(ev, exc)
         fire_post(mws, ev)
 
     base = provider.base_url or cfg.base_url

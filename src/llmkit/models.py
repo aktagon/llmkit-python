@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 from .catalogue import catalogue_by_provider, compiled_in_models, ontology_capabilities
 from .http import merge_caller_headers
-from .middleware import fire_post, fire_pre
+from .middleware import fire_post, fire_pre, set_event_error
 from .providers.generated.middleware import Event, MiddlewareOp
 from .providers.generated.models_parsers import (
     ParsedModelRecord,
@@ -166,9 +166,9 @@ async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
         post = Event(
             op=MiddlewareOp.MODELS_LIST,
             provider=scoped.target.name,
-            err=str(exc),
             duration=time.monotonic() - start,
         )
+        set_event_error(post, exc)
         fire_post(mws, post)
         raise
 
@@ -207,16 +207,14 @@ async def catalogue_run_get(scoped: "ScopedModels", id: str) -> ModelInfo:
             _get_sync, effective, pcfg, cfg.endpoint, id, cfg.parser_kind
         )
     except BaseException as exc:
-        fire_post(
-            mws,
-            Event(
-                op=MiddlewareOp.MODELS_LIST,
-                provider=scoped.target.name,
-                model=id,
-                err=str(exc),
-                duration=time.monotonic() - start,
-            ),
+        post = Event(
+            op=MiddlewareOp.MODELS_LIST,
+            provider=scoped.target.name,
+            model=id,
+            duration=time.monotonic() - start,
         )
+        set_event_error(post, exc)
+        fire_post(mws, post)
         raise
     fire_post(
         mws,

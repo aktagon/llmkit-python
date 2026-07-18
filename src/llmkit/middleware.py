@@ -1,10 +1,10 @@
-"""Handwritten middleware helpers: fire_pre, fire_post, resolve_model."""
+"""Handwritten middleware helpers: fire_pre, fire_post, set_event_error, resolve_model."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .errors import MiddlewareVetoError, ValidationError
+from .errors import APIError, MiddlewareVetoError, ValidationError
 from .providers.generated.middleware import Event, MiddlewareFn, MiddlewarePhase
 from .providers.generated.providers import ProviderSpec
 
@@ -37,6 +37,21 @@ def fire_post(mws: list[MiddlewareFn], base: Event) -> None:
             # Post-phase hooks never veto, but we also shouldn't crash the caller.
             # Swallowing here matches Go's `_ = m(ctx, ev)` discard semantics.
             pass
+
+
+def set_event_error(ev: Event, exc: BaseException) -> None:
+    """Erase a typed error onto a post-phase Event: ``err`` (the human string)
+    and ``err_type`` (the ADR-071 structural kind the OTLP builder reads
+    verbatim). Classification happens here — the one seam where the typed
+    exception still exists — never by re-parsing the message string."""
+    ev.err = str(exc)
+    if isinstance(exc, APIError):
+        ev.err_type = "api_error"
+    elif isinstance(exc, ValidationError):
+        ev.err_type = "validation_error"
+    else:
+        # Transport, decoding, veto, unknown: the stable catch-all kind.
+        ev.err_type = "error"
 
 
 def resolve_model(provider: Provider, cfg: ProviderSpec) -> str:

@@ -16,7 +16,7 @@ TELEMETRY_CAPTURE_CONTENT_DEFAULT = False
 OTEL_ATTR_OP = "gen_ai.operation.name"  # Event.op
 OTEL_ATTR_PROVIDER = "gen_ai.system"  # Event.provider
 OTEL_ATTR_MODEL = "gen_ai.request.model"  # Event.model
-OTEL_ATTR_ERR = "error.type"  # Event.err
+OTEL_ATTR_ERR_TYPE = "error.type"  # Event.err_type
 
 # OTEL GenAI usage attribute keys (llm:otelUsageAttribute).
 OTEL_USAGE_INPUT = "gen_ai.usage.input_tokens"
