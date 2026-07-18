@@ -151,7 +151,11 @@ def do_sigv4_get(
     from .sigv4 import sign_sigv4
 
     req = urllib.request.Request(url, method="GET")
-    headers = sign_sigv4(url, b"", access_key, secret_key, session_token, region, service, method="GET")
+    # content_type="": the GET carries no body, so no Content-Type is signed or
+    # sent (pack contract, CR-002 — matches Go doSigV4Get).
+    headers = sign_sigv4(
+        url, b"", access_key, secret_key, session_token, region, service, method="GET", content_type=""
+    )
     for key, value in {**(custom_headers or {}), **headers}.items():
         req.add_header(key, value)
     try:
