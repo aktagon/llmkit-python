@@ -86,6 +86,10 @@ def add_telemetry(client, telemetry: Telemetry):
         builder = getattr(client, name, None)
         if builder is not None and hasattr(builder, "_middleware"):
             builder._middleware = [*builder._middleware, mw]
+    # Client-scoped seam: the models/catalogue runtime has no per-builder
+    # middleware chain, so it fires the client list (HANDOFF-036 A3).
+    if hasattr(client, "_middleware"):
+        client._middleware = [*client._middleware, mw]
     return client
 
 
