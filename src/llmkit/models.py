@@ -72,13 +72,24 @@ def classify_catalogue_error(exc: BaseException) -> str:
     return "unavailable"
 
 
-def catalogue_filter(cap_filter: Capability | None) -> list[ModelInfo]:
-    """Walk the compiled-in slice and return records whose capabilities list
-    contains cap_filter. Returns a fresh list so callers cannot mutate the
-    module-level constant."""
+def _apply_cap_filter(
+    models: list[ModelInfo], cap_filter: Capability | None
+) -> list[ModelInfo]:
+    """Records whose capabilities contain cap_filter; no filter when unset.
+    Always a fresh list. The single capability predicate (HANDOFF-036 A4):
+    shared by the compiled-in path (catalogue_filter), the scoped live list
+    (catalogue_run_list), and -- through it -- the live aggregate. get stays
+    an unfiltered point lookup by id."""
     if not cap_filter:
-        return list(compiled_in_models)
-    return [m for m in compiled_in_models if cap_filter in m.capabilities]
+        return list(models)
+    return [m for m in models if cap_filter in m.capabilities]
+
+
+def catalogue_filter(cap_filter: Capability | None) -> list[ModelInfo]:
+    """Walk the compiled-in slice through the shared capability predicate.
+    Returns a fresh list so callers cannot mutate the module-level
+    constant."""
+    return _apply_cap_filter(compiled_in_models, cap_filter)
 
 
 def catalogue_lookup(id: str) -> ModelInfo | None:
@@ -92,7 +103,8 @@ def catalogue_lookup(id: str) -> ModelInfo | None:
 async def catalogue_run_live(models: "Models") -> LiveResult:
     """Fan out per-provider live calls and aggregate into LiveResult.
     Errors land in result.errors as typed ProviderError per Amendment 1.
-    with_capability composes post-fetch."""
+    cap_filter is applied per-provider inside scoped.list()
+    (HANDOFF-036 A4)."""
     from .builders.catalogue import ScopedModels as _ScopedModels
 
     pc = models.client.provider
@@ -118,8 +130,6 @@ async def catalogue_run_live(models: "Models") -> LiveResult:
         else:
             all_models.extend(r)
 
-    if models.cap_filter:
-        all_models = [m for m in all_models if models.cap_filter in m.capabilities]
     all_models.sort(key=lambda m: (m.provider.name, m.id))
     return LiveResult(models=all_models, errors=errors)
 
@@ -127,8 +137,10 @@ async def catalogue_run_live(models: "Models") -> LiveResult:
 async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
     """Single-provider live HTTP. Paginates per the catalogue config until
     the parser reports no next cursor; enriches each record with the
-    ontology-derived capability list. Middleware fires once per call (not
-    per page) so observability stays at the call granularity."""
+    ontology-derived capability list and applies the chain's cap_filter
+    (with_capability composes with provider(p).list() -- HANDOFF-036 A4;
+    get stays an unfiltered point lookup by id). Middleware fires once per
+    call (not per page) so observability stays at the call granularity."""
     cfg = catalogue_by_provider.get(scoped.target.name)
     if cfg is None:
         raise ErrModelsNotSupported()
@@ -166,7 +178,7 @@ async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
         duration=time.monotonic() - start,
     )
     fire_post(mws, post)
-    return _enrich(scoped, records)
+    return _apply_cap_filter(_enrich(scoped, records), scoped.cap_filter)
 
 
 async def catalogue_run_get(scoped: "ScopedModels", id: str) -> ModelInfo:
