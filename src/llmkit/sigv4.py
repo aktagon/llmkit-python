@@ -17,6 +17,8 @@ def sign_sigv4(
     region: str,
     service: str,
     method: str = "POST",
+    content_type: str = "application/json",
+    now: _dt.datetime | None = None,
 ) -> dict[str, str]:
     """
 
@@ -27,7 +29,37 @@ def sign_sigv4(
 
 
 """
-    now = _dt.datetime.now(_dt.timezone.utc)
+    headers, _, _, _ = _sign_parts(
+        url, body, access_key, secret_key, session_token, region, service, method, content_type, now
+    )
+    return headers
+
+
+def _sign_parts(
+    url: str,
+    body: bytes,
+    access_key: str,
+    secret_key: str,
+    session_token: str,
+    region: str,
+    service: str,
+    method: str,
+    content_type: str,
+    now: _dt.datetime | None,
+) -> tuple[dict[str, str], str, str, str]:
+    """
+
+
+
+
+
+
+
+
+
+"""
+    if now is None:
+        now = _dt.datetime.now(_dt.timezone.utc)
     datestamp = now.strftime("%Y%m%d")
     amzdate = now.strftime("%Y%m%dT%H%M%SZ")
 
@@ -42,11 +74,12 @@ def sign_sigv4(
     payload_hash = _sha256_hex(body)
 
     headers: dict[str, str] = {
-        "Content-Type": "application/json",
         "Host": host,
         "X-Amz-Date": amzdate,
         "X-Amz-Content-Sha256": payload_hash,
     }
+    if content_type:
+        headers["Content-Type"] = content_type
     if session_token:
         headers["X-Amz-Security-Token"] = session_token
 
@@ -76,11 +109,12 @@ def sign_sigv4(
     signing_key = _derive_signing_key(secret_key, datestamp, region, service)
     signature = _hmac_sha256(signing_key, string_to_sign.encode("utf-8")).hex()
 
-    headers["Authorization"] = (
+    authorization = (
         f"AWS4-HMAC-SHA256 Credential={access_key}/{credential_scope}, "
         f"SignedHeaders={signed_headers}, Signature={signature}"
     )
-    return headers
+    headers["Authorization"] = authorization
+    return headers, canonical_request, string_to_sign, authorization
 
 
 def _canonical_query_string(query: str) -> str:
