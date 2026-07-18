@@ -18,7 +18,7 @@ from typing import Any
 
 from .errors import APIError, ValidationError, parse_error
 from .http import do_multipart_post_multi, do_post, merge_caller_headers
-from .middleware import fire_post, fire_pre
+from .middleware import fire_post, fire_pre, set_event_error
 from .paths import extract_int_path
 from .providers.generated.image_gen import (
     ImageGenDef,
@@ -348,9 +348,9 @@ def generate_image(
     except Exception as exc:
         post_event = dataclasses.replace(
             base_event,
-            err=str(exc),
             duration=time.monotonic() - start,
         )
+        set_event_error(post_event, exc)
         fire_post(mws, post_event)
         raise
 
