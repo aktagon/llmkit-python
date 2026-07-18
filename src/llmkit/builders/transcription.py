@@ -19,7 +19,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from ..errors import APIError, ValidationError
-from ..http import do_get, do_post
+from ..http import _escape_quotes, do_get, do_post
 from ..image import Part, _image_auth_headers
 from ..job import (
     JobStatus,
@@ -355,7 +355,7 @@ def _build_openai_transcription_multipart(
         chunks.append(
             (
                 f"--{boundary}{crlf}"
-                f'Content-Disposition: form-data; name="{name}"{crlf}{crlf}'
+                f'Content-Disposition: form-data; name="{_escape_quotes(name)}"{crlf}{crlf}'
                 f"{value}{crlf}"
             ).encode("utf-8")
         )
@@ -365,7 +365,7 @@ def _build_openai_transcription_multipart(
     chunks.append(
         (
             f"--{boundary}{crlf}"
-            f'Content-Disposition: form-data; name="file"; filename="audio.{ext}"{crlf}'
+            f'Content-Disposition: form-data; name="file"; filename="audio.{_escape_quotes(ext)}"{crlf}'
             f"Content-Type: {mime}{crlf}{crlf}"
         ).encode("utf-8")
     )
