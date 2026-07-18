@@ -86,6 +86,10 @@ def add_telemetry(client, telemetry: Telemetry):
         builder = getattr(client, name, None)
         if builder is not None and hasattr(builder, "_middleware"):
             builder._middleware = [*builder._middleware, mw]
+    #
+    #
+    if hasattr(client, "_middleware"):
+        client._middleware = [*client._middleware, mw]
     return client
 
 
