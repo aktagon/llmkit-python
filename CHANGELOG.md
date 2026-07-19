@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] — 2026-07-19
+
+### Security
+
+- Fixed: an API key could appear in error output. A malformed `base_url` for a query-parameter-authenticated provider (Google) raised an error embedding the full request URL — which carries the key as a `?key=` query parameter — including through the exception's traceback chain. The URL is now redacted and the chain severed.
+
 ## [3.0.0] — 2026-07-19
 
 ### Breaking
