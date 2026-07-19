@@ -1,6 +1,6 @@
 [project]
 name = "llmkit"
-version = "3.0.0"
+version = "3.0.1"
 description = "Unified LLM client library for Python — one API, 27 providers (Anthropic, OpenAI, Google Gemini, AWS Bedrock, Mistral, Groq, DeepSeek, +20 more), zero external dependencies (stdlib only)."
 readme = "README.md"
 requires-python = ">=3.10"
