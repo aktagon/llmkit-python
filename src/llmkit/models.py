@@ -319,9 +319,12 @@ def _http_get(url: str, headers: dict[str, str]) -> bytes:
         #
         #
         #
+        #
+        #
+        #
         raise ErrModelsUnavailable(
             f"llmkit: provider models endpoint unavailable: invalid request URL ({type(exc).__name__})"
-        ) from exc
+        ) from None
     if status >= 200 and status < 300:
         return body
     if status == 403 and _SCOPE_BODY_PATTERN.search(body.decode("utf-8", "replace")):
