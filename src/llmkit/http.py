@@ -11,6 +11,27 @@ import urllib.request
 from typing import Any, Callable
 
 
+def _new_request(
+    url: str,
+    *,
+    data: bytes | None = None,
+    method: str,
+) -> urllib.request.Request:
+    """
+
+
+
+
+
+
+
+"""
+    try:
+        return urllib.request.Request(url, data=data, method=method)
+    except ValueError:
+        raise ValueError("llmkit: malformed request URL") from None
+
+
 def merge_caller_headers(headers: dict[str, str], caller: dict[str, str]) -> None:
     """
 
@@ -35,7 +56,7 @@ def do_get(
     timeout: float = 600.0,
 ) -> bytes:
     """"""
-    req = urllib.request.Request(url, method="GET")
+    req = _new_request(url, method="GET")
     for key, value in headers.items():
         req.add_header(key, value)
     try:
@@ -84,7 +105,7 @@ def _do_post_raw(
     timeout: float,
 ) -> tuple[bytes, int, dict[str, str]]:
     """"""
-    req = urllib.request.Request(url, data=body, method="POST")
+    req = _new_request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     for key, value in headers.items():
         req.add_header(key, value)
@@ -114,7 +135,7 @@ def do_sigv4_post(
 """
     from .sigv4 import sign_sigv4
 
-    req = urllib.request.Request(url, data=body, method="POST")
+    req = _new_request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     headers = sign_sigv4(url, body, access_key, secret_key, session_token, region, service)
     for key, value in {**(custom_headers or {}), **headers}.items():
@@ -150,7 +171,7 @@ def do_sigv4_get(
 """
     from .sigv4 import sign_sigv4
 
-    req = urllib.request.Request(url, method="GET")
+    req = _new_request(url, method="GET")
     #
     #
     headers = sign_sigv4(
@@ -213,7 +234,7 @@ def do_multipart_post(
     buf.write(f"--{boundary}--\r\n".encode())
 
     body = buf.getvalue()
-    req = urllib.request.Request(url, data=body, method="POST")
+    req = _new_request(url, data=body, method="POST")
     req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
     for key, value in headers.items():
         req.add_header(key, value)
@@ -256,7 +277,7 @@ def do_multipart_post_multi(
     buf.write(f"--{boundary}--\r\n".encode())
 
     body = buf.getvalue()
-    req = urllib.request.Request(url, data=body, method="POST")
+    req = _new_request(url, data=body, method="POST")
     req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
     for key, value in headers.items():
         req.add_header(key, value)
@@ -293,7 +314,7 @@ def do_stream_post(
 
 
 """
-    req = urllib.request.Request(url, data=body, method="POST")
+    req = _new_request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     for key, value in headers.items():
         req.add_header(key, value)
