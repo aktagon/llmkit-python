@@ -296,10 +296,13 @@ def _get_sync(
 
 
 def _http_get(url: str, headers: dict[str, str]) -> bytes:
-    req = urllib.request.Request(url, method="GET")
-    for k, v in headers.items():
-        req.add_header(k, v)
     try:
+        # Request(url) itself raises ValueError for a malformed URL (e.g. an
+        # unrecognized scheme) — construct it inside the try so that case is
+        # caught below alongside urlopen's own failures.
+        req = urllib.request.Request(url, method="GET")
+        for k, v in headers.items():
+            req.add_header(k, v)
         with urllib.request.urlopen(req, timeout=30.0) as resp:
             body = resp.read()
             status = resp.status
@@ -309,6 +312,15 @@ def _http_get(url: str, headers: dict[str, str]) -> bytes:
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise ErrModelsUnavailable(
             f"llmkit: provider models endpoint unavailable: {exc}"
+        ) from exc
+    except ValueError as exc:
+        # A malformed base_url makes urlopen raise a bare ValueError whose
+        # message embeds the full URL (including the spliced API key query
+        # param) — e.g. "unknown url type: 'not-a-valid-url?key=...'". Do
+        # NOT interpolate `exc` here (unlike the branch above, which is safe
+        # because URLError/TimeoutError/OSError never carry the URL).
+        raise ErrModelsUnavailable(
+            f"llmkit: provider models endpoint unavailable: invalid request URL ({type(exc).__name__})"
         ) from exc
     if status >= 200 and status < 300:
         return body
