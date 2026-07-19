@@ -318,10 +318,13 @@ def _http_get(url: str, headers: dict[str, str]) -> bytes:
         # message embeds the full URL (including the spliced API key query
         # param) — e.g. "unknown url type: 'not-a-valid-url?key=...'". Do
         # NOT interpolate `exc` here (unlike the branch above, which is safe
-        # because URLError/TimeoutError/OSError never carry the URL).
+        # because URLError/TimeoutError/OSError never carry the URL), and
+        # chain `from None` — `from exc` would still leak the key-bearing
+        # message via __cause__ to logging.exception/traceback.format_exc/an
+        # uncaught-exception printout.
         raise ErrModelsUnavailable(
             f"llmkit: provider models endpoint unavailable: invalid request URL ({type(exc).__name__})"
-        ) from exc
+        ) from None
     if status >= 200 and status < 300:
         return body
     if status == 403 and _SCOPE_BODY_PATTERN.search(body.decode("utf-8", "replace")):

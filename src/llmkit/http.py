@@ -11,6 +11,27 @@ import urllib.request
 from typing import Any, Callable
 
 
+def _new_request(
+    url: str,
+    *,
+    data: bytes | None = None,
+    method: str,
+) -> urllib.request.Request:
+    """Construct a urllib Request, redacting a malformed URL.
+
+    ``urllib.request.Request(url, ...)`` raises a bare ``ValueError`` for a
+    malformed URL (e.g. an unrecognized scheme) whose message embeds the
+    full URL — including any spliced API key query param, e.g.
+    "unknown url type: 'not-a-valid-url?key=<secret>'". Re-raise a NEW
+    ValueError with a static message, chained ``from None`` so neither the
+    message nor the traceback cause/context carries the key-bearing URL.
+    """
+    try:
+        return urllib.request.Request(url, data=data, method=method)
+    except ValueError:
+        raise ValueError("llmkit: malformed request URL") from None
+
+
 def merge_caller_headers(headers: dict[str, str], caller: dict[str, str]) -> None:
     """ADR-052: add caller-supplied custom headers (Client.add_header) that are
     NOT already present (case-insensitively). Call AFTER the SDK-set headers
@@ -35,7 +56,7 @@ def do_get(
     timeout: float = 600.0,
 ) -> bytes:
     """GET and return the response bytes. Raises APIError on 4xx/5xx."""
-    req = urllib.request.Request(url, method="GET")
+    req = _new_request(url, method="GET")
     for key, value in headers.items():
         req.add_header(key, value)
     try:
@@ -84,7 +105,7 @@ def _do_post_raw(
     timeout: float,
 ) -> tuple[bytes, int, dict[str, str]]:
     """Raw POST: returns (body, status_code, headers) without raising on HTTP errors."""
-    req = urllib.request.Request(url, data=body, method="POST")
+    req = _new_request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     for key, value in headers.items():
         req.add_header(key, value)
@@ -114,7 +135,7 @@ def do_sigv4_post(
     Bedrock can read them)."""
     from .sigv4 import sign_sigv4
 
-    req = urllib.request.Request(url, data=body, method="POST")
+    req = _new_request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     headers = sign_sigv4(url, body, access_key, secret_key, session_token, region, service)
     for key, value in {**(custom_headers or {}), **headers}.items():
@@ -150,7 +171,7 @@ def do_sigv4_get(
     signing so they do not alter the AWS signature."""
     from .sigv4 import sign_sigv4
 
-    req = urllib.request.Request(url, method="GET")
+    req = _new_request(url, method="GET")
     # content_type="": the GET carries no body, so no Content-Type is signed or
     # sent (pack contract, CR-002 — matches Go doSigV4Get).
     headers = sign_sigv4(
@@ -213,7 +234,7 @@ def do_multipart_post(
     buf.write(f"--{boundary}--\r\n".encode())
 
     body = buf.getvalue()
-    req = urllib.request.Request(url, data=body, method="POST")
+    req = _new_request(url, data=body, method="POST")
     req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
     for key, value in headers.items():
         req.add_header(key, value)
@@ -256,7 +277,7 @@ def do_multipart_post_multi(
     buf.write(f"--{boundary}--\r\n".encode())
 
     body = buf.getvalue()
-    req = urllib.request.Request(url, data=body, method="POST")
+    req = _new_request(url, data=body, method="POST")
     req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
     for key, value in headers.items():
         req.add_header(key, value)
@@ -293,7 +314,7 @@ def do_stream_post(
     (``event_name:json.path`` form or bare ``json.path``); empty when the
     provider declares no stream-time path or no signal arrived.
     """
-    req = urllib.request.Request(url, data=body, method="POST")
+    req = _new_request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     for key, value in headers.items():
         req.add_header(key, value)
