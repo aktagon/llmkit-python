@@ -70,11 +70,18 @@ from .music import MusicRequest
 from .structs import (
     AudioData,
     ImageResponse,
+    LiveResult,
+    ModelInfo,
     MusicResponse,
+    SpeechResponse,
     ToolCall,
     ToolResult,
+    TranscriptionHandle,
     TranscriptionResponse,
     TranscriptSegment,
+    VideoData,
+    VideoHandle,
+    VideoResponse,
 )
 from .wire import (
     MissingWireVersionError,
@@ -165,11 +172,17 @@ __all__ = [
     "AudioData",
     "MusicRequest",
     "MusicResponse",
+    "SpeechResponse",
     "MediaRef",
     "Part",
     #
+    "VideoHandle",
+    "VideoResponse",
+    "VideoData",
+    #
     "audio",
     "audio_bytes",
+    "TranscriptionHandle",
     "TranscriptionResponse",
     "TranscriptSegment",
     #
@@ -196,6 +209,10 @@ __all__ = [
     #
     #
     "ProviderName",
+    #
+    #
+    "ModelInfo",
+    "LiveResult",
     #
     #
     "Capability",
