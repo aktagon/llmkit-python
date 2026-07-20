@@ -1,10 +1,10 @@
-"""ADR-052: custom request headers (Client.add_header) reach the wire.
+"""
 
-Proves a caller header set via add_header lands on the outgoing request
-alongside the provider auth header (the BUG-015 gateway case), on the text
-path AND one media path (image generation — the per-capability Provider copy
-is the BUG-007/BUG-014 drift spot). Also asserts the precedence contract: a
-caller header cannot clobber the provider auth header.
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -110,8 +110,8 @@ def test_add_header_does_not_clobber_provider_auth() -> None:
 
 
 def test_add_header_different_cased_collision_cannot_clobber_auth() -> None:
-    # HTTP header names are case-insensitive: an upper-cased caller variant
-    # must not shadow the provider's "x-api-key" (ADR-052).
+    #
+    #
     with _HeaderCapturingServer(_ANTHROPIC_RESP) as server:
         c = anthropic("test-key").base_url(server.url).add_header(
             "X-API-KEY", "attacker-override"

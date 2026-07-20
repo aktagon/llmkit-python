@@ -1,8 +1,8 @@
-"""ADR-013 unit tests for stream-time finish-reason capture.
+"""
 
-Each provider's stream parser is exercised against a canned SSE event
-sequence; the assertion is that ``TextStream.response.finish_reason``
-carries the provider stop signal after iteration completes.
+
+
+
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from llmkit.builders import anthropic, google, grok, groq, openai
 
 
 class _SSEServer:
-    """Single-shot SSE producer that emits a canned event sequence."""
+    """"""
 
     def __init__(self, events: list[str]) -> None:
         outer = self
@@ -26,8 +26,8 @@ class _SSEServer:
                 pass
 
             def do_POST(self):
-                # Drain the request body so the client doesn't see a reset
-                # while we're emitting events; keep it for body assertions.
+                #
+                #
                 length = int(self.headers.get("Content-Length", "0"))
                 raw = self.rfile.read(length) if length else b""
                 outer.captured_body = json.loads(raw) if raw else {}
@@ -102,8 +102,8 @@ def test_anthropic_stream_finish_reason() -> None:
 
 
 def test_google_stream_finish_reason_filters_unspecified() -> None:
-    # First chunk carries the unspecified sentinel — must NOT clobber the
-    # real terminal value that arrives in the next chunk.
+    #
+    #
     events = [
         'data: {"candidates":[{"content":{"parts":[{"text":"Hi"}]},"finishReason":"FINISH_REASON_UNSPECIFIED"}]}',
         "",
@@ -120,8 +120,8 @@ def test_google_stream_finish_reason_filters_unspecified() -> None:
 
 
 def test_pathless_provider_stream_finish_reason_stays_empty() -> None:
-    """Provider with no stream_finish_reason_path must leave finish_reason empty
-    even when the frame carries a value that would match other providers' paths."""
+    """
+"""
     events = [
         'data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":"stop"}]}',
         "",
@@ -137,9 +137,9 @@ def test_pathless_provider_stream_finish_reason_stays_empty() -> None:
         assert stream.response.finish_reason == ""
 
 
-# BUG-028: OpenAI only emits streamed usage when the request opts in with
-# stream_options.include_usage. Assert llmkit sends it for OpenAI (usage_opt_in
-# True) and NOT for an unverified compat-fleet provider (Grok).
+#
+#
+#
 def test_openai_stream_sends_stream_options_include_usage() -> None:
     events = ["data: [DONE]", ""]
     with _SSEServer(events) as server:

@@ -1,10 +1,10 @@
-"""Minimal text-prompt example.
+"""
 
-Run: ANTHROPIC_API_KEY=sk-... python examples/quickstart.py
 
-Note `c.text` is a field, not a method — no parens. Chain methods clone
-the prototype, so `c.text.system(...)` returns a fresh Text builder
-each call.
+
+
+
+
 """
 import asyncio
 import os

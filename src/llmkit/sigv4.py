@@ -1,4 +1,4 @@
-"""AWS Signature Version 4 signing. stdlib only (hashlib, hmac, urllib)."""
+""""""
 
 from __future__ import annotations
 
@@ -20,15 +20,15 @@ def sign_sigv4(
     content_type: str = "application/json",
     now: _dt.datetime | None = None,
 ) -> dict[str, str]:
-    """Return the SigV4 headers for a request, matching Go sigv4.go output.
-
-    ``method`` defaults to POST (the chat path); the Bedrock video poll signs a
-    GET with an empty body. ``content_type`` is signed ONLY when non-empty (the
-    pack contract, CR-002: sign content-type only when the request sends one) —
-    the POST default keeps the historical application/json behavior; GET callers
-    pass "" so no Content-Type is signed or sent. ``now`` is the injected
-    signing clock (the only non-deterministic input); production leaves it None.
     """
+
+
+
+
+
+
+
+"""
     headers, _, _, _ = _sign_parts(
         url, body, access_key, secret_key, session_token, region, service, method, content_type, now
     )
@@ -47,17 +47,17 @@ def _sign_parts(
     content_type: str,
     now: _dt.datetime | None,
 ) -> tuple[dict[str, str], str, str, str]:
-    """sign_sigv4 plus the intermediate signing artifacts
-    (headers, canonical_request, string_to_sign, authorization). Production
-    callers use the sign_sigv4 wrapper; the wire-conformance driver (CR-002)
-    asserts the artifacts byte-identically against the shared golden.
-
-    The canonical path is the ESCAPED path (what goes on the wire) — mirroring
-    go canonicalURI — so a percent-encoded path segment (e.g. the GetAsyncInvoke
-    ARN encoded as one segment) canonicalizes to the same bytes the server
-    receives. A no-op for the chat Converse path: its model id's ':' is not
-    escaped, so the escaped path equals the decoded path there.
     """
+
+
+
+
+
+
+
+
+
+"""
     if now is None:
         now = _dt.datetime.now(_dt.timezone.utc)
     datestamp = now.strftime("%Y%m%d")
@@ -67,8 +67,8 @@ def _sign_parts(
     host = parsed.hostname or ""
     if parsed.port:
         host = f"{host}:{parsed.port}"
-    # urlsplit/urlparse leaves percent-encoding intact in .path, so .path is the
-    # escaped (wire) path — exactly what AWS canonicalizes.
+    #
+    #
     path = parsed.path or "/"
 
     payload_hash = _sha256_hex(body)

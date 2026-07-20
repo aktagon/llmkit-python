@@ -1,10 +1,10 @@
-"""VULN-001 regression, main request path (http.py). A malformed URL makes
-urllib.request.Request(url, ...) raise a bare ValueError whose message
-embeds the full URL — including any spliced API key query param. Every
-http.py entry point routes request construction through `_new_request`,
-which redacts the URL and drops the chain (`from None`) so neither
-str(exc) nor a traceback print (logging.exception / exc_info=True /
-traceback.format_exc / an uncaught exception) can resurface the key."""
+"""
+
+
+
+
+
+"""
 
 from __future__ import annotations
 

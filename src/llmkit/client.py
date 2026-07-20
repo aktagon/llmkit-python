@@ -1,4 +1,4 @@
-"""Public entry points: prompt, prompt_stream, upload_file. Mirrors go/llmkit.go."""
+""""""
 
 from __future__ import annotations
 
@@ -54,29 +54,29 @@ from .types import File, Options, Provider, Request, Response
 StreamCallback = Callable[[str], None]
 
 
-# ADR-055: the opt-in chat-protocol token for OpenAI's Responses API. Pass it to
-# Text.protocol to POST the {input} envelope to /v1/responses instead of the
-# default Chat Completions {messages} envelope to /v1/chat/completions. It is a
-# plain string; c.text.protocol("responses") is equivalent.
+#
+#
+#
+#
 Responses = "responses"
 
 _PROTOCOL_WIRE_SHAPES = {Responses: "ChatResponsesOpenAI"}
 
 
 def _protocol_wire_shape(token: str) -> str:
-    """Map a public Protocol token to its llm:ChatWireShape local name. An empty
-    string means the token is unknown (an empty token is handled by the caller)."""
+    """
+"""
     return _PROTOCOL_WIRE_SHAPES.get(token, "")
 
 
 def resolve_chat_protocol(cfg, token: str):
-    """Return cfg with endpoint + chat_wire_shape overridden for a non-default
-    chat protocol opt-in (ADR-055 Text.protocol(...)). An empty token keeps the
-    default (cfg unchanged). A provider that does not expose the requested
-    protocol raises ValidationError(field="protocol") — the loud, uniform error
-    the ADR requires — before any network call. cfg is a frozen dataclass; the
-    override is a copy, so it never leaks to other calls.
     """
+
+
+
+
+
+"""
     if not token:
         return cfg
     want = _protocol_wire_shape(token)
@@ -115,7 +115,7 @@ def prompt(
     raw: bool = False,
     protocol: str = "",
 ) -> Response:
-    """Send a one-shot request to an LLM provider."""
+    """"""
     opts = Options(
         temperature=temperature,
         top_p=top_p,
@@ -143,13 +143,13 @@ def prompt(
     if cfg is None:
         raise ValidationError(field="provider", message=f"unknown: {provider.name}")
 
-    # ADR-055: opt into a non-default chat protocol (Responses). Overrides the
-    # endpoint + wire shape on this call's cfg copy; empty keeps the default.
-    # Raises ValidationError(field="protocol") before any network call.
+    #
+    #
+    #
     cfg = resolve_chat_protocol(cfg, protocol)
 
-    # Carrier-validate at the single boundary before firing middleware, so a
-    # malformed message rejects without a dangling pre-hook (PIPE-008).
+    #
+    #
     msgs = to_internal(request.messages)
 
     base_event = Event(
@@ -240,7 +240,7 @@ def prompt_stream(
     middleware: list | None = None,
     request_timeout: float = 600.0,
 ) -> Response:
-    """Streaming variant of `prompt`. Calls on_chunk(text) for each delta; returns accumulated response."""
+    """"""
     opts = Options(
         temperature=temperature,
         top_p=top_p,
@@ -272,7 +272,7 @@ def prompt_stream(
             field="provider", message=f"streaming not supported: {provider.name}"
         )
 
-    # Carrier-validate at the single boundary before firing middleware (PIPE-008).
+    #
     msgs = to_internal(request.messages)
 
     base_event = Event(
@@ -294,7 +294,7 @@ def prompt_stream(
 
     if stream_cfg.param:
         body[stream_cfg.param] = True
-    # BUG-028: opt into a streamed usage frame where the provider requires it.
+    #
     if stream_cfg.usage_opt_in:
         body["stream_options"] = {"include_usage": True}
 
@@ -343,19 +343,19 @@ def upload_file(
     middleware: list | None = None,
     request_timeout: float = 600.0,
 ) -> File:
-    """Upload a file to a provider and return a File reference.
-
-    ``source`` may be:
-
-    - ``str`` or ``os.PathLike`` — read the file from disk. The
-      multipart filename defaults to ``os.path.basename(source)``;
-      pass ``filename=`` to override.
-    - ``bytes`` (or ``bytearray``) — upload the buffer directly.
-      ``filename=`` is required.
-
-    ``mime_type`` overrides the filename-extension–based detection
-    used for the multipart Content-Type header.
     """
+
+
+
+
+
+
+
+
+
+
+
+"""
     if isinstance(source, (bytes, bytearray)):
         if not filename:
             raise ValidationError(
@@ -403,7 +403,7 @@ def upload_file(
         headers[cfg.required_header] = cfg.required_header_value
     if fu.beta_header:
         headers["anthropic-beta"] = fu.beta_header
-    # ADR-052: additive; never clobbers the SDK headers above.
+    #
     merge_caller_headers(headers, provider.headers)
 
     extra_fields: dict[str, str] = {}
@@ -468,9 +468,9 @@ def upload_file(
     return file
 
 
-# =============================================================================
-# Validation
-# =============================================================================
+#
+#
+#
 
 
 def _validate_provider(p: Provider) -> None:
@@ -481,9 +481,9 @@ def _validate_provider(p: Provider) -> None:
 def _validate_request(req: Request) -> None:
     if not req.user and not req.messages:
         raise ValidationError(field="user", message="required")
-    # The carrier invariant (ADR-026: each message holds at most one of
-    # {text content, tool calls, tool result}) is enforced at the single
-    # to_internal boundary (PIPE-008), not here.
+    #
+    #
+    #
 
 
 def _validate_options(p: Provider, opts: Options) -> None:
@@ -521,9 +521,9 @@ def _validate_options(p: Provider, opts: Options) -> None:
             )
 
 
-# =============================================================================
-# URL and request builders
-# =============================================================================
+#
+#
+#
 
 
 def _build_url(p: Provider, cfg) -> str:
@@ -562,14 +562,14 @@ def _resolve_option_key(
     param: OptionKey,
     supported: dict[OptionKey, SupportedOptionDef],
 ) -> str | None:
-    """Wire (JSON) key for ``param`` on ``(provider, model)``.
-
-    Per-model overrides (ADR-024) outrank the provider default table: an exact
-    model id wins outright, otherwise the longest-prefix glob wins, and failing
-    any override the provider's default supported-options key is used. This is
-    the single resolution path; both the max-tokens site and the general option
-    loop call it (OPT-005).
     """
+
+
+
+
+
+
+"""
     best_key: str | None = None
     best_len = -1
     for ov in model_option_overrides(pname):
@@ -601,22 +601,22 @@ def _build_request(
     *,
     msgs=None,
 ):
-    # msgs is the internal message sum (ADR-026 PIPE-007). The Text/batch/stream
-    # paths convert their public Message list via to_internal at the single
-    # carrier-validation boundary (PIPE-008); the Agent builds it directly from
-    # its trusted history, with no lossy public-Message hop. When msgs is None
-    # it is derived here (the common Text/batch call), so unit tests and batch
-    # need no change; prompt/prompt_stream pass it in so the carrier check runs
-    # before fire_pre (preserving the middleware contract).
     #
-    # Deliberate scope limit (vs the TS slice, matching the Go slice): only
-    # multi-turn history flows through the sum. The single-turn req.user path —
-    # which also carries media (req.files/req.images) — is handled directly in
-    # each message transform's elif branch, because _MsgText carries only
-    # (role, text). Unifying it is tracked as a follow-up; see CLAUDE.md.
     #
-    # tools is the Agent's tool set; Text/batch pass None, so the tool-def step
-    # is a no-op there and their wire body stays identical (ADR-026 PIPE-005).
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
     if msgs is None:
         msgs = to_internal(req.messages)
     body: dict[str, Any] = {}
@@ -671,9 +671,9 @@ def _build_request(
     if req.schema:
         _add_structured_output(body, headers, req.schema, p.name, cfg)
 
-    # Files API beta (BUG-017): a document/source:file block referencing an
-    # uploaded file requires the same anthropic-beta the upload used. Compose
-    # with any existing value (e.g. structured output) rather than overwrite.
+    #
+    #
+    #
     if req.files:
         fu = file_upload_config(ProviderName(p.name))
         if fu is not None and fu.beta_header:
@@ -690,14 +690,14 @@ def _build_request(
     if cfg.required_header:
         headers[cfg.required_header] = cfg.required_header_value
 
-    # ADR-052: additive; never clobbers the provider auth / required header above.
+    #
     merge_caller_headers(headers, p.headers)
 
-    # ADR-055 Responses wire-shape body fixup: the Responses API names the
-    # output-token cap max_output_tokens and rejects max_tokens with a 400
-    # (live-verified 2026-07-02). Every other body field is shared with Chat
-    # Completions, so this single rename is the only option-key divergence.
-    # Behavior held by responses-openai.json, not the ontology.
+    #
+    #
+    #
+    #
+    #
     if cfg.chat_wire_shape == "ChatResponsesOpenAI" and "max_tokens" in body:
         body["max_output_tokens"] = body.pop("max_tokens")
 
@@ -707,17 +707,17 @@ def _build_request(
 def _add_options(
     root: dict[str, Any], body: dict[str, Any], opts: Options, provider_name: str, model: str
 ) -> None:
-    """Apply generation parameters to body, honouring dotted JSON keys + extra_fields.
-
-    JSON keys may be dotted (e.g. "thinking.budget_tokens") for providers that
-    require nested objects. Each option's per-provider OptionOverrideDef may
-    also carry extra_fields_json — sibling JSON merged into the same parent
-    path (e.g. {"type":"enabled"} alongside Anthropic's thinking.budget_tokens)
-    — and root_extra_fields_json (ADR-029 THK-003) — JSON deep-merged at the
-    request body ROOT (root differs from body for wraps_options_in providers),
-    for options that imply a sibling object elsewhere in the body (e.g.
-    {"thinking":{"type":"adaptive"}} alongside Anthropic's output_config.effort).
     """
+
+
+
+
+
+
+
+
+
+"""
     pname = ProviderName(provider_name)
     supported = {o.key: o for o in supported_options(pname)}
     overrides = {ov.key: ov for ov in option_overrides(pname)}
@@ -764,11 +764,11 @@ def _add_options(
 
 
 def _append_beta(existing: str, add: str) -> str:
-    """Compose a comma-separated anthropic-beta header value.
-
-    Multiple features that each require a beta (structured output, Files API)
-    coexist instead of clobbering one another. Idempotent on repeats.
     """
+
+
+
+"""
     if not add:
         return existing
     if not existing:
@@ -798,9 +798,9 @@ def _add_structured_output(
     if so.beta_header:
         headers["anthropic-beta"] = so.beta_header
 
-    # SiblingOfFormat placement (Google): the format field carries the literal
-    # format type (responseMimeType: "application/json") and the schema is an
-    # independent sibling at schema_path (responseSchema), not nested in a wrapper.
+    #
+    #
+    #
     if so.schema_placement == "SiblingOfFormat":
         set_nested_field(body, so.format_field, so.format_type)
         set_nested_field(body, so.schema_path, parsed_schema)
@@ -827,9 +827,9 @@ def _add_structured_output(
         set_nested_field(body, so.format_field, format_obj)
 
 
-# =============================================================================
-# Response parsing
-# =============================================================================
+#
+#
+#
 
 
 def _parse_response(provider: str, body: bytes, chat_wire_shape: str = "") -> Response:
@@ -842,9 +842,9 @@ def _parse_response(provider: str, body: bytes, chat_wire_shape: str = "") -> Re
             status_code=0,
         ) from exc
 
-    # ADR-055: chat_wire_shape is the EFFECTIVE wire shape for this request (after
-    # Text.protocol(...) resolution). Only ChatResponsesOpenAI diverges (the
-    # output[] envelope); every other value uses the declared response paths.
+    #
+    #
+    #
     if chat_wire_shape == "ChatResponsesOpenAI":
         return _parse_responses_envelope(raw)
 
@@ -887,12 +887,12 @@ def _parse_response(provider: str, body: bytes, chat_wire_shape: str = "") -> Re
 
 
 def _parse_responses_envelope(raw: dict[str, Any]) -> Response:
-    """Extract text + usage from OpenAI's Responses reply (ADR-055). Unlike Chat
-    Completions (choices[].message.content), the reply is an output[] array whose
-    message item carries content[] blocks of type "output_text"; usage is
-    input_tokens/output_tokens with cached + reasoning sub-details. Live-anchored
-    2026-07-02. Hand-coded per wire shape, symmetric with transform_responses_input.
     """
+
+
+
+
+"""
     return Response(
         text=_extract_responses_text(raw),
         usage=Usage(
@@ -908,9 +908,9 @@ def _parse_responses_envelope(raw: dict[str, Any]) -> Response:
 
 
 def _extract_responses_text(raw: dict[str, Any]) -> str:
-    """Walk the Responses output[] array for the first message item and return its
-    first output_text block. Iterating (rather than a fixed output[0].content[0]
-    path) tolerates a leading reasoning item."""
+    """
+
+"""
     output = raw.get("output")
     if not isinstance(output, list):
         return ""

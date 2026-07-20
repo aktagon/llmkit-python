@@ -1,12 +1,12 @@
-"""Music generation tests (ADR-033) — mock HTTP server, no live API calls.
+"""
 
-Mirror of test_image.py. Covers all three wire shapes:
-  - Vertex Lyria 2  (MusicPredict)       — base64 predictions[], instrumental
-  - Google Lyria 3  (MusicGenerateContent) — base64 inlineData, lyrics inline
-  - MiniMax 2.6     (MusicMinimax)        — hex data.audio, absolute URL
 
-MiniMax's gen_endpoint is an absolute https URL, so its end-to-end test
-monkeypatches llmkit.music.do_post rather than overriding base_url.
+
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -30,12 +30,12 @@ GOOGLE_LYRIA_PRO = "lyria-3-pro-preview"
 GOOGLE_LYRIA_CLIP = "lyria-3-clip-preview"
 MINIMAX_MUSIC = "music-2.6"
 
-# Distinct bytes so round-trip asserts are real (RIFF-ish header).
+#
 FAKE_AUDIO = bytes([0x52, 0x49, 0x46, 0x46, 0x01, 0x02, 0x03])
 
 
 class _MockServer:
-    """Single-shot HTTP server that captures one request and serves a canned response."""
+    """"""
 
     def __init__(self, response_body: dict[str, Any]):
         self.response_body = response_body
@@ -85,7 +85,7 @@ class _MockServer:
         return f"http://127.0.0.1:{self._httpd.server_port}"
 
 
-# ===== Vertex Lyria 2 (MusicPredict wire shape) =====
+#
 
 
 def _vertex_music_response(b64: str, mime: str = "audio/wav") -> dict[str, Any]:
@@ -137,9 +137,9 @@ def test_music_generate_vertex_surfaces_rai_filtered_reason() -> None:
     assert resp.finish_reason == "Audio filtered by safety system"
 
 
-# ADR-037 (MUS-008): supports_lyrics is advisory, not a gate. Lyrics on the
-# instrumental-only Lyria 2 fold into the :predict prompt instead of being
-# rejected.
+#
+#
+#
 def test_music_generate_vertex_folds_lyrics_into_prompt_instrumental_only() -> None:
     encoded = base64.b64encode(FAKE_AUDIO).decode("ascii")
     with _MockServer(_vertex_music_response(encoded)) as server:
@@ -156,7 +156,7 @@ def test_music_generate_vertex_folds_lyrics_into_prompt_instrumental_only() -> N
     assert len(resp.audio) == 1
 
 
-# ===== Google Lyria 3 (MusicGenerateContent wire shape) =====
+#
 
 
 def _gemini_music_response(
@@ -217,10 +217,10 @@ def test_music_generate_google_captures_text_part() -> None:
     assert len(resp.audio) == 1
 
 
-# ===== MiniMax Music 2.6 (MusicMinimax wire shape) =====
 #
-# MiniMax's gen_endpoint is an absolute https URL, so we monkeypatch
-# llmkit.music.do_post to capture the call and serve a hex payload.
+#
+#
+#
 
 
 class _Captured:
@@ -288,7 +288,7 @@ def test_music_generate_minimax_surfaces_non_success_status_msg(monkeypatch) -> 
     assert resp.finish_message == "rate limited"
 
 
-# ===== Cross-shape validation =====
+#
 
 
 def test_music_generate_requires_model() -> None:
@@ -303,8 +303,8 @@ def test_music_generate_rejects_image_part() -> None:
 
     c = new_client("google", "test-key")
     c.provider.base_url = "http://unused"
-    # Construct a Part list directly with an image part via the runtime,
-    # since the Music builder has no image() method by design.
+    #
+    #
     req = music_mod.MusicRequest(
         model=GOOGLE_LYRIA_PRO,
         parts=[Part(image=MediaRef(mime_type="image/png", bytes=b"\x89PNG"))],
@@ -345,7 +345,7 @@ def test_music_generate_rejects_unsupported_provider() -> None:
     assert "does not support music generation" in exc_info.value.message
 
 
-# ===== Middleware =====
+#
 
 
 def test_music_generate_middleware_fires_pre_then_post() -> None:

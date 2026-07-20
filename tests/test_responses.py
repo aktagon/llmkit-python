@@ -1,9 +1,9 @@
-"""ADR-055 Phase B: the OpenAI Responses chat protocol — response-parse + the
-opt-in surface. Mirrors go/responses_test.go. The request-wire golden
-(responses-openai) covers the outbound body; these tests cover the reply
-envelope (output[] not choices[]), the endpoint switch, and the loud
-ValidationError on a provider that lacks the protocol. Mock HTTP server, no
-live API calls.
+"""
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from llmkit import Responses, ValidationError, anthropic, openai
 
 
 class _MockServer:
-    """Single-shot HTTP server that records the request path and serves a canned response."""
+    """"""
 
     def __init__(self, response_body: dict[str, Any]):
         self.response_body = response_body
@@ -61,9 +61,9 @@ class _MockServer:
         return f"http://127.0.0.1:{self._httpd.server_port}"
 
 
-# A Responses reply: an output[] array whose message item carries content[]
-# blocks of type output_text, plus input_tokens/output_tokens usage. Live-
-# anchored shape 2026-07-02.
+#
+#
+#
 _RESPONSES_REPLY = {
     "status": "completed",
     "output": [
@@ -76,7 +76,7 @@ _RESPONSES_REPLY = {
     "usage": {"input_tokens": 16, "output_tokens": 5},
 }
 
-# A default Chat Completions reply.
+#
 _CHAT_COMPLETIONS_REPLY = {
     "choices": [{"message": {"content": "Helsinki."}}],
     "usage": {"prompt_tokens": 16, "completion_tokens": 5},
@@ -84,9 +84,9 @@ _CHAT_COMPLETIONS_REPLY = {
 
 
 def test_responses_parses_output_envelope() -> None:
-    # A Responses reply (output[] with output_text + input_tokens/output_tokens)
-    # parses into Response.text + usage — NOT the Chat Completions choices[] path
-    # — and the request hits /v1/responses.
+    #
+    #
+    #
     with _MockServer(_RESPONSES_REPLY) as server:
         c = openai("key")
         c.provider.base_url = server.url
@@ -102,8 +102,8 @@ def test_responses_parses_output_envelope() -> None:
 
 
 def test_responses_default_unchanged_hits_chat_completions() -> None:
-    # WITHOUT protocol(Responses) the same client still POSTs to
-    # /v1/chat/completions and parses the choices[] envelope — default pinned.
+    #
+    #
     with _MockServer(_CHAT_COMPLETIONS_REPLY) as server:
         c = openai("key")
         c.provider.base_url = server.url
@@ -115,8 +115,8 @@ def test_responses_default_unchanged_hits_chat_completions() -> None:
 
 
 def test_responses_unsupported_provider_errors() -> None:
-    # protocol(Responses) on a provider that does not expose it (Anthropic)
-    # raises the uniform ValidationError(field="protocol") before any network call.
+    #
+    #
     c = anthropic("key")
     with pytest.raises(ValidationError) as exc_info:
         asyncio.run(
@@ -126,8 +126,8 @@ def test_responses_unsupported_provider_errors() -> None:
 
 
 def test_responses_unknown_protocol_errors() -> None:
-    # An unknown protocol token raises ValidationError(field="protocol") rather
-    # than silently falling back.
+    #
+    #
     c = openai("key")
     with pytest.raises(ValidationError) as exc_info:
         asyncio.run(c.text.protocol("nonexistent").model("gpt-4o-mini").prompt("hi"))

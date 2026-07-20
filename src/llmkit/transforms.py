@@ -1,4 +1,4 @@
-"""Message and tool transforms. Selected by ProviderSpec fields, not provider name."""
+""""""
 
 from __future__ import annotations
 
@@ -48,9 +48,9 @@ def select_tool_def_transform(cfg: ProviderSpec) -> ToolDefTransform:
     if cfg.chat_wire_shape == "ChatBedrock":
         return transform_bedrock_tool_defs
     if cfg.chat_wire_shape == "ChatGoogle":
-        # Google carries tool params under a per-provider wire field (ADR-025):
-        # "parametersJsonSchema" accepts native JSON Schema verbatim, vs the
-        # OpenAPI-3.0-subset "parameters" default.
+        #
+        #
+        #
         tc = _tool_call_def(cfg)
         field = tc.params_wire_field if tc is not None and tc.params_wire_field else "parameters"
 
@@ -103,56 +103,56 @@ def _tool_call_def(cfg: ProviderSpec):
     return tool_call_config(ProviderName(cfg.name))
 
 
-# =============================================================================
-# Internal message sum (ADR-026 PIPE-007/008)
-# =============================================================================
+#
+#
+#
 
 @dataclass(frozen=True)
 class _MsgText:
-    """A text turn: exactly a role and its text content."""
+    """"""
     role: str
     text: str
 
 
 @dataclass(frozen=True)
 class _MsgCalls:
-    """An assistant turn carrying one or more tool invocations."""
+    """"""
     calls: list[ToolCall]
 
 
 @dataclass(frozen=True)
 class _MsgResult:
-    """A tool turn carrying exactly one execution result."""
+    """"""
     result: ToolResult
 
 
-# A message is *exactly one of* the three variants. The public Message
-# (structs.py) is a flat product that can encode an illegal multi-carrier
-# combination; this union cannot, so the transforms below dispatch with
-# match/case rather than the old if/elif silent-drop order.
+#
+#
+#
+#
 _Msg = _MsgText | _MsgCalls | _MsgResult
 
 
 def _assert_never(value: NoReturn) -> NoReturn:
-    """Exhaustiveness guard for the _Msg sum (local stand-in for the 3.11+
-    typing.assert_never; the package targets 3.10 and adds no dependency).
-
-    Reached only if a _Msg variant is added without a matching case: the type
-    checker errors here statically (the argument is no longer Never), and at
-    runtime this raises instead of silently dropping the message.
     """
+
+
+
+
+
+"""
     raise TypeError(f"unhandled message variant {type(value).__name__}")
 
 
 def to_internal(messages: list[Message]) -> list[_Msg]:
-    """Convert the public, untrusted Message list into the internal sum.
-
-    This is the single carrier-validation boundary (PIPE-008): a message
-    carrying more than one of {content, tool calls, tool result} is rejected
-    here, not silently mis-serialized downstream. The Text/batch/stream paths
-    feed user-supplied Message lists through here; the Agent builds the sum
-    directly from its trusted history and so skips this check.
     """
+
+
+
+
+
+
+"""
     out: list[_Msg] = []
     for i, m in enumerate(messages):
         carriers = sum(
@@ -172,27 +172,27 @@ def to_internal(messages: list[Message]) -> list[_Msg]:
     return out
 
 
-# =============================================================================
-# Message transforms — build the messages/contents array in request body
-# =============================================================================
+#
+#
+#
 
 def transform_flat_content(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> None:
     body["messages"] = _build_flat_message_array(msgs, req, cfg)
 
 
 def transform_responses_input(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> None:
-    """Build the OpenAI Responses envelope (ADR-055): the SAME flat {role,
-    content} array as Chat Completions, but under the "input" key instead of
-    "messages" (POSTed to /v1/responses). The array shape is shared with
-    transform_flat_content via _build_flat_message_array, so the golden
-    witnesses that the only wire delta is the envelope key + endpoint.
     """
+
+
+
+
+"""
     body["input"] = _build_flat_message_array(msgs, req, cfg)
 
 
 def _build_flat_message_array(msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> list[dict[str, Any]]:
-    """Build the shared flat message array used by both the Chat Completions
-    ("messages") and Responses ("input") envelopes."""
+    """
+"""
     out: list[dict[str, Any]] = []
     placement = placement_for(cfg)
 
@@ -207,8 +207,8 @@ def _build_flat_message_array(msgs: list[_Msg], req: "Request", cfg: ProviderSpe
     has_media = bool(req.files) or bool(req.images)
 
     if msgs:
-        # Tool-aware dispatch (ADR-020 / ADR-026): a tool-bearing history routes
-        # through the same builder as plain text — a text turn is the no-tool case.
+        #
+        #
         call_t = select_tool_call_transform(cfg)
         result_t = select_tool_result_transform(cfg)
         for m in msgs:
@@ -304,13 +304,13 @@ def transform_google_parts(body: dict[str, Any], msgs: list[_Msg], req: "Request
     if msgs:
         call_t = select_tool_call_transform(cfg)
         result_t = select_tool_result_transform(cfg)
-        # Google's wire identifies a tool result by the function NAME, but the
-        # universal ToolResult carries only tool_use_id. Recover id->name from
-        # the call turns, which always precede their result in a valid history,
-        # and resolve the result's name from it. A new ToolResult is built (not
-        # mutated) so the caller's Message/history is untouched. The agent path
-        # is unaffected (its extractor sets id==name); an unmatched id passes
-        # through unchanged (transform_google_tool_result_msg uses tool_use_id).
+        #
+        #
+        #
+        #
+        #
+        #
+        #
         id_to_name: dict[str, str] = {}
         for m in msgs:
             match m:
@@ -418,10 +418,10 @@ def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Req
 
 
 def _build_bedrock_content_parts(req: "Request") -> list[dict[str, Any]]:
-    """Converse content array with image blocks (ADR-060). Each image emits
-    {image:{format,source:{bytes}}}; the prompt text follows as a trailing
-    {text} block, preserving caller order among images. Mirrors go/transforms.go
-    buildBedrockContentParts."""
+    """
+
+
+"""
     parts: list[dict[str, Any]] = []
     for img in req.images:
         mime_type, data = parse_data_uri(img.url)
@@ -440,16 +440,16 @@ def _build_bedrock_content_parts(req: "Request") -> list[dict[str, Any]]:
 
 
 def _bedrock_image_format(mime_type: str) -> str:
-    """Derive the Converse `format` token from a MIME type (image/png -> "png")."""
+    """"""
     i = mime_type.rfind("/")
     if i >= 0:
         return mime_type[i + 1:]
     return mime_type
 
 
-# =============================================================================
-# Tool definition transforms
-# =============================================================================
+#
+#
+#
 
 def transform_openai_functions(body: dict[str, Any], tools: list["Tool"]) -> None:
     body["tools"] = [
@@ -504,9 +504,9 @@ def transform_bedrock_tool_defs(body: dict[str, Any], tools: list["Tool"]) -> No
     body["toolConfig"] = {"tools": defs}
 
 
-# =============================================================================
-# Tool call message transforms
-# =============================================================================
+#
+#
+#
 
 def transform_openai_tool_call_msg(calls: list[ToolCall], role_mappings: dict[str, str]) -> dict[str, Any]:
     return {
@@ -571,9 +571,9 @@ def transform_bedrock_tool_call_msg(calls: list[ToolCall], role_mappings: dict[s
     }
 
 
-# =============================================================================
-# Tool result message transforms
-# =============================================================================
+#
+#
+#
 
 def transform_openai_tool_result_msg(result: ToolResult, _: dict[str, str]) -> dict[str, Any]:
     return {
@@ -624,9 +624,9 @@ def transform_bedrock_tool_result_msg(result: ToolResult, _: dict[str, str]) -> 
     }
 
 
-# =============================================================================
-# Tool call extraction
-# =============================================================================
+#
+#
+#
 
 def extract_openai_tool_calls(raw: dict[str, Any], tc_cfg: Any) -> list[ToolCall]:
     choices = raw.get("choices")
@@ -746,5 +746,5 @@ def extract_bedrock_tool_calls(raw: dict[str, Any], _: Any) -> list[ToolCall]:
     return calls
 
 
-# Forward-declare `Request` and `Tool` via TYPE_CHECKING import at top
+#
 from .types import Request, Tool  # noqa: E402  (imported late to avoid circular types)

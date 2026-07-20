@@ -1,4 +1,4 @@
-"""HTTP transport: JSON POST, multipart upload, SSE streaming. stdlib only."""
+""""""
 
 from __future__ import annotations
 
@@ -17,15 +17,15 @@ def _new_request(
     data: bytes | None = None,
     method: str,
 ) -> urllib.request.Request:
-    """Construct a urllib Request, redacting a malformed URL.
-
-    ``urllib.request.Request(url, ...)`` raises a bare ``ValueError`` for a
-    malformed URL (e.g. an unrecognized scheme) whose message embeds the
-    full URL — including any spliced API key query param, e.g.
-    "unknown url type: 'not-a-valid-url?key=<secret>'". Re-raise a NEW
-    ValueError with a static message, chained ``from None`` so neither the
-    message nor the traceback cause/context carries the key-bearing URL.
     """
+
+
+
+
+
+
+
+"""
     try:
         return urllib.request.Request(url, data=data, method=method)
     except ValueError:
@@ -33,12 +33,12 @@ def _new_request(
 
 
 def merge_caller_headers(headers: dict[str, str], caller: dict[str, str]) -> None:
-    """ADR-052: add caller-supplied custom headers (Client.add_header) that are
-    NOT already present (case-insensitively). Call AFTER the SDK-set headers
-    (auth, required) so those can never be clobbered — HTTP header names are
-    case-insensitive, so a caller "authorization" must not shadow the
-    provider's "Authorization". The caller can still add a new gateway header.
     """
+
+
+
+
+"""
     existing = {k.lower() for k in headers}
     for k, v in caller.items():
         if k.lower() not in existing:
@@ -55,7 +55,7 @@ def do_get(
     headers: dict[str, str],
     timeout: float = 600.0,
 ) -> bytes:
-    """GET and return the response bytes. Raises APIError on 4xx/5xx."""
+    """"""
     req = _new_request(url, method="GET")
     for key, value in headers.items():
         req.add_header(key, value)
@@ -84,7 +84,7 @@ def do_post(
     headers: dict[str, str],
     timeout: float = 600.0,
 ) -> bytes:
-    """POST JSON and return the response bytes. Raises APIError on 4xx/5xx."""
+    """"""
     data, status_code, resp_headers = _do_post_raw(url, body, headers, timeout)
     if status_code >= 400:
         err = APIError(
@@ -92,7 +92,7 @@ def do_post(
             message=data.decode("utf-8", errors="replace"),
             retryable=status_code == 429 or status_code >= 500,
         )
-        # Attach the raw body for callers that want to parse provider error shape.
+        #
         err.type = ""  # keep dataclass shape consistent
         raise err
     return data
@@ -104,7 +104,7 @@ def _do_post_raw(
     headers: dict[str, str],
     timeout: float,
 ) -> tuple[bytes, int, dict[str, str]]:
-    """Raw POST: returns (body, status_code, headers) without raising on HTTP errors."""
+    """"""
     req = _new_request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     for key, value in headers.items():
@@ -127,12 +127,12 @@ def do_sigv4_post(
     timeout: float = 600.0,
     custom_headers: dict[str, str] | None = None,
 ) -> bytes:
-    """POST signed with AWS SigV4. Raises APIError on 4xx/5xx.
+    """
 
-    custom_headers are caller-supplied custom headers (Client.add_header,
-    ADR-052); added AFTER signing so they ride along without altering the AWS
-    signature (extra unsigned headers are permitted; a gateway in front of
-    Bedrock can read them)."""
+
+
+
+"""
     from .sigv4 import sign_sigv4
 
     req = _new_request(url, data=body, method="POST")
@@ -162,18 +162,18 @@ def do_sigv4_get(
     timeout: float = 600.0,
     custom_headers: dict[str, str] | None = None,
 ) -> bytes:
-    """GET signed with AWS SigV4 (empty body). Raises APIError on 4xx/5xx.
+    """
 
-    Used by the Bedrock video poll: the handle ARN is carried as one percent-
-    encoded path segment so its ':' and '/' do not split into extra segments,
-    and the signer canonicalizes the escaped path so the signed path equals the
-    wire path. custom_headers (Client.add_header, ADR-052) are added after
-    signing so they do not alter the AWS signature."""
+
+
+
+
+"""
     from .sigv4 import sign_sigv4
 
     req = _new_request(url, method="GET")
-    # content_type="": the GET carries no body, so no Content-Type is signed or
-    # sent (pack contract, CR-002 — matches Go doSigV4Get).
+    #
+    #
     headers = sign_sigv4(
         url, b"", access_key, secret_key, session_token, region, service, method="GET", content_type=""
     )
@@ -192,10 +192,10 @@ def do_sigv4_get(
 
 
 def _escape_quotes(value: str) -> str:
-    """Mirror Go stdlib mime/multipart escapeQuotes and additionally strip
-    CR/LF: a quote or newline in a caller-controlled field name or filename
-    must not break out of the Content-Disposition part header
-    (HANDOFF-036 A2)."""
+    """
+
+
+"""
     return value.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "").replace("\n", "")
 
 
@@ -209,11 +209,11 @@ def do_multipart_post(
     timeout: float = 600.0,
     mime_type: str = "",
 ) -> tuple[bytes, int]:
-    """POST multipart/form-data. Returns (body, status_code); does NOT raise on 4xx/5xx.
-
-    If ``mime_type`` is empty, Content-Type for the file part is derived
-    from the filename extension via :func:`detect_mime_type`.
     """
+
+
+
+"""
     boundary = "----llmkit-python-" + os.urandom(16).hex()
     buf = io.BytesIO()
     for key, value in fields.items():
@@ -252,11 +252,11 @@ def do_multipart_post_multi(
     headers: dict[str, str],
     timeout: float = 600.0,
 ) -> tuple[bytes, int]:
-    """POST multipart/form-data with one or more file parts plus zero-or-more
-    plain string fields. ``files`` items are ``(field_name, filename, mime_type, data)``;
-    field_name may end in "[]" when the API expects an array (e.g. OpenAI's "image[]").
-    Returns ``(body, status_code)``; does NOT raise on 4xx/5xx.
     """
+
+
+
+"""
     boundary = "----llmkit-python-" + os.urandom(16).hex()
     buf = io.BytesIO()
     for key, value in fields.items():
@@ -289,7 +289,7 @@ def do_multipart_post_multi(
 
 
 def _parse_stream_finish_path(p: str) -> tuple[str, str]:
-    """Split ADR-013 stream-finish locator into (event_name, json_path)."""
+    """"""
     if not p:
         return "", ""
     idx = p.find(":")
@@ -307,13 +307,13 @@ def do_stream_post(
     timeout: float = 600.0,
     finish_reason_path: str = "",
 ) -> tuple[Usage, str]:
-    """POST a streaming request and dispatch SSE events to `callback`.
-
-    Returns ``(usage, finish_reason)``. ``finish_reason`` follows ADR-013:
-    captured from the parsed event/data body via ``finish_reason_path``
-    (``event_name:json.path`` form or bare ``json.path``); empty when the
-    provider declares no stream-time path or no signal arrived.
     """
+
+
+
+
+
+"""
     req = _new_request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     for key, value in headers.items():
@@ -345,8 +345,8 @@ def do_stream_post(
 
             data_str = line[len("data: "):]
 
-            # Data-level done sentinel (e.g., OpenAI "[DONE]") is literal,
-            # not JSON — bail before parsing.
+            #
+            #
             if stream_cfg.done_signal and data_str == stream_cfg.done_signal:
                 break
 
@@ -369,9 +369,9 @@ def do_stream_post(
                     break
                 continue
 
-            # ADR-013: capture finish-reason BEFORE the event-level done
-            # break — Anthropic carries stop_reason on the message_stop
-            # event body and dropping the parse would discard it.
+            #
+            #
+            #
             if finish_json_path and (finish_event == "" or finish_event == current_event):
                 value = extract_path(parsed, finish_json_path)
                 if value and value != "FINISH_REASON_UNSPECIFIED":

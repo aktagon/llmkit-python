@@ -1,9 +1,9 @@
-"""ADR-023 wire-format stability for serialized *Agent history.
+"""
 
-save_history + load_history are the ONLY guaranteed-stable
-serialization path (STAB-009). Direct json.dumps / asdict on Message
-values produces valid JSON but lacks the `_v` envelope and
-load_history rejects it with MissingWireVersionError (STAB-011).
+
+
+
+
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ from .wire_version import WIRE_SCHEMA_VERSION
 
 
 class UnsupportedWireVersionError(Exception):
-    """Raised by load_history when the document's `_v` exceeds the
-    SDK's compiled-in WIRE_SCHEMA_VERSION."""
+    """
+"""
 
     def __init__(self, got: int, want: int) -> None:
         super().__init__(
@@ -28,13 +28,13 @@ class UnsupportedWireVersionError(Exception):
 
 
 class MissingWireVersionError(Exception):
-    """Raised by load_history when the document has no top-level `_v`
-    key (STAB-011)."""
+    """
+"""
 
 
 class UnknownWireKeyError(Exception):
-    """Raised by load_history when the document carries a top-level
-    key other than `_v`, `messages`, or `_meta`."""
+    """
+"""
 
     def __init__(self, key: str) -> None:
         super().__init__(f"llmkit: unknown top-level wire key: {key!r}")
@@ -42,11 +42,11 @@ class UnknownWireKeyError(Exception):
 
 
 def save_history(messages: list[Message]) -> bytes:
-    """Serialize a list of public Message values into the canonical
-    versioned wire document (STAB-002). Output carries a `_v` integer
-    and a `messages` array. tool_calls is always an array (possibly
-    empty); tool_result is always either an object or JSON null
-    (STAB-004 — never omitted)."""
+    """
+
+
+
+"""
     payload: dict[str, Any] = {
         "_v": WIRE_SCHEMA_VERSION,
         "messages": [_message_to_wire(m) for m in messages],
@@ -55,15 +55,15 @@ def save_history(messages: list[Message]) -> bytes:
 
 
 def load_history(data: bytes | str) -> list[Message]:
-    """Parse a wire document and return the in-memory Message list.
-
-    Rejects documents missing `_v` (MissingWireVersionError), with
-    `_v` above the compiled-in WIRE_SCHEMA_VERSION
-    (UnsupportedWireVersionError), or carrying unknown top-level keys
-    (UnknownWireKeyError). Unknown keys nested inside Message /
-    ToolCall / ToolResult are tolerated for additive forward
-    compatibility (STAB-003 lax-read).
     """
+
+
+
+
+
+
+
+"""
     if isinstance(data, bytes):
         text = data.decode("utf-8")
     else:
@@ -88,7 +88,7 @@ def load_history(data: bytes | str) -> list[Message]:
 
 
 def _message_to_wire(m: Message) -> dict[str, Any]:
-    """Project a public Message into the wire dict shape."""
+    """"""
     return {
         "role": m.role,
         "content": m.content,
@@ -99,9 +99,9 @@ def _message_to_wire(m: Message) -> dict[str, Any]:
 
 def _tool_call_to_wire(tc: ToolCall) -> dict[str, Any]:
     out: dict[str, Any] = {"id": tc.id, "name": tc.name}
-    # STAB-004 + ADR-020: input is None on absent args. Wire emits
-    # the key only when input is not None (avoids the literal
-    # `"input": null` noise providers don't expect on echo).
+    #
+    #
+    #
     if tc.input is not None:
         out["input"] = tc.input
     return out

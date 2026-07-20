@@ -1,14 +1,14 @@
-"""Video generation runtime (ADR-034) — mirror of go/video.go and
-go/video_builder.go.
+"""
 
-Video generation is asynchronous: ``video_submit`` POSTs the job and
-returns a ``VideoHandle`` immediately; the caller polls the handle with
-``await handle.wait()`` (modeled on the batch handle, ADR-014).
 
-Pre-flight validation (model required; XOR prompt/parts; lyrics and image
-parts rejected) runs before any HTTP call. Dispatch branches on
-vg_cfg.wire_shape — the single discriminator, never the provider name.
-Slice 1 wires VideoGrok (xAI) only: {model, prompt} submit, url delivery.
+
+
+
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -42,47 +42,47 @@ if TYPE_CHECKING:
     from . import Video
 
 
-# Default poll cadence for VideoHandle.wait. xAI documents up-to-several-minute
-# generations; the SDK polls every poll_interval until request_timeout elapses
-# (ADR-034 D2 — mirrors BatchHandle.wait's per-call kwargs, ADR-014).
+#
+#
+#
 _DEFAULT_POLL_INTERVAL = 5.0
 _DEFAULT_REQUEST_TIMEOUT = 600.0
 
 
 @dataclasses.dataclass
 class VideoRequest:
-    """Canonical video-generation request (ADR-034).
-
-    Model is required: video-generation models are explicit choices and the
-    text-generation default does not generate video.
-
-    Input is provided in one of two mutually-exclusive forms:
-      - prompt: terse sugar for the prompt-only hot path. Internally
-        desugars to parts=[Part(text=prompt)] before serialisation.
-      - parts: canonical sequence of text parts (slice 1 is text-to-video).
-
-    Pre-flight validation requires exactly one of prompt or parts to be
-    non-empty (XOR).
     """
+
+
+
+
+
+
+
+
+
+
+
+"""
 
     model: str = ""
     prompt: str = ""
     parts: list[Part] = dataclasses.field(default_factory=list)
-    # output_uri is the caller-supplied destination S3 URI for output-uri
-    # delivery providers (Bedrock Nova Reel writes the mp4 to the caller's own
-    # S3 bucket). Required when the provider's config sets requires_output_uri;
-    # ignored otherwise. Set it on the builder via Video.output_uri.
+    #
+    #
+    #
+    #
     output_uri: str = ""
 
 
 class VideoHandle(_VideoHandleData):
-    """Typed-builder VideoHandle. Inherits the ontology-generated data shape
-    (id, provider, raw) and adds a ``wait()`` method so callers can write
-    ``handle = await video.submit(...); resp = await handle.wait()`` —
-    mirroring Go's ``VideoHandle.Wait`` value-receiver shape (ADR-014).
+    """
 
-    Poll cadence is per-call (poll_interval / request_timeout), mirroring
-    ``BatchHandle.wait`` so the video handle matches its batch twin."""
+
+
+
+
+"""
 
     async def wait(
         self,
@@ -105,8 +105,8 @@ async def video_submit(b: "Video", msg: str) -> VideoHandle:
     if b.client.provider.base_url:
         provider.base_url = b.client.provider.base_url
 
-    # Mirror go/video_builder.go: chain-accumulated parts plus an optional
-    # trailing text part from submit(msg).
+    #
+    #
     request = VideoRequest(model=b._model, output_uri=b._output_uri)
     if b._parts:
         if msg:
@@ -131,9 +131,9 @@ def _submit_video(
     middleware: list[MiddlewareFn],
     raw: bool,
 ) -> VideoHandle:
-    """Submit an asynchronous text-to-video job and return a VideoHandle
-    immediately. Pre-flight validation rejects unknown models and
-    unsupported part kinds before any HTTP call. Mirror of go submitVideo."""
+    """
+
+"""
     if not provider.api_key:
         raise ValidationError(field="api_key", message="required")
     if not request.model:
@@ -166,9 +166,9 @@ def _submit_video(
                 message="video generation does not accept lyrics parts",
             )
         if part.image is not None:
-            # Image-to-video seed frame (BUG-010): accepted only by models whose
-            # VideoModelDef sets supports_image_to_video; text-to-video-only
-            # models reject it pre-flight rather than silently dropping it.
+            #
+            #
+            #
             if not model.supports_image_to_video:
                 raise ValidationError(
                     field=f"parts[{i}]",
@@ -177,9 +177,9 @@ def _submit_video(
             continue
         if not part.text:
             raise ValidationError(field=f"parts[{i}]", message="must have Text set")
-    # VID-005: output-uri providers (Bedrock Nova Reel) write the video to the
-    # caller's own S3 bucket, so the submit MUST carry a destination URI. Reject
-    # pre-flight rather than letting the provider 400.
+    #
+    #
+    #
     if vg_cfg.requires_output_uri and not request.output_uri:
         raise ValidationError(
             field="output_uri",
@@ -235,42 +235,42 @@ def _dispatch_video_submit(
     base_url: str,
     headers: dict[str, str],
 ) -> str:
-    """POST the submit body per wire shape (never by provider name) and
-    return the provider-assigned poll handle id.
-
-      - VideoGrok (xAI), VideoZhipu (CogVideoX), and VideoTogether share the
-        simple {model, prompt} submit body. They differ only in which
-        response field carries the poll handle: Grok returns it as
-        request_id, Zhipu and Together as the top-level id.
-      - VideoQwen (DashScope) nests the prompt under an ``input`` object
-        ({model, input:{prompt}}) and requires the X-DashScope-Async: enable
-        header.
-      - VideoVeo and VideoVertexVeo carry the model in the submit PATH
-        (:predictLongRunning); the body has no model field.
-      - VideoBedrock (Nova Reel) nests the prompt under modelInput, carries the
-        caller S3 URI under outputDataConfig, and is signed with SigV4 (not the
-        bearer/query-param header map).
-
-    The body and any per-shape headers are selected by wire shape; the poll
-    handle id is always read from the config-declared dotted path (OQ7).
     """
-    # Submit endpoint from the config-declared base + relative path (Option D);
-    # handle id from the config-declared dotted path (OQ7).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"""
+    #
+    #
     post_headers = headers
     if vg_cfg.wire_shape == "VideoQwen":
         body: dict[str, Any] = {
             "model": model,
             "input": {"prompt": _join_prompt_text(parts)},
         }
-        # DashScope's async submit requires this header; set per-request only so
-        # it never leaks into the shared auth-header map.
+        #
+        #
         post_headers = {**headers, "X-DashScope-Async": "enable"}
     elif vg_cfg.wire_shape == "VideoPixVerse":
-        # PixVerse requires all five fields; the generic surface is prompt-only,
-        # so duration/quality/aspect_ratio are sent as reference-anchored
-        # defaults (valid across the recorded models). The per-request
-        # Ai-trace-id header (UUID, unique per request) is PixVerse's anti-cache
-        # key; set per-request only so it never leaks into the shared header map.
+        #
+        #
+        #
+        #
+        #
         body = {
             "model": model,
             "prompt": _join_prompt_text(parts),
@@ -280,17 +280,17 @@ def _dispatch_video_submit(
         }
         post_headers = {**headers, "Ai-trace-id": _new_video_trace_id()}
     elif vg_cfg.wire_shape in ("VideoVeo", "VideoVertexVeo"):
-        # Veo (Gemini API) and Vertex Veo share the submit body: the model is in
-        # the PATH (:predictLongRunning), not the body, so the body has no model
-        # field. The prompt nests under instances[]; the optional parameters
-        # object ({aspectRatio, resolution} for Gemini; {sampleCount, storageUri}
-        # for Vertex) is omitted on the prompt-only hot path.
+        #
+        #
+        #
+        #
+        #
         body = {"instances": [{"prompt": _join_prompt_text(parts)}]}
     elif vg_cfg.wire_shape == "VideoBedrock":
-        # Nova Reel carries the model in the BODY (modelId, unlike the Converse
-        # chat path) and writes the mp4 to the caller's S3 bucket. The optional
-        # videoGenerationConfig {durationSeconds, fps, dimension, seed} is
-        # omitted on the prompt-only hot path (provider defaults apply).
+        #
+        #
+        #
+        #
         body = {
             "modelId": model,
             "modelInput": {
@@ -301,24 +301,24 @@ def _dispatch_video_submit(
         }
     else:
         body = {"model": model, "prompt": _join_prompt_text(parts)}
-        # Image-to-video (BUG-010): when a seed frame is present (only reachable
-        # for grok-imagine-video, the lone supports_image_to_video model this
-        # slice), inline it as a data URL in xAI's image.url field — the same
-        # encoding the Grok image-edit path uses. Absent on the text-to-video
-        # hot path, so the existing video-grok golden is unchanged.
+        #
+        #
+        #
+        #
+        #
         seed = _video_seed_image_url(parts)
         if seed:
             body["image"] = {"url": seed}
     json_body = json.dumps(body).encode("utf-8")
-    # {model} in the submit endpoint is substituted with the per-call model
-    # (Veo's :predictLongRunning path); a no-op for providers that carry the
-    # model in the body. Query-param auth (Google ?key=) is appended last.
+    #
+    #
+    #
     submit_url = _append_video_auth(
         base_url + vg_cfg.gen_endpoint.replace("{model}", model), provider, pname, cfg
     )
     if auth_scheme(pname) == AuthScheme.SIG_V4:
-        # Bedrock signs every request (SigV4); the bearer/query-param header map
-        # does not apply. Region/secret/session come from the AWS env vars.
+        #
+        #
         region = os.environ.get(cfg.region_env_var, "")
         secret_key = os.environ.get(cfg.secret_key_env_var, "")
         session_token = os.environ.get(cfg.session_token_env_var, "")
@@ -358,11 +358,11 @@ def _wait_video(
     request_timeout: float,
     raw: bool,
 ) -> VideoResponse:
-    """Poll the provider until the video job reaches a terminal state, then
-    return the finished VideoResponse. A failed or expired job raises. Poll
-    cadence uses poll_interval until request_timeout elapses. The handle
-    carries the request id and provider config, so wait works across process
-    boundaries. Mirror of go VideoHandle.Wait."""
+    """
+
+
+
+"""
     p = handle.provider
     cfg = PROVIDERS.get(p.name)
     if cfg is None:
@@ -377,32 +377,32 @@ def _wait_video(
 
     base = _video_base_url(p, cfg, vg_cfg)
     headers = _image_auth_headers(p, cfg, pname)
-    # PixVerse requires the per-request Ai-trace-id header on the poll GET too
-    # (not just submit); one trace id per wait() call is sufficient —
-    # uniqueness is an anti-cache measure on the generation, and the poll is a
-    # read.
+    #
+    #
+    #
+    #
     if vg_cfg.wire_shape == "VideoPixVerse":
         headers = {**headers, "Ai-trace-id": _new_video_trace_id()}
 
-    # Poll dispatch has three arms, selected here once before the loop:
-    #   - sig_v4 (Bedrock): signs the poll GET and carries the handle ARN as a
-    #     single percent-encoded path segment (its ':' and '/' must not split
-    #     into extra segments). url.PathEscape's Python twin is
-    #     quote(arn, safe=":"): it encodes '/' to %2F (keeping one path segment)
-    #     but leaves ':' literal, matching how Bedrock's SigV4 canonicalizes the
-    #     Converse model id's ':'. The signer canonicalizes the escaped path, so
-    #     the signed path equals the wire path.
-    #   - vertex_poll (Vertex Veo): the ONLY POST-poll shape — fetches the
-    #     operation with a POST to {model}:fetchPredictOperation carrying
-    #     {operationName}. The model is templated from the handle; the operation
-    #     name goes in the body, not the URL. Bearer auth + the caller-set base.
-    #   - default: the verbatim {id} substitution and a GET on the bearer/
-    #     query-param auth path (every other provider).
     #
-    # The arms are config-disjoint by design: sig_v4 keys off the auth scheme and
-    # vertex_poll off the wire shape, and no A-Box pairs SigV4 with VideoVertexVeo
-    # (Bedrock is SigV4+VideoBedrock; Vertex is bearer+VideoVertexVeo). sig_v4 is
-    # matched first so a hypothetical both-true misconfig would poll as SigV4.
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
     sig_v4 = auth_scheme(pname) == AuthScheme.SIG_V4
     vertex_poll = vg_cfg.wire_shape == "VideoVertexVeo"
     region = secret_key = session_token = ""
@@ -422,8 +422,8 @@ def _wait_video(
             _video_poll_url(vg_cfg.poll_endpoint, base, handle.id), p, pname, cfg
         )
 
-    # ADR-014 cross-process resume: a handle that remembers raw takes effect
-    # at wait time even if the raw kwarg was not passed.
+    #
+    #
     raw = raw or handle.raw
 
     deadline = time.monotonic() + request_timeout
@@ -452,15 +452,15 @@ def _wait_video(
             resp_body = do_get(poll_url, headers)
         resp, done = _parse_video_poll(vg_cfg, resp_body)
         if done:
-            # Two-hop providers (vg_cfg.file_endpoint set, e.g. minimax): the
-            # terminal poll carried a file reference, not a video URL — resolve
-            # it with one more GET before returning.
+            #
+            #
+            #
             if vg_cfg.file_endpoint:
                 resp = _resolve_video_file(base, vg_cfg, resp_body, headers)
-            # Delivery dispatch (VID-005). Download-delivery providers (Veo)
-            # returned a temporary fetch URI in VideoData.url; GET it and fill
-            # VideoData.bytes (clearing url, per the source-XOR contract). Url-
-            # and output-uri-delivery providers leave the url.
+            #
+            #
+            #
+            #
             if vg_cfg.output_delivery == "DeliveryDownload":
                 resp = _download_video_bytes(p, pname, cfg, resp, headers)
             if raw:
@@ -473,32 +473,32 @@ def _wait_video(
 
 
 def _video_base_url(provider: Provider, cfg: Any, vg_cfg: VideoGenDef) -> str:
-    """Resolve the base for the video API (Option D): an explicit per-client
-    override wins (tests point it at a mock; users at a proxy), else the
-    provider's distinct video base (vg_cfg.video_base_url) when the video host
-    differs from chat, else the chat base. Endpoints are always relative paths
-    joined to this base — never absolute — so the host stays overridable."""
+    """
+
+
+
+"""
     if provider.base_url:
         return provider.base_url
     base = vg_cfg.video_base_url or cfg.base_url
-    # SigV4 hosts carry a {region} placeholder (Bedrock:
-    # bedrock-runtime.{region}.amazonaws.com) resolved from the region env var;
-    # a no-op for every provider without the placeholder.
+    #
+    #
+    #
     if cfg.region_env_var:
         base = base.replace("{region}", os.environ.get(cfg.region_env_var, ""))
     return base
 
 
 def _video_poll_url(poll_endpoint: str, base: str, id: str) -> str:
-    """Substitute {id} in the config poll template (an A-Box fact, OQ7) and
-    join it to the resolved video base."""
+    """
+"""
     return base + poll_endpoint.replace("{id}", id)
 
 
 def _lookup_handle_field(raw: Any, path: str) -> str:
-    """Descend a dotted path (e.g. "id", "output.task_id") through the decoded
-    submit response, returning the leaf or "" if any segment is missing or the
-    leaf is neither a string nor a number."""
+    """
+
+"""
     if not path:
         return ""
     cur: Any = raw
@@ -506,9 +506,9 @@ def _lookup_handle_field(raw: Any, path: str) -> str:
         if not isinstance(cur, dict):
             return ""
         cur = cur.get(seg)
-    # The leaf is usually a string handle, but some providers return a numeric
-    # job id (PixVerse's Resp.video_id is an integer) — format it back to its
-    # integer string form. bool is an int subclass, so exclude it explicitly.
+    #
+    #
+    #
     if isinstance(cur, str):
         return cur
     if isinstance(cur, int) and not isinstance(cur, bool):
@@ -519,29 +519,29 @@ def _lookup_handle_field(raw: Any, path: str) -> str:
 
 
 def _new_video_trace_id() -> str:
-    """Return an RFC-4122 v4 UUID string, used for providers that require a
-    unique per-request trace header (PixVerse's Ai-trace-id, an anti-cache
-    key)."""
+    """
+
+"""
     return str(uuid.uuid4())
 
 
 def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, bool]:
-    """Decode one poll response per wire shape. Returns (resp, done):
-
-      - done=False when the job is still pending (caller keeps polling).
-      - done=True with the finished VideoResponse when status is
-        terminal-success.
-      - raises when the job failed or expired.
-
-    VideoGrok: {"status": "...", "video": {"url", "duration"}} or
-    {"status": "failed", "error": {"code", "message"}}.
-    VideoZhipu: {"task_status": "SUCCESS"|"FAIL"|"PROCESSING",
-    "video_result": [{"url"}]}.
-    VideoTogether: {"status": "completed"|"failed"|"cancelled"|"queued"|
-    "in_progress", "outputs": {"video_url"}}.
-    VideoQwen: {"output": {"task_status": "SUCCEEDED"|"FAILED"|"CANCELED"|
-    "PENDING"|"RUNNING"|"UNKNOWN", "video_url"}}.
     """
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"""
     try:
         raw = json.loads(body)
     except ValueError as exc:
@@ -556,7 +556,7 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
             return _video_result_from_qwen(vg_cfg, raw), True
         if status in ("FAILED", "CANCELED"):
             raise APIError(message=f"video generation {status}", status_code=0)
-        # PENDING, RUNNING, UNKNOWN (or any non-terminal status)
+        #
         return VideoResponse(), False
 
     if vg_cfg.wire_shape == "VideoTogether":
@@ -565,7 +565,7 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
             return _video_result_from_together(vg_cfg, raw), True
         if status in ("failed", "cancelled"):
             raise APIError(message=f"video generation {status}", status_code=0)
-        # queued, in_progress (or any non-terminal status)
+        #
         return VideoResponse(), False
 
     if vg_cfg.wire_shape == "VideoZhipu":
@@ -574,13 +574,13 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
             return _video_result_from_zhipu(vg_cfg, raw), True
         if status == "FAIL":
             raise APIError(message="video generation failed", status_code=0)
-        # PROCESSING (or any non-terminal status)
+        #
         return VideoResponse(), False
 
     if vg_cfg.wire_shape == "VideoVidu":
-        # Vidu (Shengshu) task poll: state success terminal-success, failed
-        # terminal-error, created/queueing/processing pending. The finished
-        # video URL sits at creations[0].url (url delivery, single-hop).
+        #
+        #
+        #
         state = raw.get("state") if isinstance(raw, dict) else None
         if state == "success":
             return _video_result_from_vidu(vg_cfg, raw), True
@@ -593,13 +593,13 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
             raise APIError(
                 message=f"video generation failed: {msg}", status_code=0
             )
-        # created, queueing, processing (or any non-terminal state)
+        #
         return VideoResponse(), False
 
     if vg_cfg.wire_shape == "VideoPixVerse":
-        # PixVerse status poll: the status is an INTEGER code nested under Resp.
-        # 1=success (terminal), 7/8=failed (terminal-error), 5=generating
-        # (pending). The finished video URL sits at Resp.url (url delivery).
+        #
+        #
+        #
         resp = raw.get("Resp") if isinstance(raw, dict) else None
         status = resp.get("status") if isinstance(resp, dict) else None
         if status == 1:
@@ -608,25 +608,25 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
             raise APIError(
                 message=f"video generation failed (status {status})", status_code=0
             )
-        # 5 (generating) or any non-terminal status
+        #
         return VideoResponse(), False
 
     if vg_cfg.wire_shape == "VideoMinimax":
-        # Two-hop: terminal-success yields a file_id, not a URL. Report done
-        # with an empty result; _wait_video performs the file-retrieve hop
-        # (gated on vg_cfg.file_endpoint) and fills the URL.
+        #
+        #
+        #
         status = raw.get("status") if isinstance(raw, dict) else None
         if status == "Success":
             return VideoResponse(), True
         if status == "Fail":
             raise APIError(message="video generation failed", status_code=0)
-        # Queueing, Preparing, Processing (or any non-terminal status)
+        #
         return VideoResponse(), False
 
     if vg_cfg.wire_shape == "VideoVeo":
-        # Operation-based LRO: poll until done=True (the long-running-operation
-        # done flag, not a status string). A done op carrying an error object is
-        # a terminal failure; otherwise the response holds the finished video.
+        #
+        #
+        #
         done = raw.get("done") if isinstance(raw, dict) else None
         if done is not True:
             return VideoResponse(), False
@@ -638,9 +638,9 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
             raise APIError(
                 message=f"video generation failed: {msg}", status_code=0
             )
-        # A done op with neither error nor a usable uri must surface as an error,
-        # not a silent zero-byte success: download delivery would otherwise GET
-        # nothing and return a VideoData with empty bytes and empty url.
+        #
+        #
+        #
         result = _video_result_from_veo(vg_cfg, raw)
         if not result.videos or not result.videos[0].url:
             raise APIError(
@@ -650,9 +650,9 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         return result, True
 
     if vg_cfg.wire_shape == "VideoVertexVeo":
-        # Vertex Veo operation poll (fetchPredictOperation): same done/error LRO
-        # shape as Gemini Veo, but the finished video arrives as inline base64 in
-        # the poll body (response.videos[0].bytesBase64Encoded), not a fetch URI.
+        #
+        #
+        #
         done = raw.get("done") if isinstance(raw, dict) else None
         if done is not True:
             return VideoResponse(), False
@@ -665,8 +665,8 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
                 message=f"video generation failed: {msg}", status_code=0
             )
         result = _video_result_from_vertex_veo(vg_cfg, raw)
-        # Mirror the Veo done+no-uri guard: a done op carrying no decodable bytes
-        # must surface as an error, not a silent zero-byte success.
+        #
+        #
         if not result.videos or not result.videos[0].bytes:
             raise APIError(
                 message="video generation: operation done but carried no video bytes",
@@ -675,15 +675,15 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         return result, True
 
     if vg_cfg.wire_shape == "VideoBedrock":
-        # Bedrock async-invoke status (GetAsyncInvoke): Completed terminal-success,
-        # Failed terminal-error (failureMessage), InProgress pending. On success
-        # the provider wrote the mp4 to the caller's S3 bucket and echoes the URI.
+        #
+        #
+        #
         status = raw.get("status") if isinstance(raw, dict) else None
         if status == "Completed":
-            # A Completed invocation that echoes no output s3 uri must surface as
-            # an error, not a silent empty success (mirrors the Veo done+no-uri
-            # guard): the caller would otherwise get a "successful" VideoResponse
-            # whose url is empty and never find the mp4.
+            #
+            #
+            #
+            #
             result = _video_result_from_bedrock(vg_cfg, raw)
             if not result.videos or not result.videos[0].url:
                 raise APIError(
@@ -698,7 +698,7 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
             raise APIError(
                 message=f"video generation failed: {msg}", status_code=0
             )
-        # InProgress (or any non-terminal status)
+        #
         return VideoResponse(), False
 
     if vg_cfg.wire_shape == "VideoGrok":
@@ -713,11 +713,11 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
                 if isinstance(m, str) and m:
                     msg = m
             raise APIError(message=f"video generation {status}: {msg}", status_code=0)
-        # pending (or any non-terminal status)
+        #
         return VideoResponse(), False
 
-    # Unknown shape rejected (not defaulted to Grok): a forgotten poll arm
-    # fails loud instead of hanging on a never-terminal status.
+    #
+    #
     raise APIError(
         message=f"video poll: unsupported wire shape {vg_cfg.wire_shape!r}",
         status_code=0,
@@ -725,9 +725,9 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
 
 
 def _video_result_from_grok(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoResponse:
-    """Extract the finished video from a Grok poll response. Grok uses url
-    delivery: VideoData.url carries a temporary xAI-hosted URL and bytes
-    stays empty (the SDK does not download on the caller's behalf)."""
+    """
+
+"""
     mime = _video_fallback_mime(vg_cfg)
     video = raw.get("video") if isinstance(raw, dict) else None
     if not isinstance(video, dict):
@@ -741,10 +741,10 @@ def _video_result_from_grok(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoRe
 
 
 def _video_result_from_zhipu(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoResponse:
-    """Extract the finished video from a Zhipu CogVideoX poll response. Zhipu
-    uses url delivery: the finished video sits at video_result[0].url (no
-    duration field on the result), so VideoData.url carries the temporary
-    Zhipu-hosted URL and bytes stays empty."""
+    """
+
+
+"""
     mime = _video_fallback_mime(vg_cfg)
     results = raw.get("video_result") if isinstance(raw, dict) else None
     if not isinstance(results, list) or not results:
@@ -759,10 +759,10 @@ def _video_result_from_zhipu(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoR
 
 
 def _video_result_from_vidu(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoResponse:
-    """Extract the finished video from a Vidu (Shengshu) poll response. Vidu
-    uses url delivery: the finished video sits at creations[0].url, so
-    VideoData.url carries the temporary Vidu-hosted URL and bytes stays
-    empty."""
+    """
+
+
+"""
     mime = _video_fallback_mime(vg_cfg)
     creations = raw.get("creations") if isinstance(raw, dict) else None
     if not isinstance(creations, list) or not creations:
@@ -779,10 +779,10 @@ def _video_result_from_vidu(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoRe
 def _video_result_from_pixverse(
     vg_cfg: VideoGenDef, raw: dict[str, Any]
 ) -> VideoResponse:
-    """Extract the finished video from a PixVerse poll response. PixVerse uses
-    url delivery: the finished video sits at Resp.url (nested under the Resp
-    envelope), so VideoData.url carries the temporary PixVerse-hosted URL and
-    bytes stays empty."""
+    """
+
+
+"""
     mime = _video_fallback_mime(vg_cfg)
     resp = raw.get("Resp") if isinstance(raw, dict) else None
     if not isinstance(resp, dict):
@@ -796,10 +796,10 @@ def _video_result_from_pixverse(
 def _video_result_from_together(
     vg_cfg: VideoGenDef, raw: dict[str, Any]
 ) -> VideoResponse:
-    """Extract the finished video from a Together poll response. Together uses
-    url delivery: the finished video sits at outputs.video_url, so
-    VideoData.url carries the temporary Together-hosted URL and bytes stays
-    empty."""
+    """
+
+
+"""
     mime = _video_fallback_mime(vg_cfg)
     outputs = raw.get("outputs") if isinstance(raw, dict) else None
     if not isinstance(outputs, dict):
@@ -813,10 +813,10 @@ def _video_result_from_together(
 def _video_result_from_qwen(
     vg_cfg: VideoGenDef, raw: dict[str, Any]
 ) -> VideoResponse:
-    """Extract the finished video from a DashScope (Qwen) poll response. Qwen
-    uses url delivery: the finished video sits at output.video_url, so
-    VideoData.url carries the temporary DashScope-hosted URL and bytes stays
-    empty."""
+    """
+
+
+"""
     mime = _video_fallback_mime(vg_cfg)
     output = raw.get("output") if isinstance(raw, dict) else None
     if not isinstance(output, dict):
@@ -830,12 +830,12 @@ def _video_result_from_qwen(
 def _resolve_video_file(
     base: str, vg_cfg: VideoGenDef, poll_body: bytes, headers: dict[str, str]
 ) -> VideoResponse:
-    """Perform the two-hop file-retrieve step for providers whose terminal poll
-    yields a file reference rather than a finished video URL (vg_cfg.file_endpoint
-    set, e.g. minimax): extract the file id from the terminal poll body, GET the
-    file endpoint (joined to the resolved video base), and extract the finished
-    reference. file-id and result locations are wire-shape-keyed (the transform);
-    the endpoint is config."""
+    """
+
+
+
+
+"""
     try:
         poll = json.loads(poll_body)
     except ValueError as exc:
@@ -859,8 +859,8 @@ def _resolve_video_file(
 
 
 def _video_file_id(v: Any) -> str:
-    """Read the minimax terminal poll's file_id, which the API may encode as a
-    string or a (large) integer."""
+    """
+"""
     if isinstance(v, str):
         return v
     if isinstance(v, int):
@@ -871,9 +871,9 @@ def _video_file_id(v: Any) -> str:
 def _video_result_from_minimax_file(
     vg_cfg: VideoGenDef, raw: dict[str, Any]
 ) -> VideoResponse:
-    """Extract the finished video from a minimax file-retrieve response. minimax
-    uses url delivery: the download URL sits at file.download_url, so
-    VideoData.url carries it and bytes stays empty."""
+    """
+
+"""
     mime = _video_fallback_mime(vg_cfg)
     file_obj = raw.get("file") if isinstance(raw, dict) else None
     if not isinstance(file_obj, dict):
@@ -885,12 +885,12 @@ def _video_result_from_minimax_file(
 
 
 def _video_result_from_veo(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoResponse:
-    """Extract the finished video reference from a Veo LRO poll response. Veo
-    uses download delivery: the response carries a temporary Files-API download
-    URI at response.generateVideoResponse.generatedSamples[0].video.uri. This
-    places it in VideoData.url; the _wait_video download step
-    (output_delivery=DeliveryDownload) then fetches the bytes into
-    VideoData.bytes and clears url."""
+    """
+
+
+
+
+"""
     mime = _video_fallback_mime(vg_cfg)
     response = raw.get("response") if isinstance(raw, dict) else None
     gvr = response.get("generateVideoResponse") if isinstance(response, dict) else None
@@ -910,14 +910,14 @@ def _video_result_from_veo(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoRes
 def _video_result_from_vertex_veo(
     vg_cfg: VideoGenDef, raw: dict[str, Any]
 ) -> VideoResponse:
-    """Extract the finished video from a Vertex Veo fetchPredictOperation poll
-    response. Unlike Gemini Veo (which returns a fetch URI), Vertex Veo returns
-    the bytes inline as base64 at response.videos[0].bytesBase64Encoded with the
-    mime at .mimeType. This is download delivery with NO fetch hop: the bytes are
-    decoded straight into VideoData.bytes here and VideoData.url stays empty, so
-    the _wait_video download step (_download_video_bytes) finds no url and no-ops
-    — the source-XOR contract holds (VID-004: download delivery returns bytes,
-    never a url)."""
+    """
+
+
+
+
+
+
+"""
     mime = _video_fallback_mime(vg_cfg)
     response = raw.get("response") if isinstance(raw, dict) else None
     videos = response.get("videos") if isinstance(response, dict) else None
@@ -939,13 +939,13 @@ def _video_result_from_vertex_veo(
 def _video_result_from_bedrock(
     vg_cfg: VideoGenDef, raw: dict[str, Any]
 ) -> VideoResponse:
-    """Extract the finished video reference from a Bedrock Nova Reel poll
-    response. Bedrock uses output-uri delivery: the provider wrote the mp4 to
-    the caller's own S3 bucket and the finished poll echoes the S3 URI at
-    outputDataConfig.s3OutputDataConfig.s3Uri. The SDK surfaces it as
-    VideoData.url with bytes empty — the _wait_video delivery step never
-    downloads it (only DeliveryDownload fetches), so the caller fetches from S3
-    with their own tooling (VID-005; ADR-034 open question 4)."""
+    """
+
+
+
+
+
+"""
     mime = _video_fallback_mime(vg_cfg)
     odc = raw.get("outputDataConfig") if isinstance(raw, dict) else None
     s3 = odc.get("s3OutputDataConfig") if isinstance(odc, dict) else None
@@ -958,11 +958,11 @@ def _video_result_from_bedrock(
 def _append_video_auth(
     url: str, provider: Provider, pname: ProviderName, cfg: Any
 ) -> str:
-    """Append the provider's query-param API key to a video URL when the
-    provider authenticates that way (Google ?key=); a no-op for bearer-header
-    providers (every other video provider). Picks ? or & based on whether the
-    URL already carries a query string (the Files-API download URI arrives with
-    ?alt=media)."""
+    """
+
+
+
+"""
     if auth_scheme(pname) != AuthScheme.QUERY_PARAM_KEY or not cfg.auth_query_param:
         return url
     sep = "&" if "?" in url else "?"
@@ -976,12 +976,12 @@ def _download_video_bytes(
     resp: VideoResponse,
     headers: dict[str, str],
 ) -> VideoResponse:
-    """Fetch the finished video for download-delivery providers
-    (vg_cfg.output_delivery == DeliveryDownload, e.g. Veo). The poll result
-    placed the temporary fetch URI in VideoData.url; this GETs each one
-    (carrying the provider's query-param auth when applicable) and moves the
-    payload into VideoData.bytes, clearing url so the source-XOR contract holds
-    (VID-004): download delivery returns bytes, never a url."""
+    """
+
+
+
+
+"""
     for video in resp.videos:
         if not video.url:
             continue
@@ -992,17 +992,17 @@ def _download_video_bytes(
 
 
 def _video_fallback_mime(vg_cfg: VideoGenDef) -> str:
-    """Return the first model's output MIME, used when the provider does not
-    echo a MIME on the result."""
+    """
+"""
     if vg_cfg.models:
         return vg_cfg.models[0].output_mime
     return "video/mp4"
 
 
 def _normalize_video_parts(request: VideoRequest) -> list[Part]:
-    """Enforce the XOR rule and produce the canonical list[Part]. When only
-    prompt is set, synthesise [Part(text=prompt)]. Both empty or both set
-    raises ValidationError."""
+    """
+
+"""
     has_prompt = bool(request.prompt)
     has_parts = bool(request.parts)
     if has_prompt and has_parts:
@@ -1024,14 +1024,14 @@ def _join_prompt_text(parts: list[Part]) -> str:
 
 
 def _video_seed_image_url(parts: list[Part]) -> str:
-    """Build the image-to-video seed-frame data URL for wire shapes that
-    condition on a single reference frame (Grok Imagine, BUG-010). The image
-    Part's bytes are inlined as a data URL carried in xAI's image.url field,
-    mirroring the Grok image-edit encoding in image.py. Returns "" when no image
-    part is present (the text-to-video hot path). Raises on more than one image
-    part: Grok animates a single seed frame, so multi-image conditioning is a
-    separate slice — rejecting is honest where silently using the first would
-    reintroduce the silent-drop bug."""
+    """
+
+
+
+
+
+
+"""
     seed = None
     for part in parts:
         if part.image is None:

@@ -1,10 +1,10 @@
-"""Job engine (ADR-062 / ADR-063) tests — mirror of go/job_test.go.
+"""
 
-The engine is proven end-to-end by the migrated batch + transcription paths
-(test_batch / test_transcription). These cover the new public surface the
-migration adds: poll (one normalized round-trip, ADR-063), the batch deadline
-backstop + poll_deadline override (ADR-062 OQ-1), and the failed-vs-timeout
-distinction (POLL-008).
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ ASSEMBLYAI_AUDIO_URL = "https://storage.example.com/meeting.mp3"
 _FAST = {"poll_interval": 0.01}
 
 
-# ============================ transcription poll ============================
+#
 
 
 def _completed_transcript() -> dict[str, Any]:
@@ -41,8 +41,8 @@ def _completed_transcript() -> dict[str, Any]:
 
 
 class _AssemblyAIServer:
-    """Serves the AssemblyAI submit + poll endpoints. The poll returns
-    ``processing`` for the first ``pending_polls`` GET calls, then ``done_body``."""
+    """
+"""
 
     def __init__(self, pending_polls: int, done_body: dict[str, Any]) -> None:
         self.pending_polls = pending_polls
@@ -108,8 +108,8 @@ def _assemblyai_handle(base_url: str):
 
 
 def test_transcription_poll_succeeded() -> None:
-    """poll on a completed job returns SUCCEEDED with the result populated inline
-    (the result decode is the terminal capability tail) and no failure cause."""
+    """
+"""
     with _AssemblyAIServer(pending_polls=0, done_body=_completed_transcript()) as server:
         h = _assemblyai_handle(server.url)
         st = asyncio.run(h.poll())
@@ -121,8 +121,8 @@ def test_transcription_poll_succeeded() -> None:
 
 
 def test_transcription_poll_running() -> None:
-    """poll on an in-progress job returns RUNNING with no result and no cause —
-    one round-trip, no loop."""
+    """
+"""
     with _AssemblyAIServer(pending_polls=5, done_body=_completed_transcript()) as server:
         h = _assemblyai_handle(server.url)
         st = asyncio.run(h.poll())
@@ -133,8 +133,8 @@ def test_transcription_poll_running() -> None:
 
 
 def test_transcription_poll_failed() -> None:
-    """poll on a failed job returns FAILED with the provider error message on the
-    normalized cause (the same message wait surfaces — S02), and no result."""
+    """
+"""
     failed = {
         "id": "transcript-7c2",
         "status": "error",
@@ -152,8 +152,8 @@ def test_transcription_poll_failed() -> None:
 
 
 def test_transcription_wait_failed_error_message() -> None:
-    """The wait path (not just poll) formats a failed job as
-    "<noun> failed: <provider message>" — and it is NOT the timeout sentinel."""
+    """
+"""
     failed = {
         "id": "transcript-7c2",
         "status": "error",
@@ -166,16 +166,16 @@ def test_transcription_wait_failed_error_message() -> None:
     msg = exc.value.message
     assert msg.startswith("transcription failed: ")
     assert "Download error" in msg
-    # POLL-008: a provider-reported failure is NOT the timeout sentinel.
+    #
     assert not isinstance(exc.value, PollTimeoutError)
 
 
-# ================================ batch poll ================================
+#
 
 
 class _BatchPollServer:
-    """Serves the OpenAI batch poll endpoint with a fixed status — enough for the
-    RUNNING + FAILED + deadline paths (no result hop needed)."""
+    """
+"""
 
     def __init__(self, status: str) -> None:
         self.status = status
@@ -225,8 +225,8 @@ def _openai_batch_handle(base_url: str) -> BatchHandle:
 
 
 def test_batch_poll_running() -> None:
-    """BatchHandle.poll on an in-progress batch returns RUNNING without attempting
-    the two-hop result fetch."""
+    """
+"""
     from llmkit.builders.batch import BatchHandle as TypedHandle
 
     with _BatchPollServer("in_progress") as server:
@@ -238,9 +238,9 @@ def test_batch_poll_running() -> None:
 
 
 def test_batch_poll_failed() -> None:
-    """A batch the provider reports as terminally failed (OpenAI status "failed",
-    carried by polling_error_values) classifies as FAILED on the FIRST poll — it
-    does not hang to the deadline backstop."""
+    """
+
+"""
     from llmkit.builders.batch import BatchHandle as TypedHandle
 
     with _BatchPollServer("failed") as server:
@@ -254,8 +254,8 @@ def test_batch_poll_failed() -> None:
 
 
 def test_batch_wait_failed_error() -> None:
-    """wait_batch on a failed batch returns a provider-failure error (not the
-    timeout sentinel) — the deadline backstop is never reached."""
+    """
+"""
     with _BatchPollServer("expired") as server:
         handle = _openai_batch_handle(server.url)
         with pytest.raises(APIError) as exc:
@@ -265,8 +265,8 @@ def test_batch_wait_failed_error() -> None:
 
 
 def test_batch_wait_times_out_at_backstop() -> None:
-    """A batch that never completes must terminate at the deadline backstop rather
-    than loop forever (ADR-062 OQ-1) — as a distinguishable PollTimeoutError."""
+    """
+"""
     with _BatchPollServer("in_progress") as server:
         handle = _openai_batch_handle(server.url)
         with pytest.raises(PollTimeoutError):
@@ -274,8 +274,8 @@ def test_batch_wait_times_out_at_backstop() -> None:
 
 
 def test_batch_wait_async_cancellable() -> None:
-    """The async wait loop honors cancellation — an asyncio.CancelledError raised
-    while the loop awaits its cancellable sleep propagates (S06)."""
+    """
+"""
     from llmkit.builders.batch import BatchHandle as TypedHandle
 
     async def run() -> None:

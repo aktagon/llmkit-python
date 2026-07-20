@@ -1,17 +1,17 @@
-"""Cross-SDK RESPONSE-body conformance driver — Python (ADR-065 / prompt 045).
+"""
 
-Sibling of test_lifecycle_wire.py, on the response-BODY side. Where the lifecycle
-suite asserts the poll CLASSIFICATION agrees across SDKs, this asserts the body
-PARSE agrees: given the same anchored provider reply, every SDK's public
-c.text.prompt() normalizes it to the SAME projection (Usage dims + finish reason
-+ content). Response parsing is handwritten per SDK (ADR-028 behavior, not
-generated data); this is its parity floor.
 
-The parser INPUT lives at codegen/testdata/wire/response/v1/bodies/<shape>.json;
-this driver serves it verbatim from a single-hop mock, drives one prompt, projects
-the parsed Response, drops target/wire/response/<shape>/python.json, and asserts it
-value-equals the EXPECTED golden codegen/testdata/wire/response/v1/<shape>.json.
-codegen/test_cross_sdk_response.py compares all four SDK artifacts to that golden.
+
+
+
+
+
+
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -41,9 +41,9 @@ ARTIFACT_ROOT = REPO_ROOT / "target" / "wire" / "response"
 
 
 class _ResponseMockServer:
-    """Serves the anchored provider reply verbatim on any method/path — the parse
-    path is single-hop, so a catch-all is enough. The parser dispatches on the
-    client's provider, not the URL."""
+    """
+
+"""
 
     def __init__(self, body: bytes, content_type: str = "application/json") -> None:
         outer = self
@@ -83,8 +83,8 @@ class _ResponseMockServer:
 
 
 def _artifact_from(resp: Response) -> dict:
-    """Normalized, cross-SDK-comparable projection of a parsed Response — the
-    contract-bearing parse output only (Usage dims + finish reason + content)."""
+    """
+"""
     u = resp.usage
     return {
         "usage": {
@@ -102,9 +102,9 @@ def _artifact_from(resp: Response) -> dict:
 
 
 def _image_artifact_from(resp: ImageResponse) -> dict:
-    """Projection for image responses. Content is the media discriminant
-    {kind,mimeType,byteLen,count} (RWR-004) — the four SDKs must agree the same
-    body decodes to the same images (the BUG-024 parse-drift class)."""
+    """
+
+"""
     first = resp.images[0] if resp.images else None
     u = resp.usage
     return {
@@ -128,8 +128,8 @@ def _image_artifact_from(resp: ImageResponse) -> dict:
 
 
 def _speech_artifact_from(resp: SpeechResponse) -> dict:
-    """Projection for speech (TTS) responses — the media discriminant
-    {kind,mimeType,byteLen} (the ADR-018 bytes/mime accessor contract)."""
+    """
+"""
     u = resp.usage
     return {
         "usage": {
@@ -151,7 +151,7 @@ def _speech_artifact_from(resp: SpeechResponse) -> dict:
 
 
 def _transcript_artifact_from(resp: TranscriptionResponse) -> dict:
-    """Projection for transcription (STT) responses — {kind,text,segments}."""
+    """"""
     u = resp.usage
     return {
         "usage": {
@@ -173,11 +173,11 @@ def _transcript_artifact_from(resp: TranscriptionResponse) -> dict:
 
 
 def _models_artifact_from(page: ParsedModelsPage) -> dict:
-    """Projection for catalogue (/models) responses. Content is the catalogue
-    discriminant {kind:"models", count, firstId, lastId, nextCursor, first{...}}
-    (ADR-067 Fix B) — the same body must decode to the same model list +
-    pagination cursor across all five SDKs. No usage / finishReason: a catalogue
-    is not a generation response."""
+    """
+
+
+
+"""
     first = page.records[0] if page.records else None
     last = page.records[-1] if page.records else None
     return {
@@ -245,10 +245,10 @@ def _run_transcript_fixture(shape: str, provider: str, model: str) -> None:
 
 
 def _run_stream_fixture(shape: str, provider: str) -> None:
-    """B-stream: drive the real streaming path against the SSE mock, drain the
-    async chunk iterator, then project the trailing handle's accumulated Response
-    — the same projection as the sync chat artifact. Data-only SSE only (OpenAI /
-    Google); Anthropic event-typed stream deferred (see PROVENANCE.md)."""
+    """
+
+
+"""
     body = (BODY_DIR / f"{shape}.sse").read_bytes()
     with _ResponseMockServer(body, content_type="text/event-stream") as server:
         c = new_client(provider, "k")
@@ -266,17 +266,17 @@ def _run_stream_fixture(shape: str, provider: str) -> None:
 
 
 def _run_models_fixture(shape, parse) -> None:
-    """Catalogue parse seam is driven DIRECTLY (no HTTP path): feed the anchored
-    /models body to the handwritten parser and project the ParsedModelsPage."""
+    """
+"""
     body = (BODY_DIR / f"{shape}.json").read_bytes()
     _write_and_assert(shape, _models_artifact_from(parse(body)))
 
 
 class _BatchResultsMockServer:
-    """Two-hop Anthropic batch mock (HANDOFF-036 A1): GET the batch status ->
-    processing_status "ended", then GET .../results -> the anchored JSONL
-    results file verbatim. Mirror of test_lifecycle_wire.py's mock, on the
-    Anthropic single-endpoint shape."""
+    """
+
+
+"""
 
     def __init__(self, results: bytes) -> None:
         class Handler(BaseHTTPRequestHandler):
@@ -318,10 +318,10 @@ class _BatchResultsMockServer:
 
 
 def _batch_results_artifact(responses: list[Response]) -> dict:
-    """Projection for a completed batch's RESULTS file parse (HANDOFF-036 A1):
-    {kind:"batch_results", count, first{finishReason, text, usage}} — count is
-    the assertion: the errored line is SKIPPED and the successful subset
-    returned, never a thrown-away completed batch."""
+    """
+
+
+"""
     first: dict = {}
     if responses:
         r = responses[0]
@@ -348,11 +348,11 @@ def _batch_results_artifact(responses: list[Response]) -> dict:
 
 
 def _run_batch_results_fixture(shape: str) -> None:
-    """Drive the real public path: BatchHandle.poll against the two-hop mock.
-    The parser INPUT is bodies/<shape>.jsonl (a JSONL results file — one
-    succeeded line + one errored line; Anthropic result.type=errored carries no
-    result.message). Known shared assumption (PROVENANCE.md): no SDK matches
-    results by custom_id — all assume file line order."""
+    """
+
+
+
+"""
     results = (BODY_DIR / f"{shape}.jsonl").read_bytes()
     with _BatchResultsMockServer(results) as server:
         handle = BatchHandle(
@@ -376,8 +376,8 @@ def test_response_chat_google() -> None:
     _run_fixture("chat-google", "google")
 
 
-# Phase 2: image response dispatch (BUG-024 surface) — one golden per
-# llm:imageResponseShape (GoogleParts / DataArrayB64Json / VertexPredictions).
+#
+#
 def test_response_image_google() -> None:
     _run_image_fixture("image-google", "google", "gemini-3.1-flash-image-preview")
 
@@ -390,7 +390,7 @@ def test_response_image_vertex() -> None:
     _run_image_fixture("image-vertex", "vertex", "imagen-3.0-generate-002")
 
 
-# Speech (TTS) + transcription (STT) — the media/transcript accessor contract.
+#
 def test_response_speech_inworld() -> None:
     _run_speech_fixture("speech-inworld", "inworld", "inworld-tts-2", "Dennis")
 
@@ -399,7 +399,7 @@ def test_response_transcription_openai() -> None:
     _run_transcript_fixture("transcription-openai", "openai", "whisper-1")
 
 
-# B-stream: streaming (SSE) response parity — data-only shapes.
+#
 def test_response_stream_openai() -> None:
     _run_stream_fixture("stream-openai", "openai")
 
@@ -408,14 +408,14 @@ def test_response_stream_google() -> None:
     _run_stream_fixture("stream-google", "google")
 
 
-# Batch results parse (HANDOFF-036 A1) — errored line skipped, successful
-# subset returned.
+#
+#
 def test_response_batch_results_anthropic() -> None:
     _run_batch_results_fixture("batch-results-anthropic")
 
 
-# Catalogue (/models) response parity (ADR-067 Fix B) — one golden per provider
-# parse shape (anthropic cursor / openai-cohort / google cursor).
+#
+#
 def test_response_models_anthropic() -> None:
     _run_models_fixture("models-anthropic", parse_anthropic_models_response)
 

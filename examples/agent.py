@@ -1,12 +1,12 @@
-"""Agent tool loop.
+"""
 
-Run: ANTHROPIC_API_KEY=sk-... python examples/agent.py
 
-Note `c.agent` is a stateful field — repeated `bot.prompt(...)` calls
-on the same builder accumulate conversation history. Chain methods
-(`.system(...)`, `.add_tool(...)`) clone and reset state, so a forked
-builder gets a fresh conversation. `bot.reset()` clears history
-without dropping chained config.
+
+
+
+
+
+
 """
 import asyncio
 import os

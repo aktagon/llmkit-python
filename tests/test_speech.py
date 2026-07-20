@@ -1,9 +1,9 @@
-"""Speech generation tests (ADR-049) — mock HTTP server, no live API calls.
+"""
 
-Mirror of go/speech_test.go: the Inworld SpeechInworld wire shape (flat-JSON
-body, Basic auth with the key sent verbatim, base64 audioContent round-trip)
-plus the pre-flight rejections (unknown voice / model, missing voice,
-unsupported provider).
+
+
+
+
 """
 
 from __future__ import annotations
@@ -22,12 +22,12 @@ from llmkit.builders import new_client
 
 INWORLD_TTS2 = "inworld-tts-2"
 
-# Distinct bytes so the round-trip assert is real (RIFF/WAVE-ish header).
+#
 FAKE_AUDIO = bytes([0x52, 0x49, 0x46, 0x46, 0x01, 0x57, 0x41])
 
 
 class _MockServer:
-    """Single-shot HTTP server that captures one request and serves a canned response."""
+    """"""
 
     def __init__(self, response_body: dict[str, Any]):
         self.response_body = response_body
@@ -102,16 +102,16 @@ def test_speech_generate_inworld_round_trips_wav() -> None:
 
 OPENAI_TTS = "gpt-4o-mini-tts"
 
-# Distinct bytes so the raw-body round-trip is real (mp3-ish frame header).
+#
 FAKE_MP3 = bytes([0xFF, 0xFB, 0x90, 0x00, 0x6D, 0x70, 0x33])
 
 
 class _RawMockServer:
-    """HTTP server that captures one JSON request and serves raw (non-JSON) bytes.
-
-    Mirrors the OpenAI /v1/audio/speech shape: a JSON request body, a raw audio
-    response body.
     """
+
+
+
+"""
 
     def __init__(self, response_bytes: bytes, content_type: str):
         self.response_bytes = response_bytes
@@ -215,7 +215,7 @@ def test_speech_generate_missing_voice_rejected() -> None:
 
 
 def test_speech_generate_unsupported_provider_rejected() -> None:
-    # Anthropic does not support speech generation (OpenAI now does, ADR-051).
+    #
     c = new_client("anthropic", "test-token")
     with pytest.raises(ValidationError) as exc:
         asyncio.run(c.speech.model(INWORLD_TTS2).voice("Dennis").generate("Hi"))
@@ -231,8 +231,8 @@ def test_speech_generate_unsupported_provider_rejected() -> None:
     ],
 )
 def test_speech_malformed_2xx_is_decoding_error(response: dict[str, Any], want: str) -> None:
-    """HANDOFF-036 A5: a 2xx whose body does not parse to audio is a decoding
-    error naming the provider and field -- never silent empty audio."""
+    """
+"""
     with _MockServer(response) as server:
         c = new_client("inworld", "test-token")
         c.provider.base_url = server.url
@@ -245,8 +245,8 @@ def test_speech_malformed_2xx_is_decoding_error(response: dict[str, Any], want: 
 
 
 def test_speech_non_json_2xx_is_decoding_error() -> None:
-    """HANDOFF-036 A5: a non-JSON 2xx body on the base64Envelope shape raises
-    a typed APIError instead of a raw json.JSONDecodeError."""
+    """
+"""
     with _RawMockServer(b"<html>Bad Gateway</html>", "text/html") as server:
         c = new_client("inworld", "test-token")
         c.provider.base_url = server.url

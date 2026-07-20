@@ -1,9 +1,9 @@
-"""Hand-coded catalogue runtime (ADR-019). The generated builder classes
-in builders/catalogue.py delegate their terminal methods here.
+"""
 
-Folds in the providers-namespace runtime (catalogue_providers_*) because
-``llmkit.providers`` is the generated subpackage path and Python forbids
-shadowing it with a sibling module.
+
+
+
+
 """
 
 from __future__ import annotations
@@ -61,10 +61,10 @@ class ErrModelsScope(Exception):
 
 
 def classify_catalogue_error(exc: BaseException) -> str:
-    """Map a caught exception to the wire-format discriminant carried in
-    ProviderError.kind (ADR-019 Amendment 1). Unknown errors fall back
-    to "unavailable" — safer than "scope" since scope implies a documented
-    retry path."""
+    """
+
+
+"""
     if isinstance(exc, ErrModelsNotSupported):
         return "not_supported"
     if isinstance(exc, ErrModelsScope):
@@ -75,25 +75,25 @@ def classify_catalogue_error(exc: BaseException) -> str:
 def _apply_cap_filter(
     models: list[ModelInfo], cap_filter: Capability | None
 ) -> list[ModelInfo]:
-    """Records whose capabilities contain cap_filter; no filter when unset.
-    Always a fresh list. The single capability predicate (HANDOFF-036 A4):
-    shared by the compiled-in path (catalogue_filter), the scoped live list
-    (catalogue_run_list), and -- through it -- the live aggregate. get stays
-    an unfiltered point lookup by id."""
+    """
+
+
+
+"""
     if not cap_filter:
         return list(models)
     return [m for m in models if cap_filter in m.capabilities]
 
 
 def catalogue_filter(cap_filter: Capability | None) -> list[ModelInfo]:
-    """Walk the compiled-in slice through the shared capability predicate.
-    Returns a fresh list so callers cannot mutate the module-level
-    constant."""
+    """
+
+"""
     return _apply_cap_filter(compiled_in_models, cap_filter)
 
 
 def catalogue_lookup(id: str) -> ModelInfo | None:
-    """Linear scan over the compiled-in slice. Returns None on miss."""
+    """"""
     for m in compiled_in_models:
         if m.id == id:
             return m
@@ -101,10 +101,10 @@ def catalogue_lookup(id: str) -> ModelInfo | None:
 
 
 async def catalogue_run_live(models: "Models") -> LiveResult:
-    """Fan out per-provider live calls and aggregate into LiveResult.
-    Errors land in result.errors as typed ProviderError per Amendment 1.
-    cap_filter is applied per-provider inside scoped.list()
-    (HANDOFF-036 A4)."""
+    """
+
+
+"""
     from .builders.catalogue import ScopedModels as _ScopedModels
 
     pc = models.client.provider
@@ -135,12 +135,12 @@ async def catalogue_run_live(models: "Models") -> LiveResult:
 
 
 async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
-    """Single-provider live HTTP. Paginates per the catalogue config until
-    the parser reports no next cursor; enriches each record with the
-    ontology-derived capability list and applies the chain's cap_filter
-    (with_capability composes with provider(p).list() -- HANDOFF-036 A4;
-    get stays an unfiltered point lookup by id). Middleware fires once per
-    call (not per page) so observability stays at the call granularity."""
+    """
+
+
+
+
+"""
     cfg = catalogue_by_provider.get(scoped.target.name)
     if cfg is None:
         raise ErrModelsNotSupported()
@@ -152,8 +152,8 @@ async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
         op=MiddlewareOp.MODELS_LIST,
         provider=scoped.target.name,
     )
-    # Client-scoped hooks (telemetry, ADR-054) observe catalogue calls too
-    # (HANDOFF-036 A3); the Swift seam is the reference.
+    #
+    #
     mws = scoped.client._middleware
     fire_pre(mws, base_event)
     start = time.monotonic()
@@ -182,7 +182,7 @@ async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
 
 
 async def catalogue_run_get(scoped: "ScopedModels", id: str) -> ModelInfo:
-    """Single-provider live model fetch. URL shapes pinned in plan 025."""
+    """"""
     cfg = catalogue_by_provider.get(scoped.target.name)
     if cfg is None:
         raise ErrModelsNotSupported()
@@ -197,7 +197,7 @@ async def catalogue_run_get(scoped: "ScopedModels", id: str) -> ModelInfo:
         provider=scoped.target.name,
         model=id,
     )
-    # Client-scoped hooks observe catalogue calls (HANDOFF-036 A3).
+    #
     mws = scoped.client._middleware
     fire_pre(mws, base_event)
     start = time.monotonic()
@@ -228,7 +228,7 @@ async def catalogue_run_get(scoped: "ScopedModels", id: str) -> ModelInfo:
     return _enrich(scoped, [record])[0]
 
 
-# === Providers-namespace runtime (hand-coded mirror of go/providers.go) ===
+#
 
 
 def catalogue_providers_list(client: "Client") -> list[ProviderInfo]:
@@ -238,15 +238,15 @@ def catalogue_providers_list(client: "Client") -> list[ProviderInfo]:
     return [info(ProviderName(p.name))]
 
 
-# === HTTP internals ===
+#
 
 
 def _effective_provider(scoped: "ScopedModels") -> Provider:
-    """Materialise the Provider used for HTTP from the Client's stored
-    credentials, not from the user-supplied scoped.target. The target
-    carries only the provider name (used for parser dispatch); the
-    base_url / api_key live on client.provider where base_url
-    sets them."""
+    """
+
+
+
+"""
     pc = scoped.client.provider
     return Provider(
         name=scoped.target.name,
@@ -263,10 +263,10 @@ def _paginate_sync(
     cursor_param: str,
     parser_kind: str,
 ) -> list[ParsedModelRecord]:
-    """Synchronous pagination loop. Runs in a worker thread per
-    asyncio.to_thread so other live fan-out tasks proceed in parallel.
-    urllib is blocking, which is why we don't call it on the event loop
-    directly."""
+    """
+
+
+"""
     headers = _build_catalogue_headers(provider, pcfg)
     cursor = ""
     all_records: list[ParsedModelRecord] = []
@@ -297,9 +297,9 @@ def _get_sync(
 
 def _http_get(url: str, headers: dict[str, str]) -> bytes:
     try:
-        # Request(url) itself raises ValueError for a malformed URL (e.g. an
-        # unrecognized scheme) — construct it inside the try so that case is
-        # caught below alongside urlopen's own failures.
+        #
+        #
+        #
         req = urllib.request.Request(url, method="GET")
         for k, v in headers.items():
             req.add_header(k, v)
@@ -314,14 +314,14 @@ def _http_get(url: str, headers: dict[str, str]) -> bytes:
             f"llmkit: provider models endpoint unavailable: {exc}"
         ) from exc
     except ValueError as exc:
-        # A malformed base_url makes urlopen raise a bare ValueError whose
-        # message embeds the full URL (including the spliced API key query
-        # param) — e.g. "unknown url type: 'not-a-valid-url?key=...'". Do
-        # NOT interpolate `exc` here (unlike the branch above, which is safe
-        # because URLError/TimeoutError/OSError never carry the URL), and
-        # chain `from None` — `from exc` would still leak the key-bearing
-        # message via __cause__ to logging.exception/traceback.format_exc/an
-        # uncaught-exception printout.
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        #
         raise ErrModelsUnavailable(
             f"llmkit: provider models endpoint unavailable: invalid request URL ({type(exc).__name__})"
         ) from None
@@ -362,9 +362,9 @@ def _parse_single_record(kind: str, body: bytes) -> ParsedModelRecord:
 
 
 def _append_cursor(raw_url: str, cursor_param: str, cursor: str) -> str:
-    # Splices the pagination cursor into the URL using the cursor query-param
-    # name carried by the generated CatalogueConfig (ADR-067 Fix A). An empty
-    # cursor or an empty cursor_param (PaginationNone) leaves the URL unchanged.
+    #
+    #
+    #
     if not cursor or not cursor_param:
         return raw_url
     sep = "&" if "?" in raw_url else "?"
@@ -390,7 +390,7 @@ def _build_catalogue_headers(provider: Provider, pcfg: ProviderSpec) -> dict[str
         headers[pcfg.auth_header] = provider.api_key
     if pcfg.required_header:
         headers[pcfg.required_header] = pcfg.required_header_value
-    # ADR-052: custom headers reach the catalogue path too.
+    #
     merge_caller_headers(headers, provider.headers)
     return headers
 

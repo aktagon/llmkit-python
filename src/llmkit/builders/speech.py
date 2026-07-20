@@ -1,6 +1,6 @@
-"""Owns Speech.generate translation (ADR-049). The typed-builder method is
-the only public entry point for speech generation; the internal
-generate_speech helper in ../speech.py holds the runtime."""
+"""
+
+"""
 
 from __future__ import annotations
 

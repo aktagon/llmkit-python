@@ -1,10 +1,10 @@
-"""Speech generation (text-to-speech) runtime — mirror of go/speech.go and
-ts/src/speech.ts (ADR-049).
+"""
 
-Pre-flight validation (model + text + voice required; provider supports
-speech; model in catalogue; voice in catalogue) runs before any HTTP call.
-One wire shape (SpeechInworld): a flat-JSON POST whose response carries base64
-audio at audioContent. Sync, single AudioData, no middleware.
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -30,10 +30,10 @@ from .structs import AudioData, SpeechResponse, Usage  # noqa: E402,F401
 
 @dataclass
 class SpeechRequest:
-    """Text-to-speech request. Text is the single utterance to speak
-    (single-turn, no Message/Role wrapper — ADR-049 SPK-003); voice is the
-    request-data selector validated pre-flight against the provider's
-    catalogue (SPK-004); model is required."""
+    """
+
+
+"""
 
     model: str = ""
     voice: str = ""
@@ -46,11 +46,11 @@ def generate_speech(
     *,
     request_timeout: float = 600.0,
 ) -> SpeechResponse:
-    """Synthesize speech audio from text.
-
-    Internal helper — the public surface is Speech.generate in
-    llmkit/builders/speech.py.
     """
+
+
+
+"""
     cfg = PROVIDERS.get(provider.name)
     if cfg is None:
         raise ValidationError(field="provider", message=f"unknown: {provider.name}")
@@ -113,10 +113,10 @@ def _find_speech_model(cfg: SpeechGenDef, model_id: str) -> SpeechModelDef | Non
     return None
 
 
-# _dispatch_speech_http picks a wire shape per provider config (never by
-# provider name). SpeechInworld is a flat-JSON POST whose response carries
-# base64 audio; SpeechOpenAI is a flat-JSON POST whose response body is the raw
-# audio bytes.
+#
+#
+#
+#
 def _dispatch_speech_http(
     cfg: Any,
     sg_cfg: SpeechGenDef,
@@ -130,8 +130,8 @@ def _dispatch_speech_http(
     return url, _build_inworld_speech_body(request)
 
 
-# _build_openai_speech_body assembles the OpenAI /v1/audio/speech request body.
-# Slice 1 fixes response_format=mp3 (KISS); format selection is a later slice.
+#
+#
 def _build_openai_speech_body(request: SpeechRequest) -> dict[str, Any]:
     return {
         "model": request.model,
@@ -141,9 +141,9 @@ def _build_openai_speech_body(request: SpeechRequest) -> dict[str, Any]:
     }
 
 
-# _build_inworld_speech_body assembles the Inworld /tts/v1/voice request body.
-# Slice 1 sends a fixed audioConfig (LINEAR16/22050 -> WAV) and BALANCED
-# delivery; format/sample-rate selection is a later slice (ADR-049 OQ-5).
+#
+#
+#
 def _build_inworld_speech_body(request: SpeechRequest) -> dict[str, Any]:
     return {
         "text": request.text,
@@ -157,10 +157,10 @@ def _build_inworld_speech_body(request: SpeechRequest) -> dict[str, Any]:
     }
 
 
-# _parse_speech_response decodes the synthesized audio per the wire shape's
-# audio response encoding (ADR-051 OAA-002). "rawBody" (OpenAI) takes the
-# response body verbatim as the audio bytes; "base64Envelope" (Inworld) parses
-# a JSON envelope and base64-decodes the audio field.
+#
+#
+#
+#
 def _parse_speech_response(
     provider_name: str, audio_encoding: str, fallback_mime: str, resp_body: bytes
 ) -> SpeechResponse:
@@ -168,9 +168,9 @@ def _parse_speech_response(
         return SpeechResponse(
             audio=AudioData(mime_type=fallback_mime, bytes=resp_body), usage=Usage()
         )
-    # base64Envelope: {"audioContent": "<base64>", "usage": {...}}. A 2xx body
-    # that does not parse to audio is a decoding error (HANDOFF-036 A5) --
-    # never a silent empty clip.
+    #
+    #
+    #
     try:
         raw = json.loads(resp_body)
     except json.JSONDecodeError as exc:

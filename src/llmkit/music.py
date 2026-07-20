@@ -1,11 +1,11 @@
-"""Music generation runtime — mirror of go/music.go and ts/src/music.ts (ADR-033).
+"""
 
-Pre-flight validation (model required; each part exactly one of text or
-lyrics; image parts rejected) runs before any HTTP call. Lyrics support is
-advisory (ADR-037 MUS-008), not gated: lyrics on an instrumental-only model
-fold into the prompt for the Predict shape. Dispatch branches on mg_cfg.wire_shape, which
-fully determines the request body, the response audio path, AND the byte
-encoding (base64 for Vertex/Gemini, hex for MiniMax).
+
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -37,32 +37,32 @@ from .structs import AudioData, MusicResponse  # noqa: E402,F401
 
 @dataclass
 class MusicRequest:
-    """Music-generation request. Model is required: music-generation models
-    are explicit choices and the text-generation default does not generate
-    audio.
-
-    Input is provided in one of two mutually-exclusive forms:
-      - prompt: terse sugar for the prompt-only hot path. Internally
-        desugars to parts=[Part(text=prompt)] before serialisation.
-      - parts: canonical sequence of text and lyrics parts. A music request
-        never carries image parts; the runtime rejects them pre-flight.
-
-    Pre-flight validation requires exactly one of prompt or parts to be
-    non-empty (XOR). Lyrics on an instrumental-only model are advisory, not
-    rejected (ADR-037 MUS-008): they fold into the prompt for the Predict shape.
     """
+
+
+
+
+
+
+
+
+
+
+
+
+"""
 
     model: str = ""
     prompt: str = ""
     parts: list[Part] = field(default_factory=list)
 
 
-# AudioData and MusicResponse are generated from the ontology (ADR-018,
-# API-PDS-002) and live in llmkit.structs. Annotations in this file are
-# strings (PEP 563) so referencing MusicResponse in annotations needs no
-# import; runtime constructor calls use a function-local import to avoid the
-# structs <-> image import cycle (structs imports nothing back from music,
-# but mirror image.py's deferred-import pattern for consistency).
+#
+#
+#
+#
+#
+#
 
 
 def generate_music(
@@ -73,15 +73,15 @@ def generate_music(
     request_timeout: float = 600.0,
     raw: bool = False,
 ) -> MusicResponse:
-    """Produce audio from a text prompt, optionally conditioned on lyrics.
-
-    Input is either prompt (sugar) or parts (canonical sequence) — exactly
-    one must be set. Pre-flight validation rejects image parts, unknown
-    models, and lyrics on instrumental-only models before any HTTP call.
-
-    Internal helper — the public surface is Music.generate in
-    llmkit/builders/music.py.
     """
+
+
+
+
+
+
+
+"""
     if not provider.api_key:
         raise ValidationError(field="api_key", message="required")
     if not request.model:
@@ -122,9 +122,9 @@ def generate_music(
             field="model",
             message=f"{request.model} is not a known music-generation model for {provider.name}",
         )
-    # ADR-037 (MUS-008): supports_lyrics is advisory metadata, not a gate.
-    # Lyrics on an instrumental-only model fold into the prompt (for the
-    # single-prompt Predict shape) and the model ignores or honors them.
+    #
+    #
+    #
 
     mws = list(middleware or [])
     base_event = Event(
@@ -190,9 +190,9 @@ def _find_music_model(cfg: MusicGenDef, model_id: str) -> MusicModelDef | None:
 
 
 def _normalize_music_parts(request: MusicRequest) -> list[Part]:
-    """Enforce the XOR rule and produce the canonical list[Part]. When only
-    prompt is set, synthesise [Part(text=prompt)]. Both empty or both set
-    raises ValidationError."""
+    """
+
+"""
     has_prompt = bool(request.prompt)
     has_parts = bool(request.parts)
     if has_prompt and has_parts:
@@ -202,16 +202,16 @@ def _normalize_music_parts(request: MusicRequest) -> list[Part]:
     return [Part(text=request.prompt)] if has_prompt else list(request.parts)
 
 
-# _dispatch_music_http picks a wire shape per provider config (never by
-# provider name — the wire shape is the single discriminator):
 #
-#   - MusicPredict (Vertex): instances/parameters envelope to :predict;
-#     audio at predictions[].audioContent (base64 WAV).
-#   - MusicGenerateContent (Gemini): prompt + lyrics fold into
-#     contents[0].parts[].text with responseModalities=["AUDIO"]; audio at
-#     candidates[0].content.parts[].inlineData.data (base64).
-#   - MusicMinimax: top-level model/prompt/lyrics/audio_setting to the
-#     absolute gen_endpoint; audio at data.audio (hex).
+#
+#
+#
+#
+#
+#
+#
+#
+#
 def _dispatch_music_http(
     provider: Provider,
     cfg: Any,
@@ -233,16 +233,16 @@ def _dispatch_music_http(
             else base_url + mg_cfg.gen_endpoint
         )
         return url, body
-    # MusicGenerateContent (Gemini).
+    #
     body = _build_gemini_music_body(parts)
     return _build_music_url(provider, cfg, mg_cfg, model), body
 
 
 def _build_vertex_music_body(parts: list[Part]) -> dict[str, Any]:
-    """Vertex AI Lyria :predict body. Lyria 2 has no lyrics wire-slot, so any
-    lyrics parts fold into the prompt text (ADR-037 MUS-008); the instrumental
-    model ignores vocal content. The instances/parameters envelope mirrors
-    Vertex Imagen."""
+    """
+
+
+"""
     prompt = _join_prompt_text(parts)
     lyrics = _join_lyrics_text(parts)
     if lyrics:
@@ -254,9 +254,9 @@ def _build_vertex_music_body(parts: list[Part]) -> dict[str, Any]:
 
 
 def _build_gemini_music_body(parts: list[Part]) -> dict[str, Any]:
-    """Gemini generateContent body for Lyria 3. Text and lyrics parts both
-    serialise as {text} parts in caller order (Gemini takes custom lyrics
-    inline in the prompt text). responseModalities requests AUDIO output."""
+    """
+
+"""
     wire: list[dict[str, Any]] = []
     for p in parts:
         if p.lyrics:
@@ -270,9 +270,9 @@ def _build_gemini_music_body(parts: list[Part]) -> dict[str, Any]:
 
 
 def _build_minimax_music_body(parts: list[Part], model: str) -> dict[str, Any]:
-    """MiniMax /v1/music_generation body. Prompt parts join into `prompt`;
-    lyrics parts join into `lyrics`. output_format=hex returns hex-encoded
-    audio at data.audio."""
+    """
+
+"""
     body: dict[str, Any] = {
         "model": model,
         "prompt": _join_prompt_text(parts),
@@ -298,9 +298,9 @@ def _join_lyrics_text(parts: list[Part]) -> str:
 
 
 def _build_music_url(p: Provider, cfg: Any, mg_cfg: MusicGenDef, model: str) -> str:
-    """Substitute the per-call model into the provider's endpoint template
-    (Gemini reuses the main generateContent endpoint) and append the query
-    auth key for query-param-key providers (Google)."""
+    """
+
+"""
     base = p.base_url or cfg.base_url
     endpoint = mg_cfg.gen_endpoint or cfg.endpoint or ""
     if auth_scheme(ProviderName(p.name)) == AuthScheme.QUERY_PARAM_KEY:
@@ -314,9 +314,9 @@ def _build_music_url(p: Provider, cfg: Any, mg_cfg: MusicGenDef, model: str) -> 
 def _parse_music_response(
     wire_shape: str, fallback_mime: str, body: bytes
 ) -> MusicResponse:
-    """Decode the audio payloads per wire shape. Each shape's response
-    diverges enough (predictions[] vs candidates[] vs data.audio, base64 vs
-    hex) that a branch is clearer than a generic walker."""
+    """
+
+"""
     from .structs import MusicResponse  # deferred to mirror image.py pattern
 
     try:
@@ -337,8 +337,8 @@ def _parse_music_response(
 def _parse_vertex_music_response(
     raw: dict[str, Any], fallback_mime: str
 ) -> MusicResponse:
-    """Decode Vertex Lyria :predict responses. Shape:
-    {"predictions": [{"audioContent": "<base64>", "mimeType": "audio/wav"}]}."""
+    """
+"""
     from .structs import MusicResponse
 
     preds = raw.get("predictions") if isinstance(raw, dict) else None
@@ -372,8 +372,8 @@ def _parse_vertex_music_response(
 def _parse_gemini_music_response(
     raw: dict[str, Any], fallback_mime: str
 ) -> MusicResponse:
-    """Walk candidates[0].content.parts, decoding each inlineData audio part
-    and concatenating text parts (generated lyrics)."""
+    """
+"""
     from .structs import MusicResponse
 
     candidates = raw.get("candidates") if isinstance(raw, dict) else None
@@ -420,8 +420,8 @@ def _parse_gemini_music_response(
 def _parse_minimax_music_response(
     raw: dict[str, Any], fallback_mime: str
 ) -> MusicResponse:
-    """Decode MiniMax /v1/music_generation responses. Shape:
-    {"data": {"audio": "<hex>"}, "base_resp": {"status_msg": "..."}}."""
+    """
+"""
     from .structs import MusicResponse
 
     audio: list[AudioData] = []

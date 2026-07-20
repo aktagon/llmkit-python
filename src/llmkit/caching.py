@@ -1,4 +1,4 @@
-"""Caching lifecycle: explicit (inline mutations) and resource (pre-flight request)."""
+""""""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def apply_caching(
     opts: Options,
     cfg: ProviderSpec,
 ) -> None:
-    """Mutate body to enable caching. Dispatches on the provider's CachingMode."""
+    """"""
     cc = caching_config(ProviderName(provider.name))
     if cc is None:
         raise ValidationError(field="caching", message=f"not supported by {provider.name}")
@@ -114,17 +114,17 @@ def _apply_resource(
         headers[cfg.auth_header] = cfg.auth_prefix + " " + provider.api_key
     elif scheme == AuthScheme.HEADER_API_KEY:
         headers[cfg.auth_header] = provider.api_key
-    # ADR-052: additive; never clobbers the provider auth above.
+    #
     merge_caller_headers(headers, provider.headers)
 
     try:
         resp_body = do_post(create_url, create_json, headers, timeout=opts.request_timeout)
     except APIError as raw_api_err:
-        # Surface the provider's own error envelope (e.g. Gemini's
-        # "Cached content is too small ... min_total_token_count=1024")
-        # rather than the raw body. Caching is optional but must fail
-        # honestly: llmkit never invents the provider's size floor, it
-        # reports whatever the provider rejected with.
+        #
+        #
+        #
+        #
+        #
         err = parse_error(provider.name, raw_api_err.status_code, raw_api_err.message.encode("utf-8"), None)
         _fire_post_err(opts.middleware, base_event, err, start)
         raise err from raw_api_err

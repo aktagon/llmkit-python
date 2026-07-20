@@ -1,4 +1,4 @@
-"""Unit tests for request building. No network, no API keys."""
+""""""
 
 from __future__ import annotations
 
@@ -31,9 +31,9 @@ def test_anthropic_builds_top_level_system() -> None:
 
 
 def test_anthropic_file_request_adds_files_beta_header() -> None:
-    # BUG-017: a text request referencing an uploaded file emits a
-    # document/source:file block, which Anthropic rejects unless the Messages
-    # request carries the Files API beta the upload path already sends.
+    #
+    #
+    #
     cfg = PROVIDERS["anthropic"]
     _, headers = _build_request(
         llmkit.Provider(
@@ -50,8 +50,8 @@ def test_anthropic_file_request_adds_files_beta_header() -> None:
 
 
 def test_anthropic_file_request_composes_files_beta_with_structured_output() -> None:
-    # The Files API beta must compose with the structured-output beta rather
-    # than overwrite it: both features share the anthropic-beta header.
+    #
+    #
     cfg = PROVIDERS["anthropic"]
     _, headers = _build_request(
         llmkit.Provider(
@@ -70,11 +70,11 @@ def test_anthropic_file_request_composes_files_beta_with_structured_output() -> 
     assert "structured-outputs-2025-11-13" in betas
 
 
-# The thinking-budget dotted-path nesting test and the per-model
-# max-tokens key table (BUG-001 / ADR-024) migrated to the
-# wire-conformance suite (ADR-028 M2): the options-anthropic and
-# options-openai-* fixtures in test_request_wire.py witness those bodies
-# byte-for-byte across all four SDKs.
+#
+#
+#
+#
+#
 
 
 def test_openai_puts_system_in_messages_array() -> None:
@@ -92,10 +92,10 @@ def test_openai_puts_system_in_messages_array() -> None:
 
 
 def test_google_places_system_in_sibling_object() -> None:
-    # The generationConfig wrapped-options asserts migrated to the
-    # options-google wire fixture (ADR-028 M2); this test's remaining
-    # subject is system placement (PlacementSiblingObject) and the
-    # contents shape — M4 surfaces not yet fixture-covered.
+    #
+    #
+    #
+    #
     cfg = PROVIDERS["google"]
     body, _ = _build_request(
         llmkit.Provider(name="google", api_key="AIza-test"),
@@ -122,12 +122,12 @@ def test_bedrock_uses_text_block_arrays_and_inference_config() -> None:
 
 
 def test_google_tool_result_resolves_function_name() -> None:
-    """ADR-026 #2: Google's wire identifies a tool result by function NAME, but
-    the universal ToolResult carries only tool_use_id. On the Text/batch path a
-    user supplies a history where the id differs from the name (unlike the
-    agent, whose extractor sets id==name), so the result's functionResponse.name
-    must resolve back to the function name via the preceding tool-call turn — not
-    echo the raw id."""
+    """
+
+
+
+
+"""
     cfg = PROVIDERS["google"]
     req = llmkit.Request(
         messages=[
@@ -182,7 +182,7 @@ def test_validation_rejects_empty_api_key() -> None:
 
 
 def test_validation_rejects_unsupported_option() -> None:
-    # Anthropic does not support frequency_penalty per the ontology.
+    #
     import asyncio
 
     from llmkit.builders import new_client
@@ -218,8 +218,8 @@ def test_sigv4_headers_have_required_fields() -> None:
 
 
 def test_providers_registry_has_all_expected_keys() -> None:
-    # PROVIDERS is crate-internal as of ADR-038 (not re-exported from the llmkit
-    # root); read it from the generated module to assert registry coverage.
+    #
+    #
     from llmkit.providers.generated.providers import PROVIDERS
 
     expected = {
@@ -235,7 +235,7 @@ def test_providers_registry_has_all_expected_keys() -> None:
 
 
 def test_usage_cost_extracted_for_openrouter() -> None:
-    """BUG-005 / ADR-027: OpenRouter reports usage.cost (USD) -> Usage.cost."""
+    """"""
     from llmkit.client import _parse_response
 
     body = json.dumps(
@@ -249,8 +249,8 @@ def test_usage_cost_extracted_for_openrouter() -> None:
 
 
 def test_usage_cost_grok_ticks_to_usd() -> None:
-    """ADR-027 usageCostScale: xAI reports cost_in_usd_ticks (1 USD = 1e10
-    ticks), so scale 1e-10 converts to USD. 2856000 ticks = $0.0002856."""
+    """
+"""
     from llmkit.client import _parse_response
 
     body = json.dumps(
@@ -268,7 +268,7 @@ def test_usage_cost_grok_ticks_to_usd() -> None:
 
 
 def test_usage_cost_zero_for_no_cost_provider() -> None:
-    """OpenAI declares no usage_cost_path, so a stray cost field is ignored."""
+    """"""
     from llmkit.client import _parse_response
 
     body = json.dumps(
@@ -282,7 +282,7 @@ def test_usage_cost_zero_for_no_cost_provider() -> None:
 
 
 def test_reasoning_tokens_extracted_for_openai() -> None:
-    """OpenAI o1/o3/o4 expose reasoning_tokens via completion_tokens_details."""
+    """"""
     from llmkit.client import _parse_response
 
     body = json.dumps(
@@ -302,7 +302,7 @@ def test_reasoning_tokens_extracted_for_openai() -> None:
 
 
 def test_reasoning_tokens_zero_for_unreported_provider() -> None:
-    """Anthropic does not report reasoning tokens separately; Usage.reasoning stays 0."""
+    """"""
     from llmkit.client import _parse_response
 
     body = json.dumps(
@@ -316,9 +316,9 @@ def test_reasoning_tokens_zero_for_unreported_provider() -> None:
 
 
 def test_workersai_parses_openai_shaped_response() -> None:
-    """Prompt 043: Cloudflare Workers AI returns the standard OpenAI chat shape
-    over its /ai/v1/ compat shim, so the config-driven parser reads text, usage,
-    and finish_reason with zero provider-specific code."""
+    """
+
+"""
     from llmkit.client import _parse_response
 
     body = json.dumps(

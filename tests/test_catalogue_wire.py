@@ -1,19 +1,19 @@
-"""Cross-SDK catalogue request-URL conformance driver — Python (ADR-067 Fix B).
+"""
 
-The REQUEST-side sibling of test_response_wire.py. Where the response suite
-locks the /models PARSE seam, this locks the URL/auth-assembly seam: for a fixed
-(provider, cursor), every SDK's catalogue-list path must assemble a
-byte-identical {method, url, headers}.
 
-The driver calls the SAME URL/header-assembly seam the paginate loop uses
-(_build_catalogue_url + _append_cursor + _build_catalogue_headers). The
-cursor_param comes from the generated catalogue_by_provider config, NOT from
-inputs.json — so this exercises the generated config.
 
-inputs.json supplies (provider, cursor) + the shared apiKey; each golden
-codegen/testdata/wire/catalogue/v1/<case>.json is the expected outbound request.
-This driver drops target/wire/catalogue/<case>/python.json and asserts it
-value-equals the golden; codegen/test_cross_sdk_catalogue.py compares all five.
+
+
+
+
+
+
+
+
+
+
+
+
 """
 
 from __future__ import annotations

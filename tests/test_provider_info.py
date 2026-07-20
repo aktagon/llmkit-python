@@ -1,10 +1,10 @@
-"""ADR-038: the `providers` namespace (providers.info / providers.list) is the
-narrow public per-provider metadata access — the public replacement for reaching
-into the internal spec (BUG-012). The import is consumer-style (`from llmkit
-import providers`, no `generated` segment); a missing re-export fails it at
-collection time. Values are a projection of provider A-Box facts; the field-set
-assertion guards against the projection silently widening back toward the
-37-field spec.
+"""
+
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -37,9 +37,9 @@ def test_info_projects_exactly_the_contract_fields() -> None:
 
 
 def test_browser_callable_is_the_cors_fact() -> None:
-    # ADR-035: true only for google (its actual response carries ACAO), false
-    # otherwise. BUG-027: openai passes the OPTIONS preflight but omits ACAO on
-    # the actual response, so it is false — keyed off the method response.
+    #
+    #
+    #
     assert providers.info(ProviderName.GOOGLE).browser_callable is True
     assert providers.info(ProviderName.OPENAI).browser_callable is False
     assert providers.info(ProviderName.GROK).browser_callable is False

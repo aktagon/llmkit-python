@@ -1,10 +1,10 @@
-"""ADR-054 opt-in telemetry: OTLP builder parity + exporter behaviour.
+"""
 
-The two parity tests assert the pure ``build_otlp_traces`` output is
-value-identical to the shared cross-SDK goldens at
-``codegen/testdata/wire/telemetry/v1/`` (the same goldens every SDK asserts
-against). The remaining tests cover the exporter wiring: it POSTs to the
-collector, empty endpoints fail loud, and a bad endpoint is fail-open.
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -39,8 +39,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 GOLDEN_DIR = REPO_ROOT / "codegen" / "testdata" / "wire" / "telemetry" / "v1"
 ARTIFACT_ROOT = REPO_ROOT / "target" / "wire" / "telemetry"
 
-# Fixed span identity + timing so the builder output is deterministic and
-# value-comparable against the goldens.
+#
+#
 _TRACE_ID = "5b8efff798038103d269b633813fc60c"
 _SPAN_ID = "eee19b7ec3c1b174"
 _START = "1700000000000000000"
@@ -80,10 +80,10 @@ def test_build_otlp_traces_rejection_matches_golden() -> None:
 
 
 def test_telemetry_error_seam_matches_golden() -> None:
-    # ADR-071 ETY-004: the typed error travels the REAL seam — set_event_error
-    # erases it onto the post Event (err + err_type together), and the pure
-    # event-level builder renders error.type from err_type verbatim. Before
-    # ADR-071 this artifact read "error" for every failure.
+    #
+    #
+    #
+    #
     ev = Event(
         op=MiddlewareOp.LLM_REQUEST,
         phase=MiddlewarePhase.POST,
@@ -101,8 +101,8 @@ def test_telemetry_error_seam_matches_golden() -> None:
 
 
 def test_set_event_error_classifies_structurally() -> None:
-    # ADR-071 ETY-002: classification is isinstance on the typed error, never a
-    # re-parse of the message string; err keeps the exact str(exc) bytes.
+    #
+    #
     cases = [
         (
             APIError(
@@ -124,15 +124,15 @@ def test_set_event_error_classifies_structurally() -> None:
 
 
 class _CollectorServer:
-    """Single-shot OTLP collector mock: records the request path, headers, and
-    decoded JSON body of one export POST."""
+    """
+"""
 
     def __init__(self) -> None:
         self.path: str | None = None
         self.headers: dict[str, str] = {}
         self.body: dict | None = None
-        # Export is now fire-and-forget on a daemon thread (FU-2); tests wait on
-        # this before asserting rather than racing the background POST.
+        #
+        #
         self.received = threading.Event()
         outer = self
 
@@ -165,9 +165,9 @@ class _CollectorServer:
 
 
 class _ProviderServer:
-    """Minimal provider mock: returns an empty JSON body (parses to empty text
-    and zero usage, no error) so the chat path completes and fires post-phase
-    middleware."""
+    """
+
+"""
 
     def __init__(self) -> None:
         outer = self
@@ -211,8 +211,8 @@ def _post_event() -> Event:
 
 
 def test_export_callback_invoked_synchronously() -> None:
-    # ADR-059: the post phase hands finished OTLP bytes to the callback exactly
-    # once, synchronously — no thread is spawned. The pre phase never exports.
+    #
+    #
     got: list[bytes] = []
     mw = make_telemetry_middleware(Telemetry(export=got.append))
 
@@ -253,8 +253,8 @@ def test_http_export_posts_to_collector() -> None:
 
 
 def test_exporter_wired_on_chat_path() -> None:
-    # End-to-end: add_telemetry attaches the exporter to the Text builder seam,
-    # so a real prompt call emits one span to the collector on the post phase.
+    #
+    #
     with _ProviderServer() as provider, _CollectorServer() as collector:
         client = openai("key")
         client.provider.base_url = provider.url
@@ -269,13 +269,13 @@ def test_exporter_wired_on_chat_path() -> None:
 
 
 def test_add_telemetry_missing_export_raises() -> None:
-    # TEL-017 honest-contract guard: enabled telemetry with no sink fails loud.
+    #
     with pytest.raises(ValidationError) as exc:
         add_telemetry(openai("key"), Telemetry(export=None))  # type: ignore[arg-type]
     assert exc.value.field == "telemetry.export"
 
 
 def test_http_export_fail_open_on_bad_endpoint() -> None:
-    # Port 1 is not listening -> connection refused -> swallowed, never raised.
+    #
     mw = make_telemetry_middleware(Telemetry(export=http_export("http://127.0.0.1:1")))
     assert mw(_post_event()) is None

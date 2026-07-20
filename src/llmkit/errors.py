@@ -1,4 +1,4 @@
-"""Public error types and provider error parsing."""
+""""""
 
 from __future__ import annotations
 
@@ -41,11 +41,11 @@ class MiddlewareVetoError(Exception):
 
 @dataclass
 class PollTimeoutError(Exception):
-    """Raised by a blocking ``wait`` / ``wait_batch`` when the deadline backstop
-    fires (ADR-063 POLL-008). Distinguishable from a provider-reported failure
-    (which raises an APIError): a consumer's retry-on-timeout vs
-    alert-on-provider-failure is a real branch. Reachable only from ``wait`` —
-    a single ``poll`` is one round-trip and never times out."""
+    """
+
+
+
+"""
 
     message: str = ""
 

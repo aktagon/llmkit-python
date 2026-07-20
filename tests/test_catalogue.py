@@ -1,5 +1,5 @@
-"""Phase 2.5 catalogue tests (ADR-019). Mirror of Go go/catalogue_test.go
-and TS ts/tests/catalogue.test.ts."""
+"""
+"""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def test_models_list_returns_compiled_in_catalogue() -> None:
     c = anthropic("test-key")
     models = c.models.list()
     assert len(models) > 0
-    # sorted by (provider, id) -> first entry is anthropic
+    #
     assert models[0].provider.name == "anthropic"
 
 
@@ -70,10 +70,10 @@ def test_providers_list_empty_for_endpointless_provider() -> None:
 
 
 def test_local_providers_have_live_catalogue_configs() -> None:
-    # BUG-009(a): local daemons expose OpenAI-compatible /v1/models; the
-    # generated catalogue table must carry all five so list()/live() can
-    # reach the only authoritative model source they have. One witness
-    # guards all four SDKs — the table is emitted from a single A-Box.
+    #
+    #
+    #
+    #
     for name in ("ollama", "vllm", "llamacpp", "lmstudio", "jan"):
         cfg = catalogue_by_provider.get(name)
         assert cfg is not None, f"{name} missing from catalogue_by_provider"
@@ -82,8 +82,8 @@ def test_local_providers_have_live_catalogue_configs() -> None:
 
 
 def test_providers_list_includes_bound_local_provider() -> None:
-    # BUG-009(b): the bound keyless local is eligible for Live() —
-    # no silent exclusion (models: [], errors: {}).
+    #
+    #
     c = ollama("")
     got = c.providers.list()
     assert len(got) == 1
@@ -94,7 +94,7 @@ def test_providers_supported_returns_full_sdk_roster() -> None:
     supported = providers.list()
     assert len(supported) >= 10
     names = [p.slug for p in supported]
-    # Wire-format names — guards against str(Enum) leaking "ProviderName.ANTHROPIC".
+    #
     assert "anthropic" in names
     assert "openai" in names
     assert "google" in names
@@ -116,7 +116,7 @@ def test_scoped_raw_chain_is_immutable() -> None:
 
 
 def test_error_sentinels_default_messages() -> None:
-    # Exercises each sentinel's default constructor so coverage sees __init__.
+    #
     assert "models endpoint" in str(ErrModelsNotSupported())
     assert "unavailable" in str(ErrModelsUnavailable())
     assert "scope" in str(ErrModelsScope())

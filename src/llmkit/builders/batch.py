@@ -1,13 +1,13 @@
-"""Wires the ``Text.batch`` execution-mode terminal + BatchHandle.wait/poll.
+"""
 
-Batch is a text execution mode (parallel to ``stream``): the codegen-emitted
-``Text.batch`` method delegates to ``text_batch(self, *prompts)``. The terminal
-queues the batch and RETURNS a handle without blocking; the blocking one-liner
-is the explicit compose ``(await c.text.batch(...)).wait()``.
 
-BatchHandle is a typed-builder-owned class with ``wait()`` / ``poll()``
-methods. It MUST NOT be awaitable (AJU-007): a result-resolving thenable
-would silently run a minutes-long job on a stray ``await``.
+
+
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -32,14 +32,14 @@ if TYPE_CHECKING:
 
 
 class BatchHandle(_BatchHandleData):
-    """Typed-builder BatchHandle. Inherits the ontology-generated data
-    shape (id, provider, raw) and adds ``wait()`` + ``poll()`` methods so callers
-    can chain ``handle = await c.text.batch(...); await handle.wait()``
-    without reaching for the ``wait_batch`` free function.
+    """
 
-    AJU-007: this handle is deliberately NOT awaitable (no ``__await__``) —
-    a result-resolving thenable would run a minutes-long job on a stray
-    ``await``. The blocking path is the explicit ``(await c.text.batch(...)).wait()``."""
+
+
+
+
+
+"""
 
     async def wait(
         self,
@@ -48,9 +48,9 @@ class BatchHandle(_BatchHandleData):
         request_timeout: float = 600.0,
         poll_deadline: float = DEFAULT_POLL_DEADLINE,
     ) -> list[Response]:
-        """Block until the batch finishes. A thin loop over ``poll`` (ADR-063
-        POLL-003) via the shared engine — the between-poll wait is a cancellable
-        ``asyncio.sleep`` so ``asyncio.CancelledError`` propagates (S06)."""
+        """
+
+"""
         adapter = _new_batch_adapter(
             self, request_timeout, poll_interval, poll_deadline, self.raw
         )
@@ -62,10 +62,10 @@ class BatchHandle(_BatchHandleData):
         request_timeout: float = 600.0,
         poll_deadline: float = DEFAULT_POLL_DEADLINE,
     ) -> JobStatus[list[Response]]:
-        """Perform exactly ONE provider round-trip and return the normalized
-        JobStatus (ADR-063 POLL-001). On a completed batch JobStatus.result carries
-        the ordered responses (two-hop fetch inline); a provider-reported failure
-        yields JobState.FAILED with the status on JobStatus.cause."""
+        """
+
+
+"""
         adapter = _new_batch_adapter(
             self, request_timeout, DEFAULT_POLL_INTERVAL, poll_deadline, self.raw
         )
@@ -86,14 +86,14 @@ def _provider_for(b: "Text") -> Provider:
 
 
 def _option_kwargs(b: "Text") -> dict:
-    """Mirror of text.py's option-threading. Every chain-set field on the
-    Text builder is propagated into the underlying batch call so the wire
-    body carries the same knobs that the one-shot ``Text.prompt`` path
-    sends. ADR-012 REQ-PROP-003 forbids drift between helpers."""
-    # ADR-055: Protocol (e.g. Responses) is prompt-only in slice 1. Reject a
-    # non-default protocol loudly rather than silently sending a Chat
-    # Completions batch — the honest handling of a deferred-capability field
-    # (REQ-PROP-003: read the field, don't silently drop it).
+    """
+
+
+"""
+    #
+    #
+    #
+    #
     if b._protocol:
         raise ValidationError(
             field="protocol",
@@ -132,16 +132,16 @@ def _option_kwargs(b: "Text") -> dict:
 
 
 async def text_batch(b: "Text", *prompts: str) -> BatchHandle:
-    """Queue a batch and return a handle without blocking. The chain's
-    accumulated config (system, max_tokens, schema, ...) applies to every prompt
-    in the variadic. The chain's ``.raw()`` opt-in is remembered on the returned
-    BatchHandle so ``handle.wait()`` honors it (ADR-014). The blocking one-liner
-    is the explicit compose ``(await c.text.batch(...)).wait()``."""
+    """
+
+
+
+"""
     provider = _provider_for(b)
-    # Reuse the prompt path's request builder so batch is byte-identical to
-    # Text.prompt (images + files + history + schema), matching the Go/TS/Rust
-    # batchInputs -> buildRequest reuse. ADR-012 REQ-PROP-003: one builder, no
-    # drift between the prompt and batch wire bodies.
+    #
+    #
+    #
+    #
     requests = [_build_request(b, p) for p in prompts]
     legacy = await asyncio.to_thread(
         legacy_submit_batch,

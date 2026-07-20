@@ -1,14 +1,14 @@
-"""Transcription (speech-to-text) tests (ADR-048) — mock HTTP server, no live
-API calls.
+"""
 
-Mirror of go/transcription_test.go. Transcription is asynchronous: submit
-returns a handle, then handle.wait() polls until terminal. Slice 1 wires the
-AssemblyAI wire shape only: optional upload hop -> {audio_url} submit ->
-poll -> {text, words[]}.
 
-The mock server returns `processing` for the first N polls, then the supplied
-done body. Each wait() call passes a small poll_interval (mirroring
-test_video.py) so tests run fast.
+
+
+
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -33,9 +33,9 @@ _FAST = {"poll_interval": 0.01}
 
 
 def _completed_transcript() -> dict[str, Any]:
-    """AssemblyAI transcript object on terminal success: the full text plus
-    word-level timing (start/end in milliseconds), with a diarized speaker
-    label on the first word only."""
+    """
+
+"""
     return {
         "id": "transcript-7c2",
         "status": "completed",
@@ -49,9 +49,9 @@ def _completed_transcript() -> dict[str, Any]:
 
 
 class _AssemblyAIServer:
-    """Serves the AssemblyAI upload + submit + poll endpoints. The poll returns
-    `processing` for the first ``pending_polls`` GET calls, then the supplied
-    done body. ``upload_url``, when non-empty, is returned from POST /v2/upload."""
+    """
+
+"""
 
     def __init__(
         self,
@@ -126,7 +126,7 @@ class _AssemblyAIServer:
         return f"http://127.0.0.1:{self._httpd.server_port}"
 
 
-# ===== submit + wait (processing -> completed) =====
+#
 
 
 def test_transcription_submit_and_wait_assemblyai() -> None:
@@ -139,7 +139,7 @@ def test_transcription_submit_and_wait_assemblyai() -> None:
 
         resp = asyncio.run(h.wait(**_FAST))
 
-    # AssemblyAI auth: the raw key with no Bearer prefix (HeaderAPIKey).
+    #
     assert server.auth == "test-key"
     assert server.submit_body == {"audio_url": ASSEMBLYAI_AUDIO_URL}
     assert resp.text == "The quarterly review is scheduled for Tuesday."
@@ -212,14 +212,14 @@ def test_transcription_requires_exactly_one_audio_part() -> None:
 
 
 def test_transcription_unsupported_provider_rejected() -> None:
-    # Anthropic does not support transcription (OpenAI now does, ADR-051).
+    #
     c = new_client("anthropic", "test-key")
     with pytest.raises(ValidationError) as exc:
         asyncio.run(c.transcription.submit([audio(ASSEMBLYAI_AUDIO_URL)]))
     assert "does not support transcription" in exc.value.message
 
 
-# === Synchronous transcription — OpenAI (TranscriptionOpenAI, ADR-051) ===
+#
 
 import email  # noqa: E402
 
@@ -235,8 +235,8 @@ OPENAI_VERBOSE = {
 
 
 class _OpenAITranscriptionServer:
-    """Serves POST /v1/audio/transcriptions, parsing the multipart body and
-    exposing the captured fields for assertion."""
+    """
+"""
 
     def __init__(self, resp_body: dict[str, Any]) -> None:
         self.resp_body = resp_body

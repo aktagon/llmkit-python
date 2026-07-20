@@ -1,10 +1,10 @@
-"""Spike 036 (PIVOT wire-conformance): request-byte conformance, generalized
-across capabilities (structured output, agent-path caching).
+"""
 
-Asserts the OUTBOUND request body each SDK produces is value-equal to the shared
-golden at codegen/testdata/wire/request/v1/<fixture>.json — the SAME golden
-every SDK asserts against. These are the wires BUG-007 (Python malformed Google
-body) and BUG-004 (agent-path caching dropped) broke. No API keys.
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -57,11 +57,11 @@ def _assert_wire_golden(fixture: str, body: dict[str, Any]) -> None:
 
 
 def _assert_wire_headers(fixture: str, headers: dict[str, str]) -> None:
-    """Drop the per-SDK request-header artifact (lowercased keys) for the
-    cross-SDK comparator's opt-in header subset-match (HANDOFF-028), closing
-    BUG-017's deferred golden header lock. A fixture with a companion
-    <fixture>.headers.json golden has each named header asserted value-equal
-    across all four SDKs."""
+    """
+
+
+
+"""
     artifact = ARTIFACT_ROOT / fixture / "python.headers.json"
     artifact.parent.mkdir(parents=True, exist_ok=True)
     flat = {k.lower(): v for k, v in headers.items()}
@@ -69,9 +69,9 @@ def _assert_wire_headers(fixture: str, headers: dict[str, str]) -> None:
 
 
 class _CaptureServer:
-    """Single-shot mock that records the outbound POST body and headers
-    (headers feed the in-driver asserts for load-bearing headers, e.g.
-    Anthropic's structured-output beta header)."""
+    """
+
+"""
 
     def __init__(self, response_body: dict[str, Any]):
         self.last_body: dict[str, Any] | None = None
@@ -108,19 +108,19 @@ class _CaptureServer:
         self._httpd.server_close()
 
 
-# Canonical inputs are single-sourced from ontology/wire-fixtures.ttl (plan
-# 039) via the generated wire_inputs.py consts. The schema omits "required"
-# so the goldens witness EnforceStrict normalization (auto-required); it
-# carries additionalProperties:false so Google's strip is witnessed too. See
-# the Go driver comment (the minting reference).
+#
+#
+#
+#
+#
 
 
-# Response shape valid for the text, agent, batch-submit, and image paths
-# across providers (id is the batch-create handle; the inlineData part and the
-# data[] array are the image-shaped fields for the Google and OpenAI image
-# paths — ADR-028 two-helper rule: extend the canned response, don't add
-# capture helpers; missing provider paths parse to empty text / zero usage,
-# which the drivers never assert).
+#
+#
+#
+#
+#
+#
 _CANNED_RESP = {
     "id": "msgbatch_test",
     "request_id": "vid_test",  # VID-007: Grok video-submit handle id
@@ -172,8 +172,8 @@ def test_structured_output_anthropic_matches_shared_golden() -> None:
         c.provider.base_url = server.url
         asyncio.run(c.text.schema(wi.WIRE_STRUCTURED_OUTPUT_SCHEMA).prompt(wi.WIRE_STRUCTURED_OUTPUT_PROMPT))
         assert server.last_body is not None
-        # ADR-028 Open Questions: load-bearing headers assert in-driver.
-        # Without this beta header Anthropic rejects output_format with a 400.
+        #
+        #
         assert (
             server.last_headers.get("anthropic-beta")
             == "structured-outputs-2025-11-13"
@@ -183,8 +183,8 @@ def test_structured_output_anthropic_matches_shared_golden() -> None:
 
 
 def test_anthropic_schema_document_composes_both_betas() -> None:
-    # BUG-017/HANDOFF-028: schema + file id in one request composes the
-    # structured-output beta and the files-api beta into one anthropic-beta.
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = anthropic("key")
         c.provider.base_url = server.url
@@ -199,8 +199,8 @@ def test_anthropic_schema_document_composes_both_betas() -> None:
         _assert_wire_headers("anthropic-schema-document", server.last_headers)
 
 
-# === Plan 039: nested-schema fixtures — the recursive normalization walk
-# (witness-lint first catch; see the Go drivers for the rationale). ===
+#
+#
 
 
 def test_structured_output_nested_google_matches_shared_golden() -> None:
@@ -292,18 +292,18 @@ def test_batch_multimodal_anthropic_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("batch-multimodal-anthropic", server.last_body)
-        # Referencing an uploaded file id in a batch item requires the files-api
-        # beta on the batch CREATE request (batch-modality witness) — golden-locked
-        # across all four SDKs via batch-multimodal-anthropic.headers.json.
+        #
+        #
+        #
         assert (
             server.last_headers.get("anthropic-beta") == "files-api-2025-04-14"
         )
         _assert_wire_headers("batch-multimodal-anthropic", server.last_headers)
 
 
-# === M2: options fixtures, one per model family (see the Go drivers — the
-# minting reference — for WIRE-005 provenance and the live rejection matrix
-# that shaped each option chain). ===
+#
+#
+#
 
 
 def test_options_openai_gpt5_matches_shared_golden() -> None:
@@ -344,7 +344,7 @@ def test_options_openai_gpt4o_matches_shared_golden() -> None:
         _assert_wire_golden("options-openai-gpt4o", server.last_body)
 
 
-# BUG-028: stream_options.include_usage on the OpenAI streaming request body.
+#
 def test_stream_openai_matches_shared_golden() -> None:
     async def _drive(c) -> None:
         stream = c.text.model(wi.WIRE_STREAM_OPENAI_MODEL).stream(wi.WIRE_STREAM_OPENAI_PROMPT)
@@ -399,9 +399,9 @@ def test_anthropic_text_document_matches_shared_golden() -> None:
         )
         assert server.last_body is not None
         _assert_wire_golden("anthropic-text-document", server.last_body)
-        # BUG-017 / HANDOFF-028: the Files API beta must ride on the Messages
-        # request referencing an uploaded file — golden-locked across all four
-        # SDKs via the companion anthropic-text-document.headers.json.
+        #
+        #
+        #
         _assert_wire_headers("anthropic-text-document", server.last_headers)
 
 
@@ -522,8 +522,8 @@ def test_options_google_gemini25_matches_shared_golden() -> None:
         _assert_wire_golden("options-google-gemini25", server.last_body)
 
 
-# === M2: image-generation fixtures (M5 pull-forward, JSON bodies only;
-# multipart edits are a WIRE-008 documented exclusion). ===
+#
+#
 
 
 def test_image_gen_google_flash_matches_shared_golden() -> None:
@@ -566,9 +566,9 @@ def test_image_gen_openai_matches_shared_golden() -> None:
 
 
 def test_image_gen_recraft_matches_shared_golden() -> None:
-    # Recraft generations JSON body (JSONGenerations shape): {model, prompt,
-    # size, n} plus the forced response_format=b64_json (Recraft defaults to
-    # URL delivery; the SDK forces b64_json for a uniform decode path).
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = recraft("key")
         c.provider.base_url = server.url
@@ -594,13 +594,13 @@ def test_image_edit_google_flash_matches_shared_golden() -> None:
         _assert_wire_golden("image-edit-google-flash", server.last_body)
 
 
-# === ADR-034 / VID-007: video generation submit body ===
+#
 
 
 def test_video_grok_matches_shared_golden() -> None:
-    # Grok video-submit body {model, prompt}. The async VideoHandle is
-    # discarded — only the outbound submit bytes are asserted. The canned
-    # response carries request_id so submit parses a handle.
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = grok("key")
         c.provider.base_url = server.url
@@ -612,9 +612,9 @@ def test_video_grok_matches_shared_golden() -> None:
 
 
 def test_video_grok_i2v_matches_shared_golden() -> None:
-    # BUG-010: Grok image-to-video submit body {model, prompt, image:{url}}.
-    # The seed frame inlines as a data URL at image.url (the Grok image-EDIT
-    # encoding); the text-to-video golden above has no image field.
+    #
+    #
+    #
     seed = base64.b64decode(wi.WIRE_VIDEO_GROK_I2V_IMAGE_BASE64)
     with _CaptureServer(_CANNED_RESP) as server:
         c = grok("key")
@@ -629,9 +629,9 @@ def test_video_grok_i2v_matches_shared_golden() -> None:
 
 
 def test_video_zhipu_matches_shared_golden() -> None:
-    # Zhipu CogVideoX video-submit body {model, prompt} — structurally
-    # identical to Grok's (the shared {model, prompt} arm); the lifecycle
-    # divergence is delivery-side, covered by the unit tests.
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = zhipu("key")
         c.provider.base_url = server.url
@@ -643,9 +643,9 @@ def test_video_zhipu_matches_shared_golden() -> None:
 
 
 def test_video_vidu_matches_shared_golden() -> None:
-    # Vidu (Shengshu) video-submit body {model, prompt} — structurally
-    # identical to Grok's/Zhipu's (the shared {model, prompt} arm); the
-    # lifecycle divergence is delivery-side, covered by the unit tests.
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = vidu("key")
         c.provider.base_url = server.url
@@ -657,8 +657,8 @@ def test_video_vidu_matches_shared_golden() -> None:
 
 
 def test_speech_inworld_matches_shared_golden() -> None:
-    # Inworld text-to-speech body {text, voiceId, modelId, audioConfig,
-    # deliveryMode} (ADR-049 SPK-007).
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = inworld("key")
         c.provider.base_url = server.url
@@ -672,9 +672,9 @@ def test_speech_inworld_matches_shared_golden() -> None:
 
 
 def test_speech_openai_matches_shared_golden() -> None:
-    # OpenAI text-to-speech body {model, input, voice, response_format}
-    # (ADR-051). The response is raw audio bytes; only the outbound request
-    # bytes are asserted here.
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = openai("key")
         c.provider.base_url = server.url
@@ -688,10 +688,10 @@ def test_speech_openai_matches_shared_golden() -> None:
 
 
 def test_transcription_assemblyai_matches_shared_golden() -> None:
-    # AssemblyAI transcription submit body {audio_url} (ADR-048). The async
-    # TranscriptionHandle is discarded; only the outbound submit bytes are
-    # asserted. The upload hop is bytes-only and is not exercised here (URL
-    # part skips it).
+    #
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = assemblyai("key")
         c.provider.base_url = server.url
@@ -705,9 +705,9 @@ def test_transcription_assemblyai_matches_shared_golden() -> None:
 
 
 class _MultipartCaptureServer:
-    """Records the outbound multipart/form-data body and decodes it into the
-    canonical descriptor (ADR-051 OQ-3): ordered fields, the file part keeping
-    filename + content-type with a fixed bytes placeholder."""
+    """
+
+"""
 
     def __init__(self, response_body: dict[str, Any]):
         self.descriptor: dict[str, Any] | None = None
@@ -771,9 +771,9 @@ class _MultipartCaptureServer:
 
 
 def test_transcription_openai_matches_shared_golden() -> None:
-    # OpenAI SYNCHRONOUS transcription — the first multipart/form-data request
-    # body (ADR-051). The golden is the canonical multipart descriptor (OQ-3);
-    # the driver decodes its actual encoded multipart body into ordered fields.
+    #
+    #
+    #
     with _MultipartCaptureServer(_CANNED_RESP) as server:
         c = openai("key")
         c.provider.base_url = server.url
@@ -787,10 +787,10 @@ def test_transcription_openai_matches_shared_golden() -> None:
 
 
 def test_video_pixverse_matches_shared_golden() -> None:
-    # PixVerse video-submit body {model, prompt, duration, quality,
-    # aspect_ratio} — the dedicated PixVerse arm (all five fields required);
-    # the dynamic Ai-trace-id header is omitted from the golden (it is a
-    # per-request UUID) and asserted in the lifecycle unit tests.
+    #
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = pixverse("key")
         c.provider.base_url = server.url
@@ -804,9 +804,9 @@ def test_video_pixverse_matches_shared_golden() -> None:
 
 
 def test_video_together_matches_shared_golden() -> None:
-    # Together video-submit body {model, prompt} — structurally identical to
-    # Grok's/Zhipu's (the shared {model, prompt} arm); the lifecycle
-    # divergence is delivery-side, covered by the unit tests.
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = together("key")
         c.provider.base_url = server.url
@@ -820,10 +820,10 @@ def test_video_together_matches_shared_golden() -> None:
 
 
 def test_video_qwen_matches_shared_golden() -> None:
-    # Qwen (DashScope) video-submit body is the NESTED {model, input:{prompt}}
-    # shape — the first divergent submit body. Also asserts the load-bearing
-    # X-DashScope-Async: enable header in-driver (mirrors the Anthropic
-    # beta-header assert).
+    #
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = qwen("key")
         c.provider.base_url = server.url
@@ -836,9 +836,9 @@ def test_video_qwen_matches_shared_golden() -> None:
 
 
 def test_video_minimax_matches_shared_golden() -> None:
-    # MiniMax video-submit body is the shared {model, prompt}. The two-hop
-    # result (poll file_id -> file-retrieve download_url) is delivery-side,
-    # covered by the unit tests.
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = minimax("key")
         c.provider.base_url = server.url
@@ -852,11 +852,11 @@ def test_video_minimax_matches_shared_golden() -> None:
 
 
 def test_video_veo_matches_shared_golden() -> None:
-    # Google Veo video-submit body is the nested {instances:[{prompt}]} shape —
-    # the first video-submit body with NO model field, because Veo carries the
-    # model in the submit PATH (/v1beta/models/{model}:predictLongRunning). The
-    # LRO lifecycle and ?key= query-param auth are delivery-side, covered by the
-    # unit tests.
+    #
+    #
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = google("key")
         c.provider.base_url = server.url
@@ -870,11 +870,11 @@ def test_video_veo_matches_shared_golden() -> None:
 
 
 def test_video_bedrock_matches_shared_golden() -> None:
-    # Bedrock Nova Reel video-submit body is the nested {modelId, modelInput:
-    # {taskType, textToVideoParams:{text}}, outputDataConfig:{s3OutputDataConfig:
-    # {s3Uri}}} shape — the first video-submit body that carries the model in the
-    # body AND a caller output S3 URI, and the first SigV4-signed video submit.
-    # The ARN-signing/poll lifecycle is delivery-side, covered by the unit tests.
+    #
+    #
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = bedrock("key")
         c.provider.base_url = server.url
@@ -888,10 +888,10 @@ def test_video_bedrock_matches_shared_golden() -> None:
 
 
 def test_video_vertex_matches_shared_golden() -> None:
-    # Vertex Veo video-submit body is the nested {instances:[{prompt}]} shape —
-    # byte-identical to the Veo golden (model in the PATH, not the body). The
-    # POST-poll lifecycle (:fetchPredictOperation, inline-base64 download
-    # delivery) is delivery-side, covered by the unit tests.
+    #
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = vertex("key")
         c.provider.base_url = server.url
@@ -904,14 +904,14 @@ def test_video_vertex_matches_shared_golden() -> None:
         _assert_wire_golden("video-vertex", server.last_body)
 
 
-# === Prompt 043: Cloudflare Workers AI (OpenAI-compatible chat) ===
+#
 
 
 def test_workersai_matches_shared_golden() -> None:
-    # Workers AI's OpenAI-compatible chat-completions body {model, messages,
-    # max_tokens, temperature, top_p} — structurally identical to the gpt-4o
-    # options golden (OpenAI ArgsFormat, system-in-messages); the novel bit
-    # (account-id-in-URL) is delivery-side, not request-body-side.
+    #
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = workersai("key")
         c.provider.base_url = server.url
@@ -926,14 +926,14 @@ def test_workersai_matches_shared_golden() -> None:
         _assert_wire_golden("workersai", server.last_body)
 
 
-# === ADR-055 Phase B: OpenAI Responses chat protocol ===
+#
 
 
 def test_responses_openai_matches_shared_golden() -> None:
-    # OpenAI Responses body: the SAME flat message array as Chat Completions but
-    # under "input" (not "messages"), max_tokens renamed to max_output_tokens,
-    # POSTed to /v1/responses. Text.protocol("responses") is the opt-in. The
-    # default Chat Completions goldens are untouched (default pinned).
+    #
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = openai("key")
         c.provider.base_url = server.url
@@ -947,19 +947,19 @@ def test_responses_openai_matches_shared_golden() -> None:
         _assert_wire_golden("responses-openai", server.last_body)
 
 
-# === TASK-002: tool-definition fixtures across the four chat wire families ===
 #
-# Each driver builds the single canonical tool (name/description/schema from the
-# generated wire-input consts), registers it on the agent via add_tool, and
-# prompts it. The mock returns a plain text response, so the agent loop makes one
-# request (carrying the tool defs) and terminates. Mirrors the Go drivers
-# (TestRequestWire_ToolDef* / wireToolDef). NOT live-anchored — parity held by
-# the cross-SDK comparator + mock body, like the keyless providers.
+#
+#
+#
+#
+#
+#
+#
 
 
 def _wire_tool_def() -> Tool:
-    # The Run stub is never invoked: the mock returns plain text, so the agent
-    # loop sends one request carrying the tool defs and terminates.
+    #
+    #
     return Tool(
         name=wi.WIRE_TOOL_TOOL_NAME,
         description=wi.WIRE_TOOL_TOOL_DESCRIPTION,
@@ -996,7 +996,7 @@ def test_tooldef_google_matches_shared_golden() -> None:
 
 
 def test_tooldef_bedrock_matches_shared_golden() -> None:
-    # Bedrock captures the body before the SigV4 auth check, so a dummy key works.
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = bedrock("key")
         c.provider.base_url = server.url
@@ -1006,9 +1006,9 @@ def test_tooldef_bedrock_matches_shared_golden() -> None:
 
 
 def test_bedrock_chat_matches_shared_golden() -> None:
-    # Text prompt to Bedrock (no tools) — the Converse message-transform arm,
-    # plus the inferenceConfig option surface (maxTokens/temperature/top_p/
-    # stopSequences). Mirrors Go's TestRequestWire_BedrockChat.
+    #
+    #
+    #
     with _CaptureServer(_CANNED_RESP) as server:
         c = bedrock("key")
         c.provider.base_url = server.url

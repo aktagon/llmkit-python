@@ -1,22 +1,22 @@
-"""ADR-031: honest no-default contract.
+"""
 
-resolve_model is the single predicate every resolution point dispatches
-on (middleware events, request body, URL templates). Local daemons
-declare no registry default — what a daemon serves is runtime inventory
-— so a missing model choice raises immediately with an instruction to
-pick one, instead of guessing a model the daemon may not have pulled
-(the BUG-009 guess-then-404). Cloud defaults are curated protocol facts
-and stay registry-resolved.
+
+
+
+
+
+
+
 """
 
 from __future__ import annotations
 
 import pytest
 
-# PROVIDERS (the 37-field wire/transform spec registry) is crate-internal as of
-# ADR-038 (no longer re-exported from the llmkit root); this test drives the
-# internal resolve_model against that spec, so it reads it from the generated
-# module directly.
+#
+#
+#
+#
 from llmkit.providers.generated.providers import PROVIDERS
 from llmkit.errors import ValidationError
 from llmkit.middleware import resolve_model

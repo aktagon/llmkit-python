@@ -1,4 +1,4 @@
-"""Multi-turn Agent with tool-calling loop. Mirrors go/agent.go."""
+""""""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ class _InternalMessage:
 
 
 class Agent:
-    """Multi-turn conversation manager with optional tool calling."""
+    """"""
 
     def __init__(
         self,
@@ -85,13 +85,13 @@ class Agent:
         self.tools = []
 
     def chat(self, msg: str) -> Response:
-        """Send a message, execute any tool calls the LLM requests, and return the final response."""
+        """"""
         self.history.append(_InternalMessage(role="user", content=msg))
         return self._run_tool_loop()
 
     def _run_tool_loop(self) -> Response:
-        # Deferred import: client.py imports agent.py at module load, so these
-        # must resolve at call time to break the cycle (existing pattern).
+        #
+        #
         from .client import _build_request, _build_url
         from .transforms import _MsgCalls, _MsgResult, _MsgText
 
@@ -105,12 +105,12 @@ class Agent:
         total_usage = Usage()
 
         for _ in range(self.opts.max_tool_iterations):
-            # Build through the shared builder (ADR-026 PIPE-001/004): the agent
-            # constructs no body of its own. Its trusted history is converted
-            # straight into the internal message sum (PIPE-007) — no round-trip
-            # through the lossy public Message shape — so the tool-aware message
-            # transforms and the option/safety/structured-output steps all run
-            # identically to the Text/batch path.
+            #
+            #
+            #
+            #
+            #
+            #
             req = Request(system=self.system)
             msgs: list = []
             for m in self.history:
@@ -122,9 +122,9 @@ class Agent:
                     msgs.append(_MsgText(role=m.role, text=m.content))
             body, headers = _build_request(self.provider, req, self.opts, cfg, self.tools, msgs=msgs)
 
-            # Caching is a shared request-construction step (ADR-026): applied
-            # on every send path by construction, like Text/batch. Before this,
-            # a .caching() agent silently paid full input price (BUG-004).
+            #
+            #
+            #
             if self.opts.caching:
                 from .caching import apply_caching
 
@@ -211,9 +211,9 @@ class Agent:
             from .structs import ToolResult
 
             for tc in calls:
-                # ADR-020 widened ToolCall.input to Any | None. Tool authors'
-                # run() callback still receives the dict shape they registered,
-                # so coerce non-dicts (None, primitives, lists) to {} here.
+                #
+                #
+                #
                 tc_args = tc.input if isinstance(tc.input, dict) else {}
                 tool = self._find_tool(tc.name)
                 if tool is None:

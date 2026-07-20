@@ -1,11 +1,11 @@
-"""Prompt caching against Anthropic.
+"""
 
-Run: ANTHROPIC_API_KEY=sk-... python examples/caching.py
 
-`.caching()` wraps the system prompt in a cache_control block so repeat
-calls reuse it. Anthropic requires a sizeable system prompt (~1024+
-tokens) before a cache block is created — short prompts are not cached.
-The system prompt below is intentionally long to illustrate the shape.
+
+
+
+
+
 """
 import asyncio
 import os

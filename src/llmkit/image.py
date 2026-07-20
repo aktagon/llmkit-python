@@ -1,10 +1,10 @@
-"""Image generation runtime — mirror of go/image.go.
+"""
 
-Pre-flight validation rejects unsupported aspect ratios, sizes, and
-reference-image counts before any HTTP call. Dispatch branches on
-img_cfg.input_mode (InlineParts → Google generateContent;
-MultipartForm → OpenAI Image API with /generations vs /edits picked
-dynamically per call based on whether image parts are present).
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -36,15 +36,15 @@ from .structs import MediaRef  # noqa: E402,F401
 
 @dataclass
 class Part:
-    """Universal multimodal input atom. Exactly one of text, image,
-    lyrics, audio_url, or audio is set; empty or multiple set is invalid
-    (rejected by pre-flight). Typed-builder accumulators (``c.text.text(s)``,
-    ``c.image.image(m, b)``, ``c.music.lyrics(s)``, ...) are the canonical
-    user-facing path; users assembling Part lists manually can construct
-    Part(text=..., image=MediaRef(...)) directly. lyrics is music-only
-    (ADR-033) — text-generation and image-generation runtimes ignore it.
-    audio_url (a public URL) and audio (local bytes) are transcription-only
-    (ADR-048); construct them with ``audio(url)`` / ``audio_bytes(mime, raw)``."""
+    """
+
+
+
+
+
+
+
+"""
 
     text: str = ""
     image: MediaRef | None = None
@@ -54,17 +54,17 @@ class Part:
 
 
 def audio(url: str) -> Part:
-    """Construct an audio-bearing Part from a public URL, for transcription
-    (ADR-048). The URL is submitted to the provider directly as the audio
-    source. Mirror of Go parts.Audio."""
+    """
+
+"""
     return Part(audio_url=url)
 
 
 def audio_bytes(mime: str, raw: bytes) -> Part:
-    """Construct an audio-bearing Part from local bytes, for transcription
-    (ADR-048). mime is the IANA media type (e.g. "audio/mp3"); raw is the
-    undecoded bytes. The runtime uploads them to the provider first to obtain a
-    URL, then submits that. Mirror of Go parts.AudioBytes."""
+    """
+
+
+"""
     return Part(audio=MediaRef(mime_type=mime, bytes=raw))
 
 
@@ -73,32 +73,32 @@ from .structs import ImageData  # noqa: E402,F401
 
 @dataclass
 class ImageRequest:
-    """Image-generation request. Model is required.
-
-    Input is provided in one of two mutually-exclusive forms:
-      - prompt: terse sugar for the text-only hot path. Internally
-        desugars to parts=[Part(text=prompt)] before serialisation.
-      - parts: canonical multimodal sequence; required for editing and
-        compositional generation where caller-controlled ordering matters.
-
-    Pre-flight validation requires exactly one of prompt or parts to be
-    non-empty (XOR). Image-typed parts respect img_cfg.max_input_count.
     """
+
+
+
+
+
+
+
+
+
+"""
 
     model: str = ""
     prompt: str = ""
     parts: list[Part] = field(default_factory=list)
 
 
-# ImageResponse is generated from the ontology (ADR-018, API-PDS-002)
-# and lives in llmkit.structs. Type annotations in this file are
-# strings (PEP 563 — `from __future__ import annotations` at the top)
-# so referencing ImageResponse in annotations does not need an import.
-# Runtime constructor calls use a function-local `from .structs import
-# ImageResponse` because a module-level import would create a cycle:
-# structs.py imports ImageData from this module, so this module cannot
-# back-import ImageResponse at top level without breaking structs's
-# initialization.
+#
+#
+#
+#
+#
+#
+#
+#
+#
 
 
 def generate_image(
@@ -120,9 +120,9 @@ def generate_image(
     request_timeout: float = 600.0,
     raw: bool = False,
 ) -> ImageResponse:
-    """Produce one or more images from a text prompt, optionally conditioned
-    on reference images for editing/composition.
     """
+
+"""
     if not provider.api_key:
         raise ValidationError(field="api_key", message="required")
     if not request.model:
@@ -147,9 +147,9 @@ def generate_image(
             field="model",
             message=f"{request.model} is not a known image-generation model for {provider.name}",
         )
-    # Empty whitelist means "no client-side check; pass through" — used by
-    # providers (e.g., OpenAI) that accept arbitrary sizes within documented
-    # bounds (plan 020 q1).
+    #
+    #
+    #
     if aspect_ratio and model.aspect_ratios and aspect_ratio not in model.aspect_ratios:
         raise ValidationError(
             field="aspect_ratio",
@@ -170,9 +170,9 @@ def generate_image(
             ),
         )
 
-    # Per-provider knob validation. Quality/output_format/background are
-    # OpenAI-only on the wire; count (n) is OpenAI + xAI; mask is OpenAI
-    # edits-only. Mirrors go/image.go.
+    #
+    #
+    #
     if img_cfg.input_mode == "InlineParts":
         if quality:
             raise ValidationError(field="quality", message=f"not supported by {provider.name}")
@@ -186,7 +186,7 @@ def generate_image(
             raise ValidationError(field="mask", message=f"not supported by {provider.name}")
         if safety_filter:
             raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
-        # safety_settings valid for InlineParts (Google); wired in _build_image_body
+        #
     elif img_cfg.input_mode == "JSONInlineRefs":
         if quality:
             raise ValidationError(field="quality", message=f"not supported by {provider.name}")
@@ -220,11 +220,11 @@ def generate_image(
         if safety_settings:
             raise ValidationError(field="safety_settings", message=f"not supported by {provider.name}; use safety_filter for Vertex Imagen")
     elif img_cfg.input_mode == "JSONGenerations":
-        # Recraft (text-to-image only). The flat generations body carries only
-        # size (-> `size`) and count (-> `n`); aspect_ratio is not a Recraft
-        # wire field (it sizes by an explicit WxH `size`), and the gpt-image /
-        # safety knobs are OpenAI / Google / Vertex only. Image parts are
-        # rejected upstream by the max_input_count==0 gate.
+        #
+        #
+        #
+        #
+        #
         if aspect_ratio:
             raise ValidationError(field="aspect_ratio", message=f"not supported by {provider.name}; use image_size (Recraft sizes by WxH)")
         if quality:
@@ -328,7 +328,7 @@ def generate_image(
                     timeout=request_timeout,
                 )
         except APIError as raw_err:
-            # parse_error returned above is already an APIError; only wrap raw HTTP errors.
+            #
             if raw_err.status_code == 0 or raw_err.message:
                 err = parse_error(
                     provider.name,
@@ -371,10 +371,10 @@ def _find_image_model(cfg: ImageGenDef, model_id: str) -> ImageModelDef | None:
 
 
 def _normalize_image_parts(request: ImageRequest) -> list[Part]:
-    """Enforce the XOR rule and produce the canonical list[Part] the rest
-    of the pipeline operates on. When only prompt is set (the text-only
-    sugar path), synthesise [Part(text=prompt)]. Both empty or both set raises
-    ValidationError."""
+    """
+
+
+"""
     has_prompt = bool(request.prompt)
     has_parts = bool(request.parts)
     if has_prompt and has_parts:
@@ -407,12 +407,12 @@ def _build_openai_gen_body(
     count: int | None,
     extra_fields: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """JSON body for /v1/images/generations.
-
-    Note: gpt-image-* models always return base64-encoded images via
-    ``data[i].b64_json`` and reject the ``response_format`` parameter
-    (it belonged to the legacy dall-e-* surface). Don't set it.
     """
+
+
+
+
+"""
     body: dict[str, Any] = {
         "model": model,
         "prompt": _join_text_parts(parts),
@@ -443,9 +443,9 @@ def _build_openai_edit_multipart(
     mask: MediaRef | None,
     extra_fields: dict[str, Any] | None,
 ) -> tuple[list[tuple[str, str, str, bytes]], dict[str, str]]:
-    """Multipart payload for /v1/images/edits. Each image Part becomes one
-    image[] file in caller order; text Parts join into the ``prompt`` field.
     """
+
+"""
     files: list[tuple[str, str, str, bytes]] = []
     idx = 0
     for part in parts:
@@ -493,12 +493,12 @@ def _build_xai_gen_body(
     count: int | None,
     extra_fields: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """JSON body for xAI Grok /v1/images/generations.
-
-    image_size maps to ``resolution`` (xAI's name for the same concept).
-    aspect_ratio maps as-is. response_format=b64_json is forced because
-    xAI defaults to URL.
     """
+
+
+
+
+"""
     body: dict[str, Any] = {
         "model": model,
         "prompt": _join_text_parts(parts),
@@ -523,8 +523,8 @@ def _build_xai_edit_body(
     count: int | None,
     extra_fields: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """JSON body for xAI Grok /v1/images/edits. Single image part →
-    ``image: {url: "data:..."}``; multiple → ``images: [...]`` in caller order."""
+    """
+"""
     body = _build_xai_gen_body(parts, model, aspect_ratio, image_size, count, extra_fields)
     refs: list[dict[str, str]] = []
     for part in parts:
@@ -547,15 +547,15 @@ def _build_recraft_gen_body(
     count: int | None,
     extra_fields: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """JSON body for Recraft's text-to-image /v1/images/generations endpoint.
-
-    image_size maps to ``size``; count maps to ``n``. response_format is
-    forced to b64_json because Recraft defaults to URL delivery — forcing it
-    keeps the response shape uniform (data[].b64_json). Vector/SVG output is
-    selected by a vector model id (recraftv3_vector), not a body flag, so the
-    body shape is identical for raster and vector. Style and other Recraft-
-    specific knobs ride extra_fields.
     """
+
+
+
+
+
+
+
+"""
     body: dict[str, Any] = {
         "model": model,
         "prompt": _join_text_parts(parts),
@@ -571,10 +571,10 @@ def _build_recraft_gen_body(
 
 
 def _looks_like_svg(data: bytes) -> bool:
-    """Report whether the decoded image bytes are an SVG document. SVG is XML
-    text starting (after optional whitespace) with an XML prolog (<?xml) or
-    the root <svg element. Used to label vector-model output (Recraft)
-    correctly when the provider does not echo a mime type."""
+    """
+
+
+"""
     try:
         s = data.decode("utf-8", "ignore").strip()
     except Exception:
@@ -632,14 +632,14 @@ def _build_vertex_body(
     safety_filter: str,
     extra_fields: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Assemble the Vertex AI Imagen :predict request body.
-
-    Vertex uses an instances/parameters envelope: instance carries the
-    per-call inputs (prompt, image ref for editing, mask for inpainting);
-    parameters carries config (sampleCount, aspectRatio). Extra fields like
-    negativePrompt and safetySetting spread into parameters so callers can
-    reach Imagen-specific knobs without typed chain methods.
     """
+
+
+
+
+
+
+"""
     instance: dict[str, Any] = {"prompt": _join_text_parts(parts)}
     for p in parts:
         if p.image is not None:
@@ -669,10 +669,10 @@ def _build_vertex_body(
 
 
 def _parse_vertex_image_response(raw: dict[str, Any]) -> ImageResponse:
-    """Decode Vertex AI Imagen :predict responses. Shape:
-    {predictions: [{bytesBase64Encoded, mimeType}]}. Vertex does not return
-    token counts in the predict response so Usage stays zero.
     """
+
+
+"""
     from .structs import ImageResponse  # deferred to break import cycle
     preds = raw.get("predictions") if isinstance(raw, dict) else None
     images: list[ImageData] = []
@@ -724,16 +724,16 @@ def _image_auth_headers(p: Provider, cfg: Any, pname: ProviderName) -> dict[str,
         headers[cfg.auth_header] = p.api_key
     if cfg.required_header:
         headers[cfg.required_header] = cfg.required_header_value
-    # ADR-052: additive; never clobbers the provider auth / required header above.
+    #
     merge_caller_headers(headers, p.headers)
     return headers
 
 
 def _parse_image_response(provider_name: str, body: bytes, img_cfg: Any) -> ImageResponse:
-    """Decode an image-gen response. The parser is selected by the config's
-    response wire family (img_cfg.response_shape), never by provider name
-    (BUG-024). img_cfg.usage_input_path/usage_output_path are dotted-from-root
-    and empty when the endpoint reports no usage."""
+    """
+
+
+"""
     from .structs import ImageResponse  # deferred to break import cycle
     try:
         raw = json.loads(body)
@@ -745,15 +745,15 @@ def _parse_image_response(provider_name: str, body: bytes, img_cfg: Any) -> Imag
         ) from exc
 
     if img_cfg.response_shape == "DataArrayB64Json":
-        # OpenAI/xAI/Recraft data[].b64_json shape. SVG bytes (Recraft vector
-        # models) are sniffed to image/svg+xml inside the parser.
+        #
+        #
         return _parse_image_response_data_array(
             raw, img_cfg.usage_input_path, img_cfg.usage_output_path
         )
     if img_cfg.response_shape == "VertexPredictions":
         return _parse_vertex_image_response(raw)
 
-    # GoogleParts: candidates[].content.parts inline data.
+    #
     images, text, finish_reason, finish_message = _extract_google_image_parts(raw)
     tokens = Usage(
         input=extract_int_path(raw, img_cfg.usage_input_path),
@@ -773,14 +773,14 @@ def _parse_image_response_data_array(
     input_path: str,
     output_path: str,
 ) -> ImageResponse:
-    """Walk the data[] array shape used by both OpenAI's and xAI's image
-    APIs. Decodes data[i].b64_json into ImageData; honors data[i].mime_type
-    when echoed back (xAI does, OpenAI does not), defaulting to image/png.
-    Concatenates any data[i].revised_prompt into text. input_path/output_path
-    are dotted-from-root token paths (e.g. "usage.input_tokens"); pass empty
-    strings for providers that don't report counts (xAI reports
-    usage.cost_in_usd_ticks instead).
     """
+
+
+
+
+
+
+"""
     from .structs import ImageResponse  # deferred to break import cycle
     data = raw.get("data") if isinstance(raw, dict) else None
     images: list[ImageData] = []
@@ -798,12 +798,12 @@ def _parse_image_response_data_array(
                 if decoded:
                     echoed = entry.get("mime_type")
                     mime = echoed if isinstance(echoed, str) and echoed else "image/png"
-                    # Vector providers (Recraft recraftv3_vector) return SVG
-                    # bytes in the same b64_json slot without echoing a
-                    # mime_type. Sniff the leading bytes so SVG is labeled
-                    # image/svg+xml rather than the image/png default. Raster
-                    # bytes (PNG/JPEG/WebP) never start with '<', so the sniff
-                    # is a no-op for them.
+                    #
+                    #
+                    #
+                    #
+                    #
+                    #
                     if mime == "image/png" and _looks_like_svg(decoded):
                         mime = "image/svg+xml"
                     images.append(ImageData(mime_type=mime, bytes=decoded))
@@ -819,9 +819,9 @@ def _parse_image_response_data_array(
 def _extract_google_image_parts(
     raw: dict[str, Any],
 ) -> tuple[list[ImageData], str, str, str]:
-    """Return (images, text, finish_reason, finish_message). finish_reason/
-    finish_message are pulled from candidates[0]; both stay empty when the
-    response carries no such fields."""
+    """
+
+"""
     candidates = raw.get("candidates")
     if not isinstance(candidates, list) or not candidates:
         return [], "", "", ""

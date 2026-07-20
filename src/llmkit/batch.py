@@ -1,4 +1,4 @@
-"""Batch API: submit_batch, wait_batch. Mirrors go/batch.go."""
+""""""
 
 from __future__ import annotations
 
@@ -24,12 +24,12 @@ from .providers.generated.request import AuthScheme, auth_scheme
 from .structs import BatchHandle
 from .types import Options, Provider, Request, Response
 
-# Batch poll cadence + deadline (ADR-062 OQ-1). The DEFAULT_POLL_DEADLINE is the
-# OVERALL wall-clock backstop for the poll LOOP — the drift this slice closes:
-# Go/TS/Python batch loops were unbounded; converge on ~10 min. It is a SEPARATE
-# concept from ``request_timeout`` (the per-HTTP-request timeout passed to each
-# do_get/do_post) — never conflate the two (S05). Per-call overridable up to the
-# provider's 24h window via the ``poll_deadline`` kwarg.
+#
+#
+#
+#
+#
+#
 DEFAULT_POLL_DEADLINE = 600.0
 DEFAULT_POLL_INTERVAL = 2.0
 
@@ -55,7 +55,7 @@ def submit_batch(
     request_timeout: float = 600.0,
     raw: bool = False,
 ) -> BatchHandle:
-    """Submit a batch and return a handle for polling."""
+    """"""
     from .client import _build_request, _validate_provider  # avoid circular at import time
 
     _validate_provider(provider)
@@ -124,10 +124,10 @@ def submit_batch(
             from .client import _append_beta
 
             body, beta_headers = _build_batch_body(requests, opts, provider, cfg, bc)
-            # The per-request bodies may require a contract-bearing anthropic-beta
-            # (files-api / structured output) that _build_auth_headers does not
-            # set — ride it onto the batch CREATE request, else a file-referencing
-            # batch item silently drops the beta (batch-modality witness family).
+            #
+            #
+            #
+            #
             for k, v in beta_headers.items():
                 headers[k] = (
                     _append_beta(headers.get(k, ""), v) if k == "anthropic-beta" else v
@@ -150,9 +150,9 @@ def submit_batch(
 
 
 class _BatchAdapter:
-    """Binds the batch capability to the job engine's four seams. Closes over the
-    resolved http timeout + raw flag + provider config so ``result`` can perform
-    batch's two-hop (output_file_id -> GET /content). Mirror of go batchAdapter."""
+    """
+
+"""
 
     def __init__(
         self,
@@ -193,9 +193,9 @@ class _BatchAdapter:
         return classify_by_config(self._lc, body)
 
     def result(self, body: PollBody) -> list[Response]:
-        # The poll body is already decoded — hand it to _fetch_batch_results so a
-        # two-hop provider (OpenAI: output_file_id lives in this same status body)
-        # skips a redundant status GET (S1).
+        #
+        #
+        #
         return _fetch_batch_results(
             self._handle,
             self._base,
@@ -214,11 +214,11 @@ def _new_batch_adapter(
     poll_deadline: float,
     raw: bool,
 ) -> _BatchAdapter:
-    """Assemble the batch adapter + its LifecycleConfig from the batch facts.
-    error_values comes from the provider's polling_error_values fact (OpenAI:
-    failed/expired/cancelled); when absent (Anthropic — failures are per-request)
-    it is empty and a stuck batch terminates at the deadline backstop rather than
-    mislabelling a FAILED terminal. Mirror of go newBatchAdapter."""
+    """
+
+
+
+"""
     p = handle.provider
     cfg = PROVIDERS.get(p.name)
     if cfg is None:
@@ -253,8 +253,8 @@ def _new_batch_adapter(
 
 
 def _non_empty(*values: str) -> tuple[str, ...]:
-    """Filter out empty strings so a provider that leaves a status value unset
-    contributes an empty set. Mirror of go nonEmptyValues."""
+    """
+"""
     return tuple(v for v in values if v)
 
 
@@ -266,15 +266,15 @@ def wait_batch(
     poll_deadline: float = DEFAULT_POLL_DEADLINE,
     raw: bool = False,
 ) -> list[Response]:
-    """Block until the batch finishes and return parsed results. A thin
-    delegation to the shared job engine (ADR-062) — ``poll_job`` owns the loop,
-    deadline, and state machine; the batch adapter carries the batch-specific
-    seams. Signature additive-only (``poll_deadline`` is the NEW overall
-    wall-clock backstop, distinct from the per-request ``request_timeout``, S05).
+    """
 
-    ADR-014 cross-process resume: a handle that remembers raw (set by submit_batch
-    or by a caller reconstructing the dataclass) takes effect at wait time even if
-    the raw kwarg was not passed."""
+
+
+
+
+
+
+"""
     adapter = _new_batch_adapter(
         handle, request_timeout, poll_interval, poll_deadline, raw or handle.raw
     )
@@ -288,11 +288,11 @@ def _build_batch_body(
     cfg: ProviderSpec,
     bc: BatchDef,
 ) -> tuple[dict[str, Any], dict[str, str]]:
-    """Returns the batch payload plus the contract-bearing anthropic-beta values
-    the per-request bodies require (files-api / structured output), composed
-    across items, so the caller can attach them to the batch CREATE request
-    (_build_request returns them per request; the batch submit otherwise sends
-    only auth headers)."""
+    """
+
+
+
+"""
     from .caching import apply_caching
     from .client import _append_beta, _build_request
 
@@ -378,11 +378,11 @@ def _fetch_batch_results(
     raw: bool = False,
     status_raw: dict[str, Any] | None = None,
 ) -> list[Response]:
-    """Fetch and parse completed batch results. ``status_raw`` is the
-    already-decoded poll body when the caller has it (the poll engine does); the
-    two-hop result fetch reads output_file_id from it instead of re-GETting the
-    status. When None (no prior poll), the status is fetched. Mirror of go
-    fetchBatchResults."""
+    """
+
+
+
+"""
     from .client import _parse_response
 
     lc = bc.lifecycle
@@ -465,6 +465,6 @@ def _build_auth_headers(p: Provider, cfg: ProviderSpec) -> dict[str, str]:
         headers[cfg.auth_header] = p.api_key
     if cfg.required_header:
         headers[cfg.required_header] = cfg.required_header_value
-    # ADR-052: additive; never clobbers the provider auth / required header above.
+    #
     merge_caller_headers(headers, p.headers)
     return headers

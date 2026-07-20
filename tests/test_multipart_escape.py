@@ -1,6 +1,6 @@
-"""HANDOFF-036 A2: a quote, backslash, or CR/LF in a caller-controlled field
-name or filename must not break out of the Content-Disposition part header.
-The shared hostile vector is asserted identically in Go, Java, and Swift."""
+"""
+
+"""
 
 from __future__ import annotations
 
@@ -56,9 +56,9 @@ def test_multipart_hostile_filename_escaped():
     assert b'filename="evil\\"name\\\\injectX-Fake: 1.mp3"' in raw, raw
     assert b'name="file\\"fieldX-Sneak: a"' in raw, raw
 
-    # The body must still parse as well-formed multipart, and the part header
-    # round-trips to the CR/LF-stripped original (quoted-pairs unescaped by
-    # the stdlib parser).
+    #
+    #
+    #
     content_type = captured["content_type"]
     assert isinstance(content_type, str)
     message = BytesParser(policy=policy.HTTP).parsebytes(

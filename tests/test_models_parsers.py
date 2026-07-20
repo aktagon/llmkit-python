@@ -1,5 +1,5 @@
-"""Parser tests against codegen/fixtures/models/*. Mirror of Go
-go/providers/models_parsers_test.go and TS ts/tests/models_parsers.test.ts."""
+"""
+"""
 
 from __future__ import annotations
 

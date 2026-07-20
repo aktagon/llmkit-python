@@ -1,15 +1,15 @@
-"""Cross-SDK LIFECYCLE conformance driver — Python (ADR-062 slice 1 / HANDOFF-032).
+"""
 
-Sibling of test_request_wire.py, on the INBOUND side. Where that suite asserts the
-outbound request bytes are identical across SDKs, this asserts the job engine's
-classification is: given the same OpenAI two-hop batch poll response, every SDK's
-BatchHandle.poll normalizes it to the SAME terminal JobStatus.
 
-For each fixture we run ONE handle.poll round-trip against a scripted mock, project
-the JobStatus down to {state, hasResult, rawStatus, cause}, drop it at
-target/wire/lifecycle/<fixture>/python.json, and assert it value-equals the shared
-golden under codegen/testdata/wire/lifecycle/v1/. codegen/test_cross_sdk_lifecycle.py
-compares all four SDK artifacts against that one golden.
+
+
+
+
+
+
+
+
+
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 GOLDEN_DIR = REPO_ROOT / "codegen" / "testdata" / "wire" / "lifecycle" / "v1"
 ARTIFACT_ROOT = REPO_ROOT / "target" / "wire" / "lifecycle"
 
-# The one JSONL result line the succeeded fixture serves from the two-hop
-# /v1/files/{id}/content endpoint (OpenAI shape: body wrapped at response.body).
+#
+#
 _RESULT_LINE = json.dumps(
     {
         "custom_id": "req-0",
@@ -45,9 +45,9 @@ _RESULT_LINE = json.dumps(
 
 
 class _LifecycleMockServer:
-    """Serves the OpenAI two-hop batch shape: GET /v1/batches/{id} -> status
-    (+ output_file_id for the succeeded fixture), and GET /v1/files/{id}/content
-    -> one JSONL result line. Mirror of go/lifecycle_wire_test.go's mock."""
+    """
+
+"""
 
     def __init__(self, status: str, output_file_id: str) -> None:
         self.status = status
@@ -102,10 +102,10 @@ def _openai_batch_handle(base_url: str) -> BatchHandle:
 
 
 def _artifact_from(st: JobStatus) -> dict:
-    """Normalized, cross-SDK-comparable projection of a terminal JobStatus.
-    JobState is an Enum whose .value IS the lowercase wire string
-    ("succeeded"/"failed"/"running"); the JobFailure.timed_out field is emitted
-    under the camelCase key "timedOut" to match the shared golden."""
+    """
+
+
+"""
     cause = None
     if st.cause is not None:
         cause = {"status": st.cause.status, "timedOut": st.cause.timed_out}

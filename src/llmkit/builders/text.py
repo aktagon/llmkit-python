@@ -1,9 +1,9 @@
-"""Phase 3 slice 1 — wires Text.prompt against the legacy ``prompt`` API.
+"""
 
-Codegen-emitted ``Text.prompt`` delegates to ``text_prompt(self, msg)``
-via PYTHON_BUILDER_SKIP_TERMINALS. The bridge is sync→async: legacy
-``llmkit.client.prompt`` is synchronous, so we wrap it in
-``asyncio.to_thread`` to keep the typed-builder API uniformly async.
+
+
+
+
 """
 
 from __future__ import annotations
@@ -37,9 +37,9 @@ def _build_request(b: "Text", final_text: str) -> Request:
     if b._system:
         req.system = b._system
 
-    # Concatenate accumulated text Parts + final prompt; collect image
-    # Parts as InputImage data URIs (ADR-060). Mirrors go/text.go
-    # splitTextAndImages — caller order preserved.
+    #
+    #
+    #
     parts_text: list[str] = []
     images: list[InputImage] = []
     for p in b._parts:
@@ -55,9 +55,9 @@ def _build_request(b: "Text", final_text: str) -> Request:
     if images:
         req.images = images
 
-    # Legacy Request: messages + user are mutually exclusive in the
-    # downstream body builder. Append the final user turn to messages
-    # when history is present; otherwise use the simpler user field.
+    #
+    #
+    #
     if b._history:
         msgs = list(b._history)
         if user:
