@@ -70,11 +70,18 @@ from .music import MusicRequest
 from .structs import (
     AudioData,
     ImageResponse,
+    LiveResult,
+    ModelInfo,
     MusicResponse,
+    SpeechResponse,
     ToolCall,
     ToolResult,
+    TranscriptionHandle,
     TranscriptionResponse,
     TranscriptSegment,
+    VideoData,
+    VideoHandle,
+    VideoResponse,
 )
 from .wire import (
     MissingWireVersionError,
@@ -165,11 +172,17 @@ __all__ = [
     "AudioData",
     "MusicRequest",
     "MusicResponse",
+    "SpeechResponse",
     "MediaRef",
     "Part",
+    # Video generation (ADR-034): async handle + result containers.
+    "VideoHandle",
+    "VideoResponse",
+    "VideoData",
     # Audio Part constructors + transcription containers (ADR-048).
     "audio",
     "audio_bytes",
+    "TranscriptionHandle",
     "TranscriptionResponse",
     "TranscriptSegment",
     # Middleware.
@@ -196,6 +209,10 @@ __all__ = [
     # (ADR-038 PMD-004); read provider metadata via the `providers` namespace —
     # `from llmkit import providers; providers.info(name)` / `providers.list()`.
     "ProviderName",
+    # Model catalogue return types (ADR-019): what
+    # client.models.provider(...).capability(...).list() and .live() return.
+    "ModelInfo",
+    "LiveResult",
     # Capability vocabulary (ADR-019 catalogue filter + ADR-030
     # Client.supports query).
     "Capability",
