@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] — 2026-07-20
+
+### Added
+
+- Every response and catalogue type is now importable from the package root uniformly: `SpeechResponse`, `TranscriptionHandle`, `VideoHandle`, `VideoResponse`, `VideoData`, `ModelInfo`, and `LiveResult` join the existing root exports. Previously a consumer naming a video-generation result or a model-catalogue result (`ModelInfo` / `LiveResult`) could hit a missing export.
+
 ## [3.0.1] — 2026-07-19
 
 ### Security
