@@ -29,4 +29,10 @@ async def speech_generate(b: "Speech", msg: str) -> SpeechResponse:
 
     request = SpeechRequest(model=b._model, voice=b._voice, text=msg)
 
-    return await asyncio.to_thread(run_speech_generation, provider, request)
+    kwargs: dict = {}
+    if b._middleware:
+        kwargs["middleware"] = list(b._middleware)
+
+    return await asyncio.to_thread(
+        run_speech_generation, provider, request, **kwargs
+    )

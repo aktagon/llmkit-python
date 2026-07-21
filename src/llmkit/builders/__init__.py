@@ -356,8 +356,14 @@ class Speech:
 
     def __init__(self, client: "Client") -> None:
         self.client = client
+        self._middleware: list[MiddlewareFn] = []
         self._model: str = ""
         self._voice: str = ""
+
+    def add_middleware(self, *fns: MiddlewareFn) -> "Speech":
+        out = copy.copy(self)
+        out._middleware = [*self._middleware, *fns]
+        return out
 
     def model(self, name: str) -> "Speech":
         out = copy.copy(self)
@@ -380,7 +386,13 @@ class Transcription:
 
     def __init__(self, client: "Client") -> None:
         self.client = client
+        self._middleware: list[MiddlewareFn] = []
         self._model: str = ""
+
+    def add_middleware(self, *fns: MiddlewareFn) -> "Transcription":
+        out = copy.copy(self)
+        out._middleware = [*self._middleware, *fns]
+        return out
 
     def model(self, name: str) -> "Transcription":
         out = copy.copy(self)

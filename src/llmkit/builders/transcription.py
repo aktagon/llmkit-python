@@ -15,12 +15,16 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
+import time
 from typing import TYPE_CHECKING, Any
 
 from ..errors import APIError, ValidationError
 from ..http import _escape_quotes, do_get, do_post
 from ..image import Part, _image_auth_headers
+from ..middleware import fire_post, fire_pre, set_event_error
+from ..providers.generated.middleware import Event, MiddlewareFn, MiddlewareOp
 from ..job import (
     JobStatus,
     LifecycleConfig,
@@ -110,12 +114,19 @@ async def transcription_submit(
         provider.base_url = b.client.provider.base_url
 
     return await asyncio.to_thread(
-        _submit_transcription, provider, list(audio_parts)
+        _submit_transcription,
+        provider,
+        b._model,
+        list(audio_parts),
+        list(b._middleware),
     )
 
 
 def _submit_transcription(
-    provider: Provider, parts: list[Part]
+    provider: Provider,
+    model: str,
+    parts: list[Part],
+    middleware: list[MiddlewareFn] | None = None,
 ) -> TranscriptionHandle:
     """
 
@@ -144,17 +155,61 @@ def _submit_transcription(
 
     audio_url, audio_bytes = _normalize_audio_part(parts)
 
+    #
+    #
+    if audio_bytes is not None and not tc_cfg.upload_endpoint:
+        raise ValidationError(
+            field="parts",
+            message=f"{provider.name} does not accept audio bytes; pass a public audio URL",
+        )
+
     base = _transcription_base_url(provider, cfg)
     headers = _image_auth_headers(provider, cfg, pname)
 
+    mws = list(middleware or [])
+    base_event = Event(
+        op=MiddlewareOp.TRANSCRIPTION,
+        provider=provider.name,
+        model=model,
+    )
+    start = time.monotonic()
+    fire_pre(mws, base_event)
+
+    try:
+        handle_id = _dispatch_transcription_submit(
+            base, tc_cfg, headers, audio_url, audio_bytes
+        )
+    except Exception as exc:
+        post_event = dataclasses.replace(
+            base_event,
+            duration=time.monotonic() - start,
+        )
+        set_event_error(post_event, exc)
+        fire_post(mws, post_event)
+        raise
+
+    post_event = dataclasses.replace(
+        base_event,
+        duration=time.monotonic() - start,
+    )
+    fire_post(mws, post_event)
+    return TranscriptionHandle(id=handle_id, provider=provider)
+
+
+def _dispatch_transcription_submit(
+    base: str,
+    tc_cfg: TranscriptionDef,
+    headers: dict[str, str],
+    audio_url: str,
+    audio_bytes: bytes | None,
+) -> str:
+    """
+
+
+"""
     #
     #
     if audio_bytes is not None:
-        if not tc_cfg.upload_endpoint:
-            raise ValidationError(
-                field="parts",
-                message=f"{provider.name} does not accept audio bytes; pass a public audio URL",
-            )
         upload_headers = {**headers, "content-type": "application/octet-stream"}
         upload_body = do_post(base + tc_cfg.upload_endpoint, audio_bytes, upload_headers)
         try:
@@ -190,7 +245,7 @@ def _submit_transcription(
             message=f"transcription submit: empty handle field {tc_cfg.submit_handle_field!r}",
             status_code=0,
         )
-    return TranscriptionHandle(id=handle_id, provider=provider)
+    return handle_id
 
 
 class _TranscriptionAdapter:
@@ -285,12 +340,19 @@ async def transcription_transcribe(
     if b.client.provider.base_url:
         provider.base_url = b.client.provider.base_url
     return await asyncio.to_thread(
-        _transcribe_sync, provider, b._model, list(audio_parts)
+        _transcribe_sync,
+        provider,
+        b._model,
+        list(audio_parts),
+        list(b._middleware),
     )
 
 
 def _transcribe_sync(
-    provider: Provider, model: str, parts: list[Part]
+    provider: Provider,
+    model: str,
+    parts: list[Part],
+    middleware: list[MiddlewareFn] | None = None,
 ) -> TranscriptionResponse:
     """
 
@@ -323,18 +385,44 @@ def _transcribe_sync(
     body, content_type = _build_openai_transcription_multipart(
         model, "verbose_json", ref
     )
-    resp_body = do_post(
-        base + tc_cfg.submit_endpoint,
-        body,
-        {**headers, "content-type": content_type},
+    mws = list(middleware or [])
+    base_event = Event(
+        op=MiddlewareOp.TRANSCRIPTION,
+        provider=provider.name,
+        model=model,
     )
+    start = time.monotonic()
+    fire_pre(mws, base_event)
+
     try:
-        raw = json.loads(resp_body)
-    except ValueError as exc:
-        raise APIError(
-            message=f"unmarshal transcription response: {exc}", status_code=0
-        ) from exc
-    return _transcription_result_from_openai(raw)
+        resp_body = do_post(
+            base + tc_cfg.submit_endpoint,
+            body,
+            {**headers, "content-type": content_type},
+        )
+        try:
+            raw = json.loads(resp_body)
+        except ValueError as exc:
+            raise APIError(
+                message=f"unmarshal transcription response: {exc}", status_code=0
+            ) from exc
+        result = _transcription_result_from_openai(raw)
+    except Exception as exc:
+        post_event = dataclasses.replace(
+            base_event,
+            duration=time.monotonic() - start,
+        )
+        set_event_error(post_event, exc)
+        fire_post(mws, post_event)
+        raise
+
+    post_event = dataclasses.replace(
+        base_event,
+        usage=result.usage,
+        duration=time.monotonic() - start,
+    )
+    fire_post(mws, post_event)
+    return result
 
 
 def _build_openai_transcription_multipart(
