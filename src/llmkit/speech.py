@@ -10,13 +10,17 @@
 from __future__ import annotations
 
 import base64
+import dataclasses
 import json
+import time
 from dataclasses import dataclass
 from typing import Any
 
 from .errors import APIError, ValidationError, parse_error
 from .http import do_post
 from .image import _image_auth_headers
+from .middleware import fire_post, fire_pre, set_event_error
+from .providers.generated.middleware import Event, MiddlewareFn, MiddlewareOp
 from .providers.generated.providers import PROVIDERS, ProviderName
 from .providers.generated.speech_gen import (
     SpeechGenDef,
@@ -44,6 +48,7 @@ def generate_speech(
     provider: Provider,
     request: SpeechRequest,
     *,
+    middleware: list[MiddlewareFn] | None = None,
     request_timeout: float = 600.0,
 ) -> SpeechResponse:
     """
@@ -82,28 +87,54 @@ def generate_speech(
             message=f"{request.voice} is not a known voice for {provider.name}",
         )
 
-    headers = _image_auth_headers(provider, cfg, pname)
-    base_url = provider.base_url or cfg.base_url
-    url, body = _dispatch_speech_http(cfg, sg_cfg, request, base_url)
-    json_body = json.dumps(body).encode("utf-8")
-    try:
-        resp_body = do_post(
-            url,
-            json_body,
-            {**headers, "content-type": "application/json"},
-            timeout=request_timeout,
-        )
-    except APIError as raw_err:
-        raise parse_error(
-            provider.name,
-            raw_err.status_code,
-            raw_err.message.encode("utf-8") if raw_err.message else b"",
-            None,
-        ) from raw_err
-
-    return _parse_speech_response(
-        provider.name, sg_cfg.audio_response_encoding, model.output_mime, resp_body
+    mws = list(middleware or [])
+    base_event = Event(
+        op=MiddlewareOp.SPEECH_GENERATION,
+        provider=provider.name,
+        model=request.model,
     )
+    start = time.monotonic()
+    fire_pre(mws, base_event)
+
+    try:
+        headers = _image_auth_headers(provider, cfg, pname)
+        base_url = provider.base_url or cfg.base_url
+        url, body = _dispatch_speech_http(cfg, sg_cfg, request, base_url)
+        json_body = json.dumps(body).encode("utf-8")
+        try:
+            resp_body = do_post(
+                url,
+                json_body,
+                {**headers, "content-type": "application/json"},
+                timeout=request_timeout,
+            )
+        except APIError as raw_err:
+            raise parse_error(
+                provider.name,
+                raw_err.status_code,
+                raw_err.message.encode("utf-8") if raw_err.message else b"",
+                None,
+            ) from raw_err
+
+        result = _parse_speech_response(
+            provider.name, sg_cfg.audio_response_encoding, model.output_mime, resp_body
+        )
+    except Exception as exc:
+        post_event = dataclasses.replace(
+            base_event,
+            duration=time.monotonic() - start,
+        )
+        set_event_error(post_event, exc)
+        fire_post(mws, post_event)
+        raise
+
+    post_event = dataclasses.replace(
+        base_event,
+        usage=result.usage,
+        duration=time.monotonic() - start,
+    )
+    fire_post(mws, post_event)
+    return result
 
 
 def _find_speech_model(cfg: SpeechGenDef, model_id: str) -> SpeechModelDef | None:
