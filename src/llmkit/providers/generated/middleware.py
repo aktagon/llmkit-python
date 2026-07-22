@@ -33,6 +33,8 @@ class MiddlewareOp(str, Enum):
     MUSIC_GENERATION = "music_generation"
     VIDEO_GENERATION = "video_generation"
     MODELS_LIST = "models_list"
+    SPEECH_GENERATION = "speech_generation"
+    TRANSCRIPTION = "transcription"
 
 
 @dataclass
