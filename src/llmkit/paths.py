@@ -154,6 +154,68 @@ def set_nested_field(body: dict[str, Any], path: str, value: Any) -> None:
     current[parts[-1]] = value
 
 
+def set_wire_path(data: dict[str, Any], path: str, value: Any) -> None:
+    """
+
+
+
+
+
+
+
+"""
+    if not path or _is_empty_wire_value(value):
+        return
+    parts = path.split(".")
+    current = data
+    for i, part in enumerate(parts):
+        last = i == len(parts) - 1
+        m = _INDEX_RE.match(part)
+        if m is None:
+            if last:
+                current[part] = value
+                return
+            current = _child_map(current, part)
+            continue
+        field_name = m.group("field")
+        idx = int(m.group("idx"))
+        arr = current.get(field_name)
+        if not isinstance(arr, list):
+            arr = []
+            current[field_name] = arr
+        while len(arr) <= idx:
+            arr.append(None)
+        if last:
+            arr[idx] = value
+            return
+        elem = arr[idx]
+        if not isinstance(elem, dict):
+            elem = {}
+            arr[idx] = elem
+        current = elem
+
+
+def _child_map(parent: dict[str, Any], field_name: str) -> dict[str, Any]:
+    """"""
+    child = parent.get(field_name)
+    if not isinstance(child, dict):
+        child = {}
+        parent[field_name] = child
+    return child
+
+
+def _is_empty_wire_value(value: Any) -> bool:
+    """
+
+
+"""
+    if isinstance(value, str):
+        return value == ""
+    if isinstance(value, (int, float)):
+        return value == 0
+    return value is None
+
+
 def merge_into_parent(body: dict[str, Any], path: str, extras: dict[str, Any]) -> None:
     """
 
