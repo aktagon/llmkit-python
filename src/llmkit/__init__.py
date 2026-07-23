@@ -19,7 +19,7 @@ and the four builder classes (`Text`, `Image`, `Agent`, `Upload`) so
 from __future__ import annotations
 
 from .batch import BatchHandle
-from .client import Responses
+from .client import Responses, decode_response, encode_response
 from .builders import (
     Agent,
     Client,
@@ -159,6 +159,11 @@ __all__ = [
     "ToolResult",
     # Chat protocol opt-in token (ADR-055).
     "Responses",
+    # Symmetric response codec (ADR-076): keyless, IO-free, pure. Not on the
+    # Client — a translator handling many providers cannot fabricate a
+    # credentialed client per provider to do arithmetic on a byte string.
+    "decode_response",
+    "encode_response",
     # Wire format (ADR-023).
     "save_history",
     "load_history",
