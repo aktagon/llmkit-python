@@ -256,6 +256,16 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
         comment="Queues a batch and returns a BatchHandle immediately (ADR-064). A text execution mode on the *Text builder (parallel to Stream); the chain's accumulated config (System, Schema, Model, ...) applies to every prompt in the variadic. Use the handle's Wait to block for results, or Poll to drive the loop from your own orchestrator.",
     ),
     APIEntryPointDef(
+        py_func="decode_response",
+        py_param_type="ChatWireShape",
+        comment="DecodeResponse(provider, chatWireShape, body) -> Response \u2014 parses a provider response body into the canonical Response using the generated response path tables (ADR-076 SYM-004: this is the same function each SDK's own chat send path calls, not a second implementation beside it). Keyless, IO-free and pure: no Client, no credential, no network, no clock. Scope is api:Response and its llm:Usage sub-struct; tool calls and streaming are out (SYM-008).",
+    ),
+    APIEntryPointDef(
+        py_func="encode_response",
+        py_param_type="ChatWireShape",
+        comment="EncodeResponse(provider, chatWireShape, response) -> body \u2014 renders a canonical Response back onto the wire, deriving every write location from the same generated path accessors DecodeResponse reads (ADR-076 SYM-005: no second table, no per-provider switch, no path literal). Fails with the SDK's validation error when a canonical field marked llm:OneWay for the (provider, wire shape) carries a non-empty value, rather than fabricating a provider field (SYM-007). The contract is the canonical fixed point Decode(Encode(Decode(body))) == Decode(body); byte equality against the original body is explicitly NOT required and must not be asserted (SYM-006).",
+    ),
+    APIEntryPointDef(
         py_func="generate_image",
         py_param_type="ImageRequest",
         comment="Synchronous text-to-image and image-to-image. Input is ImageRequest{ Model, Prompt, Parts []Part } where Parts is a positionally-ordered sequence of llm:Part (text or image MediaRef). Prompt is a sugar field for the text-only case (XOR with Parts; runtime synthesises []Part{Text(Prompt)} when only Prompt is set). Returns ImageResponse{ Images []ImageData, Text string, Usage }.",
