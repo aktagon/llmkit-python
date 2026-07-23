@@ -28,6 +28,7 @@ from .paths import (
     remove_additional_properties,
     set_additional_properties_false,
     set_nested_field,
+    set_wire_path,
 )
 from .providers.generated.caching import caching_config
 from .providers.generated.middleware import Event, MiddlewareOp, Usage
@@ -203,7 +204,7 @@ def prompt(
         _fire_post_err(opts.middleware, base_event, exc, start)
         raise
 
-    resp = _parse_response(provider.name, resp_body, cfg.chat_wire_shape)
+    resp = decode_response(provider.name, cfg.chat_wire_shape, resp_body)
     if opts.raw:
         try:
             resp.raw = json.loads(resp_body)
@@ -832,7 +833,15 @@ def _add_structured_output(
 #
 
 
-def _parse_response(provider: str, body: bytes, chat_wire_shape: str = "") -> Response:
+def decode_response(provider: str, chat_wire_shape: str, body: bytes) -> Response:
+    """
+
+
+
+
+
+
+"""
     try:
         raw = json.loads(body)
     except ValueError as exc:
@@ -886,6 +895,56 @@ def _parse_response(provider: str, body: bytes, chat_wire_shape: str = "") -> Re
     )
 
 
+def encode_response(provider: str, chat_wire_shape: str, response: Response) -> bytes:
+    """
+
+
+
+
+
+
+
+
+
+"""
+    _guard_one_way_fields(provider, response)
+    if chat_wire_shape == "ChatResponsesOpenAI":
+        return json.dumps(_encode_responses_envelope(response)).encode("utf-8")
+
+    cfg = PROVIDERS[provider]
+    raw: dict[str, Any] = {}
+    set_wire_path(raw, cfg.response_text_path, response.text)
+    set_wire_path(raw, cfg.usage_input_path, response.usage.input)
+    set_wire_path(raw, cfg.usage_output_path, response.usage.output)
+    cc = caching_config(ProviderName(provider))
+    if cc is not None:
+        set_wire_path(raw, cc.write_tokens_path, response.usage.cache_write)
+        set_wire_path(raw, cc.read_tokens_path, response.usage.cache_read)
+    set_wire_path(raw, cfg.reasoning_tokens_path, response.usage.reasoning)
+    if cfg.usage_cost_scale:
+        set_wire_path(raw, cfg.usage_cost_path, response.usage.cost / cfg.usage_cost_scale)
+    set_wire_path(raw, cfg.finish_reason_path, response.finish_reason)
+    set_wire_path(raw, cfg.finish_message_path, response.finish_message)
+    return json.dumps(raw).encode("utf-8")
+
+
+def _guard_one_way_fields(provider: str, response: Response) -> None:
+    """
+
+
+
+
+
+
+
+"""
+    if provider == ProviderName.VERTEX.value and response.finish_reason:
+        raise ValidationError(
+            field="response.finish_reason",
+            message="Vertex carries no finish-reason field. Its path reads predictions[0].raiFilteredReason — a safety-filter explanation surfaced AS the finish reason. Extraction is a deliberate fusion, so the reverse leg cannot decide whether a given canonical finish_reason originated as a safety verdict, and writing an ordinary stop signal into that field would fabricate one.",
+        )
+
+
 def _parse_responses_envelope(raw: dict[str, Any]) -> Response:
     """
 
@@ -905,6 +964,32 @@ def _parse_responses_envelope(raw: dict[str, Any]) -> Response:
         ),
         finish_reason=extract_path(raw, "status"),
     )
+
+
+def _encode_responses_envelope(response: Response) -> dict[str, Any]:
+    """
+
+
+
+
+
+"""
+    raw: dict[str, Any] = {}
+    if response.text:
+        raw["output"] = [
+            {
+                "type": "message",
+                "content": [{"type": "output_text", "text": response.text}],
+            }
+        ]
+    set_wire_path(raw, "usage.input_tokens", response.usage.input)
+    set_wire_path(raw, "usage.output_tokens", response.usage.output)
+    set_wire_path(raw, "usage.input_tokens_details.cached_tokens", response.usage.cache_read)
+    set_wire_path(
+        raw, "usage.output_tokens_details.reasoning_tokens", response.usage.reasoning
+    )
+    set_wire_path(raw, "status", response.finish_reason)
+    return raw
 
 
 def _extract_responses_text(raw: dict[str, Any]) -> str:
