@@ -383,8 +383,6 @@ def _fetch_batch_results(
     two-hop result fetch reads output_file_id from it instead of re-GETting the
     status. When None (no prior poll), the status is fetched. Mirror of go
     fetchBatchResults."""
-    from .client import _parse_response
-
     lc = bc.lifecycle
     assert lc is not None
 
@@ -412,7 +410,7 @@ def _fetch_batch_results(
 
 
 def _parse_batch_results(provider: str, data: bytes, bc: BatchDef, raw: bool = False) -> list[Response]:
-    from .client import _parse_response
+    from .client import decode_response
 
     out: list[Response] = []
     for line in data.decode("utf-8", errors="replace").splitlines():
@@ -431,8 +429,10 @@ def _parse_batch_results(provider: str, data: bytes, bc: BatchDef, raw: bool = F
                 continue
             inner_for_raw = inner
             response_bytes = json.dumps(inner).encode("utf-8")
+        # Batch is Chat-Completions-only (ADR-055): empty wire shape selects the
+        # provider's declared response paths, not the Responses output[] arm.
         try:
-            parsed = _parse_response(provider, response_bytes)
+            parsed = decode_response(provider, "", response_bytes)
         except Exception:
             continue
         if raw:
