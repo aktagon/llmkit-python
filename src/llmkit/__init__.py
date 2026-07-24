@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from .batch import BatchHandle
-from .client import Responses
+from .client import Responses, decode_response, encode_response
 from .builders import (
     Agent,
     Client,
@@ -159,6 +159,11 @@ __all__ = [
     "ToolResult",
     #
     "Responses",
+    #
+    #
+    #
+    "decode_response",
+    "encode_response",
     #
     "save_history",
     "load_history",
