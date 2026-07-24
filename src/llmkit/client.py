@@ -28,6 +28,7 @@ from .paths import (
     remove_additional_properties,
     set_additional_properties_false,
     set_nested_field,
+    set_wire_path,
 )
 from .providers.generated.caching import caching_config
 from .providers.generated.middleware import Event, MiddlewareOp, Usage
@@ -203,7 +204,7 @@ def prompt(
         _fire_post_err(opts.middleware, base_event, exc, start)
         raise
 
-    resp = _parse_response(provider.name, resp_body, cfg.chat_wire_shape)
+    resp = decode_response(provider.name, cfg.chat_wire_shape, resp_body)
     if opts.raw:
         try:
             resp.raw = json.loads(resp_body)
@@ -832,7 +833,15 @@ def _add_structured_output(
 # =============================================================================
 
 
-def _parse_response(provider: str, body: bytes, chat_wire_shape: str = "") -> Response:
+def decode_response(provider: str, chat_wire_shape: str, body: bytes) -> Response:
+    """Extract text and usage from a provider response body into the canonical
+    Response.
+
+    Keyless, IO-free and pure (ADR-076 SYM-002): no Client, no credential, no
+    network, no clock. The wire shape is required, not derived — one provider can
+    serve two chat protocols, and inferring it silently mis-parses (SYM-003).
+    This is the same function the chat send path calls (SYM-004).
+    """
     try:
         raw = json.loads(body)
     except ValueError as exc:
@@ -886,6 +895,56 @@ def _parse_response(provider: str, body: bytes, chat_wire_shape: str = "") -> Re
     )
 
 
+def encode_response(provider: str, chat_wire_shape: str, response: Response) -> bytes:
+    """decode_response's inverse: render a canonical Response back onto the wire
+    for provider + chat_wire_shape. Every write location comes from the same
+    generated path accessors decode_response reads — there is no second table and
+    no path literal here (ADR-076 SYM-005).
+
+    Keyless, IO-free and pure, like its mirror. The result is NOT byte-identical
+    to the body a provider would send: a provider body carries fields the
+    canonical Response does not model (ADR-014's raw exists for exactly that).
+    The contract is the canonical fixed point, decode(encode(decode(b))) ==
+    decode(b) (SYM-006).
+    """
+    _guard_one_way_fields(provider, response)
+    if chat_wire_shape == "ChatResponsesOpenAI":
+        return json.dumps(_encode_responses_envelope(response)).encode("utf-8")
+
+    cfg = PROVIDERS[provider]
+    raw: dict[str, Any] = {}
+    set_wire_path(raw, cfg.response_text_path, response.text)
+    set_wire_path(raw, cfg.usage_input_path, response.usage.input)
+    set_wire_path(raw, cfg.usage_output_path, response.usage.output)
+    cc = caching_config(ProviderName(provider))
+    if cc is not None:
+        set_wire_path(raw, cc.write_tokens_path, response.usage.cache_write)
+        set_wire_path(raw, cc.read_tokens_path, response.usage.cache_read)
+    set_wire_path(raw, cfg.reasoning_tokens_path, response.usage.reasoning)
+    if cfg.usage_cost_scale:
+        set_wire_path(raw, cfg.usage_cost_path, response.usage.cost / cfg.usage_cost_scale)
+    set_wire_path(raw, cfg.finish_reason_path, response.finish_reason)
+    set_wire_path(raw, cfg.finish_message_path, response.finish_message)
+    return json.dumps(raw).encode("utf-8")
+
+
+def _guard_one_way_fields(provider: str, response: Response) -> None:
+    """Refuse to encode a canonical field whose mapping is OneWay for this
+    provider — the result set of CQ-WMAP-011 (ADR-076 SYM-007). Only one member
+    is in Phase 2's scope; the other, exceptGoogleToolCallID, covers tool
+    calls, which are out (SYM-008).
+
+    An empty value is not an error: there is nothing to write, so the common path
+    stays usable and only the lying path fails. field and message carry the
+    mapping's canonicalPath and invertibilityNote verbatim.
+    """
+    if provider == ProviderName.VERTEX.value and response.finish_reason:
+        raise ValidationError(
+            field="response.finish_reason",
+            message="Vertex carries no finish-reason field. Its path reads predictions[0].raiFilteredReason — a safety-filter explanation surfaced AS the finish reason. Extraction is a deliberate fusion, so the reverse leg cannot decide whether a given canonical finish_reason originated as a safety verdict, and writing an ordinary stop signal into that field would fabricate one.",
+        )
+
+
 def _parse_responses_envelope(raw: dict[str, Any]) -> Response:
     """Extract text + usage from OpenAI's Responses reply (ADR-055). Unlike Chat
     Completions (choices[].message.content), the reply is an output[] array whose
@@ -905,6 +964,32 @@ def _parse_responses_envelope(raw: dict[str, Any]) -> Response:
         ),
         finish_reason=extract_path(raw, "status"),
     )
+
+
+def _encode_responses_envelope(response: Response) -> dict[str, Any]:
+    """Mirror of _parse_responses_envelope: rebuild OpenAI's Responses reply
+    (ADR-055) — an output[] array whose message item carries content[] blocks of
+    type "output_text", with input_tokens/output_tokens usage and cached +
+    reasoning sub-details. Hand-coded per wire shape on both legs, symmetric with
+    the reader, for the same reason the reader is (ADR-028: behavior held by
+    tests, not by declared response paths).
+    """
+    raw: dict[str, Any] = {}
+    if response.text:
+        raw["output"] = [
+            {
+                "type": "message",
+                "content": [{"type": "output_text", "text": response.text}],
+            }
+        ]
+    set_wire_path(raw, "usage.input_tokens", response.usage.input)
+    set_wire_path(raw, "usage.output_tokens", response.usage.output)
+    set_wire_path(raw, "usage.input_tokens_details.cached_tokens", response.usage.cache_read)
+    set_wire_path(
+        raw, "usage.output_tokens_details.reasoning_tokens", response.usage.reasoning
+    )
+    set_wire_path(raw, "status", response.finish_reason)
+    return raw
 
 
 def _extract_responses_text(raw: dict[str, Any]) -> str:

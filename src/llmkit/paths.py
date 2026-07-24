@@ -154,6 +154,68 @@ def set_nested_field(body: dict[str, Any], path: str, value: Any) -> None:
     current[parts[-1]] = value
 
 
+def set_wire_path(data: dict[str, Any], path: str, value: Any) -> None:
+    """Place value at a dot-notation path with array index support
+    ("choices[0].message.content"), creating intermediate maps and array elements
+    as it descends. It is the navigate-or-create inverse of extract_path and walks
+    the identical generated path strings.
+
+    An empty path (the provider declares no location for this field) or an empty
+    value is a no-op: there is nothing to write, and materializing a zero would
+    invent a field the provider never sent.
+    """
+    if not path or _is_empty_wire_value(value):
+        return
+    parts = path.split(".")
+    current = data
+    for i, part in enumerate(parts):
+        last = i == len(parts) - 1
+        m = _INDEX_RE.match(part)
+        if m is None:
+            if last:
+                current[part] = value
+                return
+            current = _child_map(current, part)
+            continue
+        field_name = m.group("field")
+        idx = int(m.group("idx"))
+        arr = current.get(field_name)
+        if not isinstance(arr, list):
+            arr = []
+            current[field_name] = arr
+        while len(arr) <= idx:
+            arr.append(None)
+        if last:
+            arr[idx] = value
+            return
+        elem = arr[idx]
+        if not isinstance(elem, dict):
+            elem = {}
+            arr[idx] = elem
+        current = elem
+
+
+def _child_map(parent: dict[str, Any], field_name: str) -> dict[str, Any]:
+    """Return parent[field_name] as a dict, creating it when absent or mistyped."""
+    child = parent.get(field_name)
+    if not isinstance(child, dict):
+        child = {}
+        parent[field_name] = child
+    return child
+
+
+def _is_empty_wire_value(value: Any) -> bool:
+    """Report whether value is the zero of its canonical type. Empty values are
+    skipped rather than written, so the encoder never claims a provider reported
+    zero tokens when the canonical Response simply had none.
+    """
+    if isinstance(value, str):
+        return value == ""
+    if isinstance(value, (int, float)):
+        return value == 0
+    return value is None
+
+
 def merge_into_parent(body: dict[str, Any], path: str, extras: dict[str, Any]) -> None:
     """Merge extras into the dict that contains the leaf of path.
 
