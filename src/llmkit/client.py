@@ -21,10 +21,11 @@ from .middleware import fire_post, fire_pre, resolve_model, set_event_error
 from .paths import (
     contains_value,
     deep_merge,
-    extract_float_path,
     extract_int_path,
     extract_path,
     merge_into_parent,
+    opt_float_path,
+    opt_int_path,
     remove_additional_properties,
     set_additional_properties_false,
     set_nested_field,
@@ -858,40 +859,49 @@ def decode_response(provider: str, chat_wire_shape: str, body: bytes) -> Respons
         return _parse_responses_envelope(raw)
 
     cfg = PROVIDERS[provider]
-    text = extract_path(raw, cfg.response_text_path)
-    input_tokens = extract_int_path(raw, cfg.usage_input_path)
-    output_tokens = extract_int_path(raw, cfg.usage_output_path)
-    cache_write, cache_read = _extract_cache_usage(raw, provider)
-    reasoning = (
-        extract_int_path(raw, cfg.reasoning_tokens_path)
-        if cfg.reasoning_tokens_path
-        else 0
-    )
-    cost = (
-        extract_float_path(raw, cfg.usage_cost_path) * cfg.usage_cost_scale
-        if cfg.usage_cost_path
-        else 0.0
-    )
-    finish_reason = (
-        extract_path(raw, cfg.finish_reason_path) if cfg.finish_reason_path else ""
-    )
-    finish_message = (
-        extract_path(raw, cfg.finish_message_path) if cfg.finish_message_path else ""
+    return Response(
+        text=extract_path(raw, cfg.response_text_path),
+        usage=decode_usage(raw, provider),
+        finish_reason=_opt_str(
+            extract_path(raw, cfg.finish_reason_path)
+            if cfg.finish_reason_path
+            else ""
+        ),
+        finish_message=_opt_str(
+            extract_path(raw, cfg.finish_message_path)
+            if cfg.finish_message_path
+            else ""
+        ),
     )
 
-    tokens = Usage(
-        input=input_tokens,
-        output=output_tokens,
+
+def _opt_str(value: str) -> str | None:
+    """Wrap a finish signal, treating the empty string as not reported. The
+    provider either sent a signal or it did not; an empty one is not a third
+    state any provider produces."""
+    return value or None
+
+
+def decode_usage(raw: Any, provider: str) -> Usage:
+    """Read all six dimensions out of a parsed provider body.
+
+    The ONE usage reader (ADR-076 SYM-004): decode_response and the agent tool
+    loop both call it, so a loop cannot re-derive a subset of what the reader
+    already produces — which is exactly how Go, Python and TypeScript came to
+    accumulate three dimensions of six (BUG-045).
+    """
+    cfg = PROVIDERS[provider]
+    cache_write, cache_read = _extract_cache_usage(raw, provider)
+    cost = opt_float_path(raw, cfg.usage_cost_path)
+    return Usage(
+        input=opt_int_path(raw, cfg.usage_input_path),
+        output=opt_int_path(raw, cfg.usage_output_path),
         cache_write=cache_write,
         cache_read=cache_read,
-        reasoning=reasoning,
-        cost=cost,
-    )
-    return Response(
-        text=text,
-        usage=tokens,
-        finish_reason=finish_reason,
-        finish_message=finish_message,
+        reasoning=opt_int_path(raw, cfg.reasoning_tokens_path),
+        # Scaling preserves absence: an unreported cost stays unreported rather
+        # than becoming 0.0 * scale (AVAIL-007).
+        cost=None if cost is None else cost * cfg.usage_cost_scale,
     )
 
 
@@ -921,7 +931,7 @@ def encode_response(provider: str, chat_wire_shape: str, response: Response) -> 
         set_wire_path(raw, cc.write_tokens_path, response.usage.cache_write)
         set_wire_path(raw, cc.read_tokens_path, response.usage.cache_read)
     set_wire_path(raw, cfg.reasoning_tokens_path, response.usage.reasoning)
-    if cfg.usage_cost_scale:
+    if cfg.usage_cost_scale and response.usage.cost is not None:
         set_wire_path(raw, cfg.usage_cost_path, response.usage.cost / cfg.usage_cost_scale)
     set_wire_path(raw, cfg.finish_reason_path, response.finish_reason)
     set_wire_path(raw, cfg.finish_message_path, response.finish_message)
@@ -955,14 +965,14 @@ def _parse_responses_envelope(raw: dict[str, Any]) -> Response:
     return Response(
         text=_extract_responses_text(raw),
         usage=Usage(
-            input=extract_int_path(raw, "usage.input_tokens"),
-            output=extract_int_path(raw, "usage.output_tokens"),
-            cache_read=extract_int_path(raw, "usage.input_tokens_details.cached_tokens"),
-            reasoning=extract_int_path(
+            input=opt_int_path(raw, "usage.input_tokens"),
+            output=opt_int_path(raw, "usage.output_tokens"),
+            cache_read=opt_int_path(raw, "usage.input_tokens_details.cached_tokens"),
+            reasoning=opt_int_path(
                 raw, "usage.output_tokens_details.reasoning_tokens"
             ),
         ),
-        finish_reason=extract_path(raw, "status"),
+        finish_reason=_opt_str(extract_path(raw, "status")),
     )
 
 
@@ -1014,13 +1024,17 @@ def _extract_responses_text(raw: dict[str, Any]) -> str:
     return ""
 
 
-def _extract_cache_usage(raw: dict[str, Any], provider: str) -> tuple[int, int]:
+def _extract_cache_usage(
+    raw: dict[str, Any], provider: str
+) -> tuple[int | None, int | None]:
     cc = caching_config(ProviderName(provider))
+    # A provider with no caching config reports no cache dimensions — it does
+    # not report them as zero (ADR-081 AVAIL-001).
     if cc is None:
-        return 0, 0
-    write = extract_int_path(raw, cc.write_tokens_path) if cc.write_tokens_path else 0
-    read = extract_int_path(raw, cc.read_tokens_path) if cc.read_tokens_path else 0
-    return write, read
+        return None, None
+    return opt_int_path(raw, cc.write_tokens_path), opt_int_path(
+        raw, cc.read_tokens_path
+    )
 
 
 def _fire_post_err(
@@ -1031,3 +1045,36 @@ def _fire_post_err(
     ev = dataclasses.replace(base_event, duration=time.monotonic() - start)
     set_event_error(ev, exc)
     fire_post(mws, ev)
+
+
+def _add_opt(a: float | None, b: float | None) -> Any:
+    """Sum one dimension across two responses. Absence is ABSORBING (ADR-081
+    AVAIL-005): if either side did not report the dimension, neither does the
+    sum. Summing what is present and calling it a total is the defect at
+    aggregate scale — nine reported turns would hide the tenth unreported one,
+    and the answer gets less trustworthy the longer a loop runs while looking
+    more authoritative."""
+    return None if a is None or b is None else a + b
+
+
+def accumulate_usage(total: Usage, turn: Usage) -> Usage:
+    """Fold one turn's usage into a run's running total, every dimension,
+    absorbing.
+
+    Named and single so there is exactly one place in this SDK where "add a
+    turn's usage to a run's usage" is defined — three of the seven SDKs
+    hand-wrote it with three of the six dimensions (BUG-045), which is what
+    having no such place produces.
+
+    Callers seed from the first turn rather than from a zero value: the identity
+    for absorbing addition is a REPORTED zero, so an all-unreported seed would
+    absorb every subsequent turn to nothing.
+    """
+    return Usage(
+        input=_add_opt(total.input, turn.input),
+        output=_add_opt(total.output, turn.output),
+        cache_write=_add_opt(total.cache_write, turn.cache_write),
+        cache_read=_add_opt(total.cache_read, turn.cache_read),
+        reasoning=_add_opt(total.reasoning, turn.reasoning),
+        cost=_add_opt(total.cost, turn.cost),
+    )
