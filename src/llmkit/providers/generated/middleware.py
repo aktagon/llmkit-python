@@ -9,13 +9,21 @@ from typing import Any, Callable
 
 @dataclass
 class Usage:
-    input: int = 0
-    output: int = 0
-    cache_write: int = 0
-    cache_read: int = 0
-    reasoning: int = 0
-    # cost is the provider-reported request cost in USD (ADR-027). Not a TokenDimension — a distinct monetary field. Only OpenRouter (the request must opt in with usage: {include: true}) and xAI report it. 0 is ambiguous: unreported or genuinely free — providers whose usageCostPath is empty never report cost.
-    cost: float = 0.0
+    """Token consumption metrics for an LLM call.
+
+    A dimension is either reported — carrying a value that may legitimately be
+    zero — or not reported at all. The two are different claims: a provider
+    that says it used no cached tokens and a provider that never mentions
+    caching are not the same fact, and neither is a zero.
+    """
+
+    input: int | None = None
+    output: int | None = None
+    cache_write: int | None = None
+    cache_read: int | None = None
+    reasoning: int | None = None
+    # cost is the provider-reported request cost in USD (ADR-027). Not a TokenDimension — a distinct monetary field. Only OpenRouter (the request must opt in with usage: {include: true}) and xAI report it. Providers whose usageCostPath is empty never report cost, and the field is then ABSENT, not 0.0 — an unreported cost is not a free request (ADR-081 AVAIL-007).
+    cost: float | None = None
 
 
 class MiddlewarePhase(str, Enum):
@@ -54,7 +62,7 @@ class Event:
     args: dict[str, Any] = field(default_factory=dict)
     # Only set when Op=tool_call, Phase=post. Internal-only.
     result: str = ""
-    # Set for Op=llm_request, Phase=post. Expanded to gen_ai.usage.* via otelUsageAttribute on each TokenDimension, not a single attribute.
+    # Set for Op=llm_request, Phase=post. Expanded to gen_ai.usage.* via otelUsageAttribute on each TokenDimension, not a single attribute. Its optional dimensions are SHARED with the response the middleware observes (ADR-081): read them, do not write through them — mutating one rewrites what the caller receives.
     usage: Usage | None = None
     # Set in Phase=post when the operation failed. Human-readable; telemetry never re-parses it (ADR-071).
     err: str | None = None

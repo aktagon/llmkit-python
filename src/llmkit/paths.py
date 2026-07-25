@@ -42,6 +42,64 @@ def extract_path(data: Any, path: str) -> str:
     return str(current)
 
 
+def _navigate(data: Any, path: str) -> Any:
+    """Walk a dotted path with array-index support, returning None on any miss.
+
+    Shared by the optional extractors below; the two returning-zero extractors
+    keep their own walks so their behaviour is unchanged.
+    """
+    current: Any = data
+    for part in path.split("."):
+        m = _INDEX_RE.match(part)
+        if m:
+            if not isinstance(current, dict):
+                return None
+            current = current.get(m.group("field"))
+            idx = int(m.group("idx"))
+            if not isinstance(current, list) or idx >= len(current):
+                return None
+            current = current[idx]
+        else:
+            if not isinstance(current, dict):
+                return None
+            current = current.get(part)
+    return current
+
+
+def opt_int_path(data: Any, path: str) -> int | None:
+    """extract_int_path's honest form (ADR-081 AVAIL-001).
+
+    None when the provider declares no location for this dimension (empty
+    path) or the location is absent from the body; the value — which may be a
+    genuine zero — when the provider reported one.
+
+    This is where the ambiguity used to be manufactured. extract_int_path
+    answers "unreported" and "reported as zero" with the same 0, and every
+    Usage dimension flowed through it, so the lie was created once and copied
+    everywhere.
+    """
+    if not path:
+        return None
+    current = _navigate(data, path)
+    if isinstance(current, bool):
+        return int(current)
+    if isinstance(current, (int, float)):
+        return int(current)
+    return None
+
+
+def opt_float_path(data: Any, path: str) -> float | None:
+    """opt_int_path for the fractional ADR-027 cost field."""
+    if not path:
+        return None
+    current = _navigate(data, path)
+    if isinstance(current, bool):
+        return None
+    if isinstance(current, (int, float)):
+        return float(current)
+    return None
+
+
 def extract_int_path(data: Any, path: str) -> int:
     """Like extract_path but returns an int (0 on miss)."""
     if not path:
@@ -72,37 +130,6 @@ def extract_int_path(data: Any, path: str) -> int:
     return 0
 
 
-def extract_float_path(data: Any, path: str) -> float:
-    """Like extract_int_path but returns a float (0.0 on miss).
-
-    Used for provider-reported USD cost (ADR-027), which is fractional.
-    """
-    if not path:
-        return 0.0
-    current: Any = data
-    for part in path.split("."):
-        m = _INDEX_RE.match(part)
-        if m:
-            field = m.group("field")
-            idx = int(m.group("idx"))
-            if isinstance(current, dict):
-                current = current.get(field)
-            else:
-                return 0.0
-            if isinstance(current, list) and idx < len(current):
-                current = current[idx]
-            else:
-                return 0.0
-        else:
-            if isinstance(current, dict):
-                current = current.get(part)
-            else:
-                return 0.0
-    if isinstance(current, bool):
-        return 0.0
-    if isinstance(current, (int, float)):
-        return float(current)
-    return 0.0
 
 
 def detect_mime_type(path: str) -> str:
@@ -205,14 +232,18 @@ def _child_map(parent: dict[str, Any], field_name: str) -> dict[str, Any]:
 
 
 def _is_empty_wire_value(value: Any) -> bool:
-    """Report whether value is the zero of its canonical type. Empty values are
-    skipped rather than written, so the encoder never claims a provider reported
-    zero tokens when the canonical Response simply had none.
+    """Report whether value is NOT REPORTED, which is the one case the encoder
+    must not write: materializing a value there would invent a field the
+    provider never sent.
+
+    A reported ZERO is written, and that is the change ADR-081 forces here. The
+    old rule dropped every zero because the type could not tell the two apart,
+    so an explicit ``cached_tokens: 0`` round-tripped to a body that omitted the
+    field — an asymmetry the SYM-006 fixed point could not see, because decoding
+    the omission produced the same 0 it started from.
     """
     if isinstance(value, str):
         return value == ""
-    if isinstance(value, (int, float)):
-        return value == 0
     return value is None
 
 

@@ -343,7 +343,7 @@ def _parse_vertex_music_response(
 
     preds = raw.get("predictions") if isinstance(raw, dict) else None
     audio: list[AudioData] = []
-    finish_reason = ""
+    finish_reason: str | None = None
     if isinstance(preds, list):
         for entry in preds:
             if not isinstance(entry, dict):
@@ -435,7 +435,7 @@ def _parse_minimax_music_response(
                 decoded = b""
             if decoded:
                 audio.append(AudioData(mime_type=fallback_mime, bytes=decoded))
-    finish_message = ""
+    finish_message: str | None = None
     base_resp = raw.get("base_resp") if isinstance(raw, dict) else None
     if isinstance(base_resp, dict):
         msg = base_resp.get("status_msg")
