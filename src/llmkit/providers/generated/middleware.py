@@ -9,13 +9,21 @@ from typing import Any, Callable
 
 @dataclass
 class Usage:
-    input: int = 0
-    output: int = 0
-    cache_write: int = 0
-    cache_read: int = 0
-    reasoning: int = 0
+    """
+
+
+
+
+
+"""
+
+    input: int | None = None
+    output: int | None = None
+    cache_write: int | None = None
+    cache_read: int | None = None
+    reasoning: int | None = None
     #
-    cost: float = 0.0
+    cost: float | None = None
 
 
 class MiddlewarePhase(str, Enum):

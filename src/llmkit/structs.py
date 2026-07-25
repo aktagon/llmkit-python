@@ -73,10 +73,10 @@ class ImageResponse:
     usage: Usage = field(default_factory=Usage)
 
     #
-    finish_reason: str = ""
+    finish_reason: str | None = None
 
     #
-    finish_message: str = ""
+    finish_message: str | None = None
 
     #
     raw: Any | None = None
@@ -162,10 +162,10 @@ class MusicResponse:
     usage: Usage = field(default_factory=Usage)
 
     #
-    finish_reason: str = ""
+    finish_reason: str | None = None
 
     #
-    finish_message: str = ""
+    finish_message: str | None = None
 
     #
     raw: Any | None = None
@@ -191,10 +191,10 @@ class Response:
     usage: Usage = field(default_factory=Usage)
 
     #
-    finish_reason: str = ""
+    finish_reason: str | None = None
 
     #
-    finish_message: str = ""
+    finish_message: str | None = None
 
     #
     raw: Any | None = None
@@ -210,7 +210,7 @@ class SpeechResponse:
     usage: Usage = field(default_factory=Usage)
 
     #
-    finish_reason: str = ""
+    finish_reason: str | None = None
 
 
 @dataclass
@@ -317,10 +317,10 @@ class VideoResponse:
     usage: Usage = field(default_factory=Usage)
 
     #
-    finish_reason: str = ""
+    finish_reason: str | None = None
 
     #
-    finish_message: str = ""
+    finish_message: str | None = None
 
     #
     raw: Any | None = None

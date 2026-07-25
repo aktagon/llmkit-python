@@ -132,8 +132,8 @@ def _build_payload_at(
 
 """
     operation_name = TELEMETRY_OPERATION_NAME.get(event.op, event.op.value)
-    input_tokens = event.usage.input if event.usage is not None else 0
-    output_tokens = event.usage.output if event.usage is not None else 0
+    input_tokens = event.usage.input if event.usage is not None else None
+    output_tokens = event.usage.output if event.usage is not None else None
     return build_otlp_traces(
         operation_name,
         event.provider,
@@ -186,8 +186,8 @@ def build_otlp_traces(
     operation_name: str,
     provider: str,
     model: str,
-    input_tokens: int,
-    output_tokens: int,
+    input_tokens: int | None,
+    output_tokens: int | None,
     error_type: str,
     trace_id: str,
     span_id: str,
@@ -207,11 +207,15 @@ def build_otlp_traces(
         {"key": OTEL_ATTR_PROVIDER, "value": {"stringValue": provider}},
         {"key": OTEL_ATTR_MODEL, "value": {"stringValue": model}},
     ]
-    if input_tokens > 0:
+    #
+    #
+    #
+    #
+    if input_tokens is not None:
         attributes.append(
             {"key": OTEL_USAGE_INPUT, "value": {"intValue": str(input_tokens)}}
         )
-    if output_tokens > 0:
+    if output_tokens is not None:
         attributes.append(
             {"key": OTEL_USAGE_OUTPUT, "value": {"intValue": str(output_tokens)}}
         )

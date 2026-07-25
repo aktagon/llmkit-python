@@ -39,6 +39,7 @@ async def main():
         .prompt("Say hi")
     )
     print(resp.text)
+    # Optional: None means the provider reported no count, not a count of 0.
     print(resp.usage.input, "input tokens")
 
 asyncio.run(main())
@@ -76,9 +77,17 @@ resp = await (
 )
 
 print(resp.text)               # "4"
-print(resp.usage.input)       # prompt tokens
-print(resp.usage.output)      # completion tokens
-print(resp.usage.cache_read)  # tokens served from cache
+# Every Usage dimension is optional. None means the provider did not report
+# the value, which is NOT the same as reporting zero: a provider that says it
+# used no cached tokens and one that never mentions caching are different
+# facts, and a plain 0 cannot tell you which you have.
+resp.usage.input       # int | None — prompt tokens
+resp.usage.output      # int | None — completion tokens
+resp.usage.cache_read  # int | None — tokens served from cache
+resp.usage.cost        # float | None — provider-reported USD; None is unreported, never "free"
+
+if resp.usage.cache_read is not None:
+    print(resp.usage.cache_read, "tokens served from cache")
 print(resp.usage.cache_write) # tokens written to cache (Anthropic explicit)
 print(resp.usage.reasoning)   # internal reasoning tokens (OpenAI o-series, Gemini 2.5+)
 ```

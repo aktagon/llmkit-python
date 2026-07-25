@@ -42,6 +42,64 @@ def extract_path(data: Any, path: str) -> str:
     return str(current)
 
 
+def _navigate(data: Any, path: str) -> Any:
+    """
+
+
+
+"""
+    current: Any = data
+    for part in path.split("."):
+        m = _INDEX_RE.match(part)
+        if m:
+            if not isinstance(current, dict):
+                return None
+            current = current.get(m.group("field"))
+            idx = int(m.group("idx"))
+            if not isinstance(current, list) or idx >= len(current):
+                return None
+            current = current[idx]
+        else:
+            if not isinstance(current, dict):
+                return None
+            current = current.get(part)
+    return current
+
+
+def opt_int_path(data: Any, path: str) -> int | None:
+    """
+
+
+
+
+
+
+
+
+
+"""
+    if not path:
+        return None
+    current = _navigate(data, path)
+    if isinstance(current, bool):
+        return int(current)
+    if isinstance(current, (int, float)):
+        return int(current)
+    return None
+
+
+def opt_float_path(data: Any, path: str) -> float | None:
+    """"""
+    if not path:
+        return None
+    current = _navigate(data, path)
+    if isinstance(current, bool):
+        return None
+    if isinstance(current, (int, float)):
+        return float(current)
+    return None
+
+
 def extract_int_path(data: Any, path: str) -> int:
     """"""
     if not path:
@@ -72,37 +130,6 @@ def extract_int_path(data: Any, path: str) -> int:
     return 0
 
 
-def extract_float_path(data: Any, path: str) -> float:
-    """
-
-
-"""
-    if not path:
-        return 0.0
-    current: Any = data
-    for part in path.split("."):
-        m = _INDEX_RE.match(part)
-        if m:
-            field = m.group("field")
-            idx = int(m.group("idx"))
-            if isinstance(current, dict):
-                current = current.get(field)
-            else:
-                return 0.0
-            if isinstance(current, list) and idx < len(current):
-                current = current[idx]
-            else:
-                return 0.0
-        else:
-            if isinstance(current, dict):
-                current = current.get(part)
-            else:
-                return 0.0
-    if isinstance(current, bool):
-        return 0.0
-    if isinstance(current, (int, float)):
-        return float(current)
-    return 0.0
 
 
 def detect_mime_type(path: str) -> str:
@@ -208,11 +235,15 @@ def _is_empty_wire_value(value: Any) -> bool:
     """
 
 
+
+
+
+
+
+
 """
     if isinstance(value, str):
         return value == ""
-    if isinstance(value, (int, float)):
-        return value == 0
     return value is None
 
 

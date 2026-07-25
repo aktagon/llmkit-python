@@ -21,10 +21,11 @@ from .middleware import fire_post, fire_pre, resolve_model, set_event_error
 from .paths import (
     contains_value,
     deep_merge,
-    extract_float_path,
     extract_int_path,
     extract_path,
     merge_into_parent,
+    opt_float_path,
+    opt_int_path,
     remove_additional_properties,
     set_additional_properties_false,
     set_nested_field,
@@ -858,40 +859,49 @@ def decode_response(provider: str, chat_wire_shape: str, body: bytes) -> Respons
         return _parse_responses_envelope(raw)
 
     cfg = PROVIDERS[provider]
-    text = extract_path(raw, cfg.response_text_path)
-    input_tokens = extract_int_path(raw, cfg.usage_input_path)
-    output_tokens = extract_int_path(raw, cfg.usage_output_path)
-    cache_write, cache_read = _extract_cache_usage(raw, provider)
-    reasoning = (
-        extract_int_path(raw, cfg.reasoning_tokens_path)
-        if cfg.reasoning_tokens_path
-        else 0
-    )
-    cost = (
-        extract_float_path(raw, cfg.usage_cost_path) * cfg.usage_cost_scale
-        if cfg.usage_cost_path
-        else 0.0
-    )
-    finish_reason = (
-        extract_path(raw, cfg.finish_reason_path) if cfg.finish_reason_path else ""
-    )
-    finish_message = (
-        extract_path(raw, cfg.finish_message_path) if cfg.finish_message_path else ""
+    return Response(
+        text=extract_path(raw, cfg.response_text_path),
+        usage=decode_usage(raw, provider),
+        finish_reason=_opt_str(
+            extract_path(raw, cfg.finish_reason_path)
+            if cfg.finish_reason_path
+            else ""
+        ),
+        finish_message=_opt_str(
+            extract_path(raw, cfg.finish_message_path)
+            if cfg.finish_message_path
+            else ""
+        ),
     )
 
-    tokens = Usage(
-        input=input_tokens,
-        output=output_tokens,
+
+def _opt_str(value: str) -> str | None:
+    """
+
+"""
+    return value or None
+
+
+def decode_usage(raw: Any, provider: str) -> Usage:
+    """
+
+
+
+
+
+"""
+    cfg = PROVIDERS[provider]
+    cache_write, cache_read = _extract_cache_usage(raw, provider)
+    cost = opt_float_path(raw, cfg.usage_cost_path)
+    return Usage(
+        input=opt_int_path(raw, cfg.usage_input_path),
+        output=opt_int_path(raw, cfg.usage_output_path),
         cache_write=cache_write,
         cache_read=cache_read,
-        reasoning=reasoning,
-        cost=cost,
-    )
-    return Response(
-        text=text,
-        usage=tokens,
-        finish_reason=finish_reason,
-        finish_message=finish_message,
+        reasoning=opt_int_path(raw, cfg.reasoning_tokens_path),
+        #
+        #
+        cost=None if cost is None else cost * cfg.usage_cost_scale,
     )
 
 
@@ -921,7 +931,7 @@ def encode_response(provider: str, chat_wire_shape: str, response: Response) -> 
         set_wire_path(raw, cc.write_tokens_path, response.usage.cache_write)
         set_wire_path(raw, cc.read_tokens_path, response.usage.cache_read)
     set_wire_path(raw, cfg.reasoning_tokens_path, response.usage.reasoning)
-    if cfg.usage_cost_scale:
+    if cfg.usage_cost_scale and response.usage.cost is not None:
         set_wire_path(raw, cfg.usage_cost_path, response.usage.cost / cfg.usage_cost_scale)
     set_wire_path(raw, cfg.finish_reason_path, response.finish_reason)
     set_wire_path(raw, cfg.finish_message_path, response.finish_message)
@@ -955,14 +965,14 @@ def _parse_responses_envelope(raw: dict[str, Any]) -> Response:
     return Response(
         text=_extract_responses_text(raw),
         usage=Usage(
-            input=extract_int_path(raw, "usage.input_tokens"),
-            output=extract_int_path(raw, "usage.output_tokens"),
-            cache_read=extract_int_path(raw, "usage.input_tokens_details.cached_tokens"),
-            reasoning=extract_int_path(
+            input=opt_int_path(raw, "usage.input_tokens"),
+            output=opt_int_path(raw, "usage.output_tokens"),
+            cache_read=opt_int_path(raw, "usage.input_tokens_details.cached_tokens"),
+            reasoning=opt_int_path(
                 raw, "usage.output_tokens_details.reasoning_tokens"
             ),
         ),
-        finish_reason=extract_path(raw, "status"),
+        finish_reason=_opt_str(extract_path(raw, "status")),
     )
 
 
@@ -1014,13 +1024,17 @@ def _extract_responses_text(raw: dict[str, Any]) -> str:
     return ""
 
 
-def _extract_cache_usage(raw: dict[str, Any], provider: str) -> tuple[int, int]:
+def _extract_cache_usage(
+    raw: dict[str, Any], provider: str
+) -> tuple[int | None, int | None]:
     cc = caching_config(ProviderName(provider))
+    #
+    #
     if cc is None:
-        return 0, 0
-    write = extract_int_path(raw, cc.write_tokens_path) if cc.write_tokens_path else 0
-    read = extract_int_path(raw, cc.read_tokens_path) if cc.read_tokens_path else 0
-    return write, read
+        return None, None
+    return opt_int_path(raw, cc.write_tokens_path), opt_int_path(
+        raw, cc.read_tokens_path
+    )
 
 
 def _fire_post_err(
@@ -1031,3 +1045,36 @@ def _fire_post_err(
     ev = dataclasses.replace(base_event, duration=time.monotonic() - start)
     set_event_error(ev, exc)
     fire_post(mws, ev)
+
+
+def _add_opt(a: float | None, b: float | None) -> Any:
+    """
+
+
+
+
+"""
+    return None if a is None or b is None else a + b
+
+
+def accumulate_usage(total: Usage, turn: Usage) -> Usage:
+    """
+
+
+
+
+
+
+
+
+
+
+"""
+    return Usage(
+        input=_add_opt(total.input, turn.input),
+        output=_add_opt(total.output, turn.output),
+        cache_write=_add_opt(total.cache_write, turn.cache_write),
+        cache_read=_add_opt(total.cache_read, turn.cache_read),
+        reasoning=_add_opt(total.reasoning, turn.reasoning),
+        cost=_add_opt(total.cost, turn.cost),
+    )

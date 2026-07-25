@@ -11,7 +11,7 @@ from typing import Any
 from .errors import APIError, ValidationError, parse_error
 from .http import do_post, do_sigv4_post
 from .middleware import fire_post, fire_pre, resolve_model, set_event_error
-from .paths import extract_float_path, extract_int_path, extract_path
+from .paths import extract_int_path, extract_path
 from .providers.generated.middleware import Event, MiddlewareOp, Usage
 from .providers.generated.providers import PROVIDERS, ProviderName
 from .providers.generated.request import AuthScheme, auth_scheme, tool_call_config
@@ -92,7 +92,12 @@ class Agent:
     def _run_tool_loop(self) -> Response:
         #
         #
-        from .client import _build_request, _build_url
+        from .client import (
+            _build_request,
+            _build_url,
+            accumulate_usage,
+            decode_usage,
+        )
         from .transforms import _MsgCalls, _MsgResult, _MsgText
 
         cfg = PROVIDERS.get(self.provider.name)
@@ -102,7 +107,10 @@ class Agent:
         tc_cfg = tool_call_config(ProviderName(self.provider.name))
         tc_extractor = select_tool_call_extractor(cfg)
 
-        total_usage = Usage()
+        #
+        #
+        #
+        total_usage: Usage | None = None
 
         for _ in range(self.opts.max_tool_iterations):
             #
@@ -173,20 +181,19 @@ class Agent:
                 _fire_post_err(self.opts.middleware, llm_event, exc, llm_start)
                 raise
 
-            input_path = cfg.usage_input_path
-            output_path = cfg.usage_output_path
-            turn_input = extract_int_path(raw, input_path)
-            turn_output = extract_int_path(raw, output_path)
-            turn_cost = extract_float_path(raw, cfg.usage_cost_path) * cfg.usage_cost_scale if cfg.usage_cost_path else 0.0
-            total_usage.input += turn_input
-            total_usage.output += turn_output
-            total_usage.cost += turn_cost
+            #
+            turn_usage = decode_usage(raw, self.provider.name)
+            total_usage = (
+                turn_usage
+                if total_usage is None
+                else accumulate_usage(total_usage, turn_usage)
+            )
 
             post_ev = Event(
                 op=MiddlewareOp.LLM_REQUEST,
                 provider=self.provider.name,
                 model=resolve_model(self.provider, cfg),
-                usage=Usage(input=turn_input, output=turn_output),
+                usage=turn_usage,
                 duration=time.monotonic() - llm_start,
             )
             fire_post(self.opts.middleware, post_ev)

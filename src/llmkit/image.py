@@ -19,7 +19,7 @@ from typing import Any
 from .errors import APIError, ValidationError, parse_error
 from .http import do_multipart_post_multi, do_post, merge_caller_headers
 from .middleware import fire_post, fire_pre, set_event_error
-from .paths import extract_int_path
+from .paths import opt_int_path
 from .providers.generated.image_gen import (
     ImageGenDef,
     ImageModelDef,
@@ -676,7 +676,7 @@ def _parse_vertex_image_response(raw: dict[str, Any]) -> ImageResponse:
     from .structs import ImageResponse  # deferred to break import cycle
     preds = raw.get("predictions") if isinstance(raw, dict) else None
     images: list[ImageData] = []
-    finish_reason = ""
+    finish_reason: str | None = None
     if isinstance(preds, list):
         for entry in preds:
             if not isinstance(entry, dict):
@@ -756,15 +756,16 @@ def _parse_image_response(provider_name: str, body: bytes, img_cfg: Any) -> Imag
     #
     images, text, finish_reason, finish_message = _extract_google_image_parts(raw)
     tokens = Usage(
-        input=extract_int_path(raw, img_cfg.usage_input_path),
-        output=extract_int_path(raw, img_cfg.usage_output_path),
+        input=opt_int_path(raw, img_cfg.usage_input_path),
+        output=opt_int_path(raw, img_cfg.usage_output_path),
     )
     return ImageResponse(
         images=images,
         text=text,
         usage=tokens,
-        finish_reason=finish_reason,
-        finish_message=finish_message,
+        #
+        finish_reason=finish_reason or None,
+        finish_message=finish_message or None,
     )
 
 
@@ -810,8 +811,8 @@ def _parse_image_response_data_array(
             rp = entry.get("revised_prompt")
             if isinstance(rp, str) and rp:
                 revised.append(rp)
-    in_tokens = extract_int_path(raw, input_path) if input_path else 0
-    out_tokens = extract_int_path(raw, output_path) if output_path else 0
+    in_tokens = opt_int_path(raw, input_path)
+    out_tokens = opt_int_path(raw, output_path)
     tokens = Usage(input=in_tokens, output=out_tokens)
     return ImageResponse(images=images, text="\n".join(revised), usage=tokens)
 

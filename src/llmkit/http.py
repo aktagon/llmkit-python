@@ -45,7 +45,7 @@ def merge_caller_headers(headers: dict[str, str], caller: dict[str, str]) -> Non
             headers[k] = v
 
 from .errors import APIError
-from .paths import detect_mime_type, extract_int_path, extract_path
+from .paths import detect_mime_type, extract_path, opt_int_path
 from .providers.generated.middleware import Usage
 from .providers.generated.stream import StreamDef
 
@@ -330,7 +330,7 @@ def do_stream_post(
 
     usage = Usage()
     finish_event, finish_json_path = _parse_stream_finish_path(finish_reason_path)
-    finish_reason = ""
+    finish_reason: str | None = None
     current_event = ""
     with resp:
         for raw_line in resp:
@@ -389,20 +389,24 @@ def do_stream_post(
                     text = extract_path(parsed, stream_cfg.delta_text_path)
                     if text:
                         callback(text)
-                if current_event == stream_cfg.usage_event and stream_cfg.usage_output_path:
-                    usage.output = extract_int_path(parsed, stream_cfg.usage_output_path)
+                if current_event == stream_cfg.usage_event:
+                    value = opt_int_path(parsed, stream_cfg.usage_output_path)
+                    if value is not None:
+                        usage.output = value
             else:
                 text = extract_path(parsed, stream_cfg.delta_text_path)
                 if text:
                     callback(text)
-                if stream_cfg.usage_input_path:
-                    value = extract_int_path(parsed, stream_cfg.usage_input_path)
-                    if value > 0:
-                        usage.input = value
-                if stream_cfg.usage_output_path:
-                    value = extract_int_path(parsed, stream_cfg.usage_output_path)
-                    if value > 0:
-                        usage.output = value
+                #
+                #
+                #
+                #
+                value = opt_int_path(parsed, stream_cfg.usage_input_path)
+                if value is not None:
+                    usage.input = value
+                value = opt_int_path(parsed, stream_cfg.usage_output_path)
+                if value is not None:
+                    usage.output = value
 
             current_event = ""
     return usage, finish_reason
