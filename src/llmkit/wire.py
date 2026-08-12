@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .structs import Message, ToolCall, ToolResult
+from .structs import Message, ProviderTurn, ToolCall, ToolResult
 from .wire_version import WIRE_SCHEMA_VERSION
 
 
@@ -89,12 +89,23 @@ def load_history(data: bytes | str) -> list[Message]:
 
 def _message_to_wire(m: Message) -> dict[str, Any]:
     """Project a public Message into the wire dict shape."""
-    return {
+    out: dict[str, Any] = {
         "role": m.role,
         "content": m.content,
         "tool_calls": [_tool_call_to_wire(tc) for tc in m.tool_calls],
         "tool_result": _tool_result_to_wire(m.tool_result),
     }
+    # ADR-085. Omitted when absent, unlike tool_result: STAB-004's emit-null rule
+    # is scoped to the role discriminator, and provider_turn is not one — a turn
+    # that never had a payload and a turn whose payload was dropped are the same
+    # thing to a reader. Omitting also keeps the canonical messages.json golden
+    # byte-identical, since the wire.ttl fixture declares no payload.
+    if m.provider_turn is not None:
+        out["provider_turn"] = {
+            "wire_shape": m.provider_turn.wire_shape,
+            "wire": m.provider_turn.wire,
+        }
+    return out
 
 
 def _tool_call_to_wire(tc: ToolCall) -> dict[str, Any]:
@@ -135,9 +146,24 @@ def _message_from_wire(raw: Any) -> Message:
             tool_use_id=str(tr_raw.get("tool_use_id", "")),
             content=str(tr_raw.get("content", "")),
         )
+    # ADR-085 RSN-009, the unknown-field hazard. An OLD reader — one built before
+    # provider_turn existed — silently drops this key, and on Anthropic a dropped
+    # payload is a REJECTED request once the provider enforces the echo, not a
+    # degraded one. Unknown-field tolerance is benign in general and is not benign
+    # here. Nothing in the format can fix that (the key is additive under the same
+    # `_v` by ADR-085 §9); it is documented so a consumer reading a document
+    # written by a newer SDK knows what a silent reconstruction means.
+    provider_turn: ProviderTurn | None = None
+    pt_raw = raw.get("provider_turn")
+    if isinstance(pt_raw, dict):
+        provider_turn = ProviderTurn(
+            wire_shape=str(pt_raw.get("wire_shape", "")),
+            wire=str(pt_raw.get("wire", "")),
+        )
     return Message(
         role=str(raw.get("role", "")),
         content=str(raw.get("content", "") or ""),
         tool_calls=tool_calls,
         tool_result=tool_result,
+        provider_turn=provider_turn,
     )
