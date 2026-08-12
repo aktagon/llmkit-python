@@ -73,6 +73,7 @@ from .structs import (
     LiveResult,
     ModelInfo,
     MusicResponse,
+    ProviderTurn,
     SpeechResponse,
     ToolCall,
     ToolResult,
@@ -157,6 +158,7 @@ __all__ = [
     "Tool",
     "ToolCall",
     "ToolResult",
+    "ProviderTurn",
     #
     "Responses",
     #

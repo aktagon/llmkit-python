@@ -117,6 +117,9 @@ class Message:
     #
     tool_result: ToolResult | None = None
 
+    #
+    provider_turn: ProviderTurn | None = None
+
 
 @dataclass(kw_only=True)
 class ModelInfo:
@@ -182,6 +185,16 @@ class ProviderError:
 
 
 @dataclass
+class ProviderTurn:
+    """"""
+    #
+    wire_shape: str = ""
+
+    #
+    wire: str = ""
+
+
+@dataclass
 class Response:
     """"""
     #
@@ -198,6 +211,9 @@ class Response:
 
     #
     raw: Any | None = None
+
+    #
+    provider_turn: ProviderTurn | None = None
 
 
 @dataclass
