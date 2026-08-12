@@ -91,6 +91,11 @@ def _init_agent(b: "Agent") -> AgentState:
                     content=m.content or "",
                     tool_calls=list(m.tool_calls),
                     tool_result=m.tool_result,
+                    #
+                    #
+                    #
+                    #
+                    provider_turn=m.provider_turn,
                 )
             )
         agent.history = seeded
@@ -147,6 +152,12 @@ def _agent_messages(legacy_agent: LegacyAgent) -> tuple[Message, ...]:
                 content=m.content or "",
                 tool_calls=public_tool_calls,
                 tool_result=tool_result,
+                #
+                #
+                #
+                #
+                #
+                provider_turn=m.provider_turn,
             )
         )
     return tuple(out)

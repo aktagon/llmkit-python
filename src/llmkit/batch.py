@@ -17,6 +17,7 @@ from .job import (
 )
 from .middleware import fire_post, fire_pre, resolve_model, set_event_error
 from .paths import extract_path
+from .provider_turn import extract_raw_json_path
 from .providers.generated.batch import BatchDef, BatchInputMode, batch_config
 from .providers.generated.middleware import Event, MiddlewareOp
 from .providers.generated.providers import PROVIDERS, ProviderSpec, ProviderName
@@ -420,15 +421,19 @@ def _parse_batch_results(provider: str, data: bytes, bc: BatchDef, raw: bool = F
         response_bytes = line.encode("utf-8")
         inner_for_raw: Any = None
         if bc.result_body_path:
+            #
+            #
+            #
+            #
+            #
+            inner_text = extract_raw_json_path(line, bc.result_body_path)
+            if inner_text is None:
+                continue
             try:
-                wrapper = json.loads(line)
+                inner_for_raw = json.loads(inner_text)
             except ValueError:
                 continue
-            inner = _navigate_map_path(wrapper, bc.result_body_path)
-            if inner is None:
-                continue
-            inner_for_raw = inner
-            response_bytes = json.dumps(inner).encode("utf-8")
+            response_bytes = inner_text.encode("utf-8")
         #
         #
         try:
@@ -445,15 +450,6 @@ def _parse_batch_results(provider: str, data: bytes, bc: BatchDef, raw: bool = F
                     parsed.raw = None
         out.append(parsed)
     return out
-
-
-def _navigate_map_path(data: dict[str, Any], path: str) -> dict[str, Any] | None:
-    current: Any = data
-    for part in path.split("."):
-        if not isinstance(current, dict):
-            return None
-        current = current.get(part)
-    return current if isinstance(current, dict) else None
 
 
 def _build_auth_headers(p: Provider, cfg: ProviderSpec) -> dict[str, str]:

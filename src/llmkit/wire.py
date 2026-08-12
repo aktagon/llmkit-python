@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .structs import Message, ToolCall, ToolResult
+from .structs import Message, ProviderTurn, ToolCall, ToolResult
 from .wire_version import WIRE_SCHEMA_VERSION
 
 
@@ -89,12 +89,23 @@ def load_history(data: bytes | str) -> list[Message]:
 
 def _message_to_wire(m: Message) -> dict[str, Any]:
     """"""
-    return {
+    out: dict[str, Any] = {
         "role": m.role,
         "content": m.content,
         "tool_calls": [_tool_call_to_wire(tc) for tc in m.tool_calls],
         "tool_result": _tool_result_to_wire(m.tool_result),
     }
+    #
+    #
+    #
+    #
+    #
+    if m.provider_turn is not None:
+        out["provider_turn"] = {
+            "wire_shape": m.provider_turn.wire_shape,
+            "wire": m.provider_turn.wire,
+        }
+    return out
 
 
 def _tool_call_to_wire(tc: ToolCall) -> dict[str, Any]:
@@ -135,9 +146,24 @@ def _message_from_wire(raw: Any) -> Message:
             tool_use_id=str(tr_raw.get("tool_use_id", "")),
             content=str(tr_raw.get("content", "")),
         )
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    provider_turn: ProviderTurn | None = None
+    pt_raw = raw.get("provider_turn")
+    if isinstance(pt_raw, dict):
+        provider_turn = ProviderTurn(
+            wire_shape=str(pt_raw.get("wire_shape", "")),
+            wire=str(pt_raw.get("wire", "")),
+        )
     return Message(
         role=str(raw.get("role", "")),
         content=str(raw.get("content", "") or ""),
         tool_calls=tool_calls,
         tool_result=tool_result,
+        provider_turn=provider_turn,
     )

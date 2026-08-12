@@ -126,11 +126,25 @@ class _MsgResult:
     result: ToolResult
 
 
+@dataclass(frozen=True)
+class _MsgTurn:
+    """
+
+
+
+
+"""
+    shape: str
+    wire: str
+    fallback: "_Msg"
+
+
 #
 #
 #
 #
-_Msg = _MsgText | _MsgCalls | _MsgResult
+#
+_Msg = _MsgText | _MsgCalls | _MsgResult | _MsgTurn
 
 
 def _assert_never(value: NoReturn) -> NoReturn:
@@ -163,12 +177,24 @@ def to_internal(messages: list[Message]) -> list[_Msg]:
                 field=f"messages[{i}]",
                 message="must carry only one of content, tool calls, or tool result",
             )
+        projected: _Msg
         if m.tool_result is not None:
-            out.append(_MsgResult(result=m.tool_result))
+            projected = _MsgResult(result=m.tool_result)
         elif m.tool_calls:
-            out.append(_MsgCalls(calls=list(m.tool_calls)))
+            projected = _MsgCalls(calls=list(m.tool_calls))
         else:
-            out.append(_MsgText(role=m.role, text=m.content))
+            projected = _MsgText(role=m.role, text=m.content)
+        #
+        #
+        #
+        #
+        if m.provider_turn is not None:
+            projected = _MsgTurn(
+                shape=m.provider_turn.wire_shape,
+                wire=m.provider_turn.wire,
+                fallback=projected,
+            )
+        out.append(projected)
     return out
 
 
@@ -188,6 +214,74 @@ def transform_responses_input(body: dict[str, Any], msgs: list[_Msg], req: "Requ
 
 """
     body["input"] = _build_flat_message_array(msgs, req, cfg)
+
+
+def _flat_projected_entry(
+    m: _Msg,
+    cfg: ProviderSpec,
+    call_t: ToolCallTransform,
+    result_t: ToolResultTransform,
+) -> dict[str, Any]:
+    """
+
+"""
+    match m:
+        case _MsgResult():
+            return result_t(m.result, cfg.role_mappings)
+        case _MsgCalls():
+            return call_t(m.calls, cfg.role_mappings)
+        case _MsgText():
+            return {
+                "role": map_role(m.role, cfg.role_mappings),
+                "content": m.text,
+            }
+        case _MsgTurn():
+            #
+            #
+            #
+            return _flat_projected_entry(m.fallback, cfg, call_t, result_t)
+        case _:
+            _assert_never(m)
+
+
+def _append_flat_replayed_turn(
+    out: list[dict[str, Any]], turn: _MsgTurn, cfg: ProviderSpec
+) -> bool:
+    """
+
+
+
+
+
+
+
+
+
+
+
+
+"""
+    try:
+        payload = json.loads(turn.wire)
+    except ValueError:
+        return False
+    if turn.shape == "ChatAnthropic":
+        out.append(
+            {
+                "role": map_role("assistant", cfg.role_mappings),
+                "content": payload,
+            }
+        )
+        return True
+    if turn.shape == "ChatResponsesOpenAI":
+        if not isinstance(payload, list):
+            return False
+        out.extend(payload)
+        return True
+    if not isinstance(payload, dict):
+        return False
+    out.append(payload)
+    return True
 
 
 def _build_flat_message_array(msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> list[dict[str, Any]]:
@@ -212,20 +306,9 @@ def _build_flat_message_array(msgs: list[_Msg], req: "Request", cfg: ProviderSpe
         call_t = select_tool_call_transform(cfg)
         result_t = select_tool_result_transform(cfg)
         for m in msgs:
-            match m:
-                case _MsgResult():
-                    out.append(result_t(m.result, cfg.role_mappings))
-                case _MsgCalls():
-                    out.append(call_t(m.calls, cfg.role_mappings))
-                case _MsgText():
-                    out.append(
-                        {
-                            "role": map_role(m.role, cfg.role_mappings),
-                            "content": m.text,
-                        }
-                    )
-                case _:
-                    _assert_never(m)
+            if isinstance(m, _MsgTurn) and _append_flat_replayed_turn(out, m, cfg):
+                continue
+            out.append(_flat_projected_entry(m, cfg, call_t, result_t))
     elif req.user:
         if has_media:
             out.append(
@@ -299,6 +382,37 @@ def _build_flat_content_parts(req: "Request", cfg: ProviderSpec) -> list[dict[st
     return parts
 
 
+def _google_projected_entry(
+    m: _Msg,
+    cfg: ProviderSpec,
+    call_t: ToolCallTransform,
+    result_t: ToolResultTransform,
+    id_to_name: dict[str, str],
+) -> dict[str, Any]:
+    """
+"""
+    match m:
+        case _MsgResult():
+            r = m.result
+            name = id_to_name.get(r.tool_use_id)
+            if name:
+                r = ToolResult(tool_use_id=name, content=r.content)
+            return result_t(r, cfg.role_mappings)
+        case _MsgCalls():
+            for c in m.calls:
+                id_to_name[c.id] = c.name
+            return call_t(m.calls, cfg.role_mappings)
+        case _MsgText():
+            return {
+                "role": map_role(m.role, cfg.role_mappings),
+                "parts": [{"text": m.text}],
+            }
+        case _MsgTurn():
+            return _google_projected_entry(m.fallback, cfg, call_t, result_t, id_to_name)
+        case _:
+            _assert_never(m)
+
+
 def transform_google_parts(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> None:
     contents: list[dict[str, Any]] = []
     if msgs:
@@ -313,26 +427,22 @@ def transform_google_parts(body: dict[str, Any], msgs: list[_Msg], req: "Request
         #
         id_to_name: dict[str, str] = {}
         for m in msgs:
-            match m:
-                case _MsgResult():
-                    r = m.result
-                    name = id_to_name.get(r.tool_use_id)
-                    if name:
-                        r = ToolResult(tool_use_id=name, content=r.content)
-                    contents.append(result_t(r, cfg.role_mappings))
-                case _MsgCalls():
-                    for c in m.calls:
+            #
+            #
+            #
+            #
+            #
+            #
+            if isinstance(m, _MsgTurn) and m.shape == "ChatGoogle":
+                if isinstance(m.fallback, _MsgCalls):
+                    for c in m.fallback.calls:
                         id_to_name[c.id] = c.name
-                    contents.append(call_t(m.calls, cfg.role_mappings))
-                case _MsgText():
-                    contents.append(
-                        {
-                            "role": map_role(m.role, cfg.role_mappings),
-                            "parts": [{"text": m.text}],
-                        }
-                    )
-                case _:
-                    _assert_never(m)
+                try:
+                    contents.append(json.loads(m.wire))
+                    continue
+                except ValueError:
+                    pass
+            contents.append(_google_projected_entry(m, cfg, call_t, result_t, id_to_name))
     elif req.user:
         parts = _build_google_content_parts(req)
         contents.append(
@@ -389,6 +499,15 @@ def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Req
         call_t = select_tool_call_transform(cfg)
         result_t = select_tool_result_transform(cfg)
         for m in msgs:
+            #
+            #
+            #
+            #
+            #
+            #
+            #
+            if isinstance(m, _MsgTurn):
+                m = m.fallback
             match m:
                 case _MsgResult():
                     out.append(result_t(m.result, cfg.role_mappings))

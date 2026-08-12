@@ -15,6 +15,7 @@ from .paths import extract_int_path, extract_path
 from .providers.generated.middleware import Event, MiddlewareOp, Usage
 from .providers.generated.providers import PROVIDERS, ProviderName
 from .providers.generated.request import AuthScheme, auth_scheme, tool_call_config
+from .provider_turn import capture_provider_turn
 from .transforms import select_tool_call_extractor
 from .types import Options, Provider, Request, Response, Tool
 
@@ -25,6 +26,10 @@ class _InternalMessage:
     content: str = ""
     tool_calls: list = field(default_factory=list)   # list[ToolCall]
     tool_result: Any = None                           # ToolResult | None
+    #
+    #
+    #
+    provider_turn: Any = None                         # ProviderTurn | None
 
 
 class Agent:
@@ -98,7 +103,7 @@ class Agent:
             accumulate_usage,
             decode_usage,
         )
-        from .transforms import _MsgCalls, _MsgResult, _MsgText
+        from .transforms import _MsgCalls, _MsgResult, _MsgText, _MsgTurn
 
         cfg = PROVIDERS.get(self.provider.name)
         if cfg is None:
@@ -123,11 +128,18 @@ class Agent:
             msgs: list = []
             for m in self.history:
                 if m.tool_result is not None:
-                    msgs.append(_MsgResult(result=m.tool_result))
+                    projected: Any = _MsgResult(result=m.tool_result)
                 elif m.tool_calls:
-                    msgs.append(_MsgCalls(calls=list(m.tool_calls)))
+                    projected = _MsgCalls(calls=list(m.tool_calls))
                 else:
-                    msgs.append(_MsgText(role=m.role, text=m.content))
+                    projected = _MsgText(role=m.role, text=m.content)
+                if m.provider_turn is not None:
+                    projected = _MsgTurn(
+                        shape=m.provider_turn.wire_shape,
+                        wire=m.provider_turn.wire,
+                        fallback=projected,
+                    )
+                msgs.append(projected)
             body, headers = _build_request(self.provider, req, self.opts, cfg, self.tools, msgs=msgs)
 
             #
@@ -202,7 +214,14 @@ class Agent:
 
             if not calls:
                 text = extract_path(raw, cfg.response_text_path)
-                self.history.append(_InternalMessage(role="assistant", content=text))
+                #
+                #
+                #
+                #
+                turn = capture_provider_turn(resp_body, cfg, cfg.chat_wire_shape)
+                self.history.append(
+                    _InternalMessage(role="assistant", content=text, provider_turn=turn)
+                )
                 finish_reason = extract_path(raw, cfg.finish_reason_path) if cfg.finish_reason_path else ""
                 finish_message = extract_path(raw, cfg.finish_message_path) if cfg.finish_message_path else ""
                 return Response(
@@ -211,9 +230,21 @@ class Agent:
                     finish_reason=finish_reason,
                     finish_message=finish_message,
                     raw=raw if self.opts.raw else None,
+                    provider_turn=turn,
                 )
 
-            self.history.append(_InternalMessage(role="assistant", tool_calls=list(calls)))
+            #
+            #
+            #
+            #
+            #
+            self.history.append(
+                _InternalMessage(
+                    role="assistant",
+                    tool_calls=list(calls),
+                    provider_turn=capture_provider_turn(resp_body, cfg, cfg.chat_wire_shape),
+                )
+            )
 
             from .structs import ToolResult
 
