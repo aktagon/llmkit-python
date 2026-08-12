@@ -117,6 +117,9 @@ class Message:
     # tool_result is the tool execution result on a role=tool turn. Null on text turns and assistant turns. Singular (not plural) because one tool turn carries exactly one result.
     tool_result: ToolResult | None = None
 
+    # provider_turn is the provider's own serialization of this turn, when the SDK received it from a provider (ADR-085). Null on user turns, tool turns, and any assistant turn the caller authored via History(...) or a compaction hook — those are reconstructed from the fields above, as every turn was before ADR-085. Consumers never need to read it: it exists so the next request can replay the turn verbatim instead of rebuilding a lossy copy.
+    provider_turn: ProviderTurn | None = None
+
 
 @dataclass(kw_only=True)
 class ModelInfo:
@@ -182,6 +185,16 @@ class ProviderError:
 
 
 @dataclass
+class ProviderTurn:
+    """ProviderTurn is one assistant turn exactly as the provider serialized it, captured at assistantTurnPath and replayed unchanged on every subsequent request in the run (ADR-085). It sits BESIDE the canonical projection, not instead of it: Message.role/.content/.tool_calls stay the consumer's view of the turn, and this is what goes back on the wire. Present only on a turn the SDK received from a provider; a caller-authored turn (History(...), a compaction hook) has none and is reconstructed as before."""
+    # wire_shape is the ChatWireShape value that produced this payload (chat_openai, chat_anthropic, chat_google, chat_responses_openai, chat_bedrock). Load-bearing: a payload captured under one shape is never replayed under another, because the shapes disagree on what an assistant turn even is — an array of blocks on Anthropic, a message object on OpenAI, an item list on Responses. On a mismatch the payload is dropped and the turn reconstructed (ADR-085 RSN-006).
+    wire_shape: str = ""
+
+    # wire is the verbatim JSON text of one assistant turn, held as a string rather than a decoded value so it survives at rest byte-for-byte in every SDK and through Save/Load. The SDK never parses, canonicalizes, re-encodes or truncates it (ADR-085 RSN-002); it is spliced into the next request as raw JSON. String — not a parsed JSON value — because the parsed representations disagree across languages: Go's json.RawMessage keeps the source bytes, but serde_json's default Map is a BTreeMap that would re-sort the keys on re-encode.
+    wire: str = ""
+
+
+@dataclass
 class Response:
     """Response is the universal response container returned by text-generation terminals (Text.Prompt, Agent.Prompt). Five fields; all five are core (no per-capability augmentation)."""
     # text is the assistant's response text, extracted from the provider response body at the path declared by hasResponseTextPath.
@@ -198,6 +211,9 @@ class Response:
 
     # raw is the parsed provider response body, populated only when the caller opted in via the typed builder's .raw() chain method (ADR-014). Type-erased — provider-specific fields (Anthropic citations, OpenAI logprobs, Google promptFeedback, ...) are not part of the universal Response shape; consumers cast to a provider-shape type once they know which provider they're talking to.
     raw: Any | None = None
+
+    # provider_turn is the assistant turn this response carried, as the provider serialized it (ADR-085). Always captured — unlike raw, it is not opt-in — so a caller running their own loop on Text.Prompt can thread the turn into the next request without parsing raw per provider, which is the work this library exists to absorb. Null when the response carries no assistant turn at the wire shape's declared position, or when the shape declares none (Bedrock).
+    provider_turn: ProviderTurn | None = None
 
 
 @dataclass
