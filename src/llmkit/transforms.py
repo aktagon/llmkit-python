@@ -126,11 +126,25 @@ class _MsgResult:
     result: ToolResult
 
 
-# A message is *exactly one of* the three variants. The public Message
-# (structs.py) is a flat product that can encode an illegal multi-carrier
-# combination; this union cannot, so the transforms below dispatch with
-# match/case rather than the old if/elif silent-drop order.
-_Msg = _MsgText | _MsgCalls | _MsgResult
+@dataclass(frozen=True)
+class _MsgTurn:
+    """An assistant turn the provider itself serialized, replayed verbatim
+    instead of rebuilt (ADR-085). It carries the projection it replaces so
+    provider_turn.resolve_turns can drop back to reconstruction when the payload
+    was captured under a different wire shape — the alternative, deciding that at
+    transform time, would put the same check in four places.
+    """
+    shape: str
+    wire: str
+    fallback: "_Msg"
+
+
+# A message is *exactly one of* the variants. The public Message (structs.py) is
+# a flat product that can encode an illegal multi-carrier combination; this union
+# cannot, so the transforms below dispatch with match/case rather than the old
+# if/elif silent-drop order. _MsgTurn is not a fourth carrier: it WRAPS one of the
+# other three, which stays the projection consumers read.
+_Msg = _MsgText | _MsgCalls | _MsgResult | _MsgTurn
 
 
 def _assert_never(value: NoReturn) -> NoReturn:
@@ -163,12 +177,24 @@ def to_internal(messages: list[Message]) -> list[_Msg]:
                 field=f"messages[{i}]",
                 message="must carry only one of content, tool calls, or tool result",
             )
+        projected: _Msg
         if m.tool_result is not None:
-            out.append(_MsgResult(result=m.tool_result))
+            projected = _MsgResult(result=m.tool_result)
         elif m.tool_calls:
-            out.append(_MsgCalls(calls=list(m.tool_calls)))
+            projected = _MsgCalls(calls=list(m.tool_calls))
         else:
-            out.append(_MsgText(role=m.role, text=m.content))
+            projected = _MsgText(role=m.role, text=m.content)
+        # provider_turn is not a fourth carrier — it is the same turn in the
+        # provider's own serialization, so it never participates in the
+        # one-carrier check above. When present it supersedes the projection on
+        # the wire while the projection stays what consumers read.
+        if m.provider_turn is not None:
+            projected = _MsgTurn(
+                shape=m.provider_turn.wire_shape,
+                wire=m.provider_turn.wire,
+                fallback=projected,
+            )
+        out.append(projected)
     return out
 
 
@@ -188,6 +214,74 @@ def transform_responses_input(body: dict[str, Any], msgs: list[_Msg], req: "Requ
     witnesses that the only wire delta is the envelope key + endpoint.
     """
     body["input"] = _build_flat_message_array(msgs, req, cfg)
+
+
+def _flat_projected_entry(
+    m: _Msg,
+    cfg: ProviderSpec,
+    call_t: ToolCallTransform,
+    result_t: ToolResultTransform,
+) -> dict[str, Any]:
+    """Render one canonical message as a flat-envelope entry — the reconstruction
+    path, unchanged from before ADR-085 and still what every caller-authored turn
+    takes."""
+    match m:
+        case _MsgResult():
+            return result_t(m.result, cfg.role_mappings)
+        case _MsgCalls():
+            return call_t(m.calls, cfg.role_mappings)
+        case _MsgText():
+            return {
+                "role": map_role(m.role, cfg.role_mappings),
+                "content": m.text,
+            }
+        case _MsgTurn():
+            # A payload the splice could not place falls back to its projection.
+            # resolve_turns should already have unwrapped anything unplaceable —
+            # this arm is what keeps "should" from being load-bearing.
+            return _flat_projected_entry(m.fallback, cfg, call_t, result_t)
+        case _:
+            _assert_never(m)
+
+
+def _append_flat_replayed_turn(
+    out: list[dict[str, Any]], turn: _MsgTurn, cfg: ProviderSpec
+) -> bool:
+    """Append a captured assistant turn to a flat-envelope array in whatever
+    container that wire family expects, returning False when the payload cannot
+    be placed so the caller reconstructs instead.
+
+    The three families disagree on what assistantTurnPath even points at,
+    which is why this cannot be one append:
+
+      - ChatOpenAI     "choices[0].message"  -> an assistant message object
+      - ChatAnthropic  "content"             -> the block ARRAY, with no message
+        object around it; the role wrapper below is llmkit's, the blocks are the
+        provider's
+      - ChatResponses  "output"              -> an ITEM LIST that spreads across
+        N input entries rather than becoming one (ADR-085 OQ-1)
+    """
+    try:
+        payload = json.loads(turn.wire)
+    except ValueError:
+        return False
+    if turn.shape == "ChatAnthropic":
+        out.append(
+            {
+                "role": map_role("assistant", cfg.role_mappings),
+                "content": payload,
+            }
+        )
+        return True
+    if turn.shape == "ChatResponsesOpenAI":
+        if not isinstance(payload, list):
+            return False
+        out.extend(payload)
+        return True
+    if not isinstance(payload, dict):
+        return False
+    out.append(payload)
+    return True
 
 
 def _build_flat_message_array(msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> list[dict[str, Any]]:
@@ -212,20 +306,9 @@ def _build_flat_message_array(msgs: list[_Msg], req: "Request", cfg: ProviderSpe
         call_t = select_tool_call_transform(cfg)
         result_t = select_tool_result_transform(cfg)
         for m in msgs:
-            match m:
-                case _MsgResult():
-                    out.append(result_t(m.result, cfg.role_mappings))
-                case _MsgCalls():
-                    out.append(call_t(m.calls, cfg.role_mappings))
-                case _MsgText():
-                    out.append(
-                        {
-                            "role": map_role(m.role, cfg.role_mappings),
-                            "content": m.text,
-                        }
-                    )
-                case _:
-                    _assert_never(m)
+            if isinstance(m, _MsgTurn) and _append_flat_replayed_turn(out, m, cfg):
+                continue
+            out.append(_flat_projected_entry(m, cfg, call_t, result_t))
     elif req.user:
         if has_media:
             out.append(
@@ -299,6 +382,37 @@ def _build_flat_content_parts(req: "Request", cfg: ProviderSpec) -> list[dict[st
     return parts
 
 
+def _google_projected_entry(
+    m: _Msg,
+    cfg: ProviderSpec,
+    call_t: ToolCallTransform,
+    result_t: ToolResultTransform,
+    id_to_name: dict[str, str],
+) -> dict[str, Any]:
+    """Render one canonical message as a Google `contents` entry — the
+    reconstruction path. Mirrors _flat_projected_entry, final arm included."""
+    match m:
+        case _MsgResult():
+            r = m.result
+            name = id_to_name.get(r.tool_use_id)
+            if name:
+                r = ToolResult(tool_use_id=name, content=r.content)
+            return result_t(r, cfg.role_mappings)
+        case _MsgCalls():
+            for c in m.calls:
+                id_to_name[c.id] = c.name
+            return call_t(m.calls, cfg.role_mappings)
+        case _MsgText():
+            return {
+                "role": map_role(m.role, cfg.role_mappings),
+                "parts": [{"text": m.text}],
+            }
+        case _MsgTurn():
+            return _google_projected_entry(m.fallback, cfg, call_t, result_t, id_to_name)
+        case _:
+            _assert_never(m)
+
+
 def transform_google_parts(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> None:
     contents: list[dict[str, Any]] = []
     if msgs:
@@ -313,26 +427,22 @@ def transform_google_parts(body: dict[str, Any], msgs: list[_Msg], req: "Request
         # through unchanged (transform_google_tool_result_msg uses tool_use_id).
         id_to_name: dict[str, str] = {}
         for m in msgs:
-            match m:
-                case _MsgResult():
-                    r = m.result
-                    name = id_to_name.get(r.tool_use_id)
-                    if name:
-                        r = ToolResult(tool_use_id=name, content=r.content)
-                    contents.append(result_t(r, cfg.role_mappings))
-                case _MsgCalls():
-                    for c in m.calls:
+            # A replayed Google turn is candidates[0].content verbatim — the same
+            # {role, parts} object the contents array takes, so it drops straight
+            # in. It still has to feed id_to_name below, because a LATER tool
+            # result is matched by name against calls made on this turn; that
+            # lookup reads the canonical projection, which the fallback still
+            # carries even when the payload is what gets sent.
+            if isinstance(m, _MsgTurn) and m.shape == "ChatGoogle":
+                if isinstance(m.fallback, _MsgCalls):
+                    for c in m.fallback.calls:
                         id_to_name[c.id] = c.name
-                    contents.append(call_t(m.calls, cfg.role_mappings))
-                case _MsgText():
-                    contents.append(
-                        {
-                            "role": map_role(m.role, cfg.role_mappings),
-                            "parts": [{"text": m.text}],
-                        }
-                    )
-                case _:
-                    _assert_never(m)
+                try:
+                    contents.append(json.loads(m.wire))
+                    continue
+                except ValueError:
+                    pass
+            contents.append(_google_projected_entry(m, cfg, call_t, result_t, id_to_name))
     elif req.user:
         parts = _build_google_content_parts(req)
         contents.append(
@@ -389,6 +499,15 @@ def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Req
         call_t = select_tool_call_transform(cfg)
         result_t = select_tool_result_transform(cfg)
         for m in msgs:
+            # Bedrock never replays: ChatBedrock declares
+            # assistantTurnUnanchored rather than a position (ADR-085 OQ-5),
+            # so there is no container to splice into. Reconstruct from the
+            # projection instead of falling through to _assert_never —
+            # resolve_turns should already have unwrapped this, and raising at a
+            # caller is the wrong way to report that it did not. When OQ-5 anchors
+            # Converse, this becomes a real splice.
+            if isinstance(m, _MsgTurn):
+                m = m.fallback
             match m:
                 case _MsgResult():
                     out.append(result_t(m.result, cfg.role_mappings))

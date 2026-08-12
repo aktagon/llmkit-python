@@ -50,6 +50,7 @@ from .providers.generated.request import (
     system_placement,
 )
 from .providers.generated.stream import stream_config
+from .provider_turn import capture_provider_turn, resolve_turns
 from .transforms import select_message_transform, select_tool_def_transform, to_internal
 from .types import File, Options, Provider, Request, Response
 
@@ -647,8 +648,11 @@ def _build_request(
         if req.system:
             body["system_instruction"] = {"parts": [{"text": req.system}]}
 
+    # resolve_turns runs first and only here: it is the one place cfg and the
+    # message list meet, so the ADR-085 RSN-006 shape check is made once rather
+    # than remembered in each transform.
     msg_transform = select_message_transform(cfg)
-    msg_transform(body, msgs, req, cfg)
+    msg_transform(body, resolve_turns(msgs, cfg), req, cfg)
 
     if tools:
         select_tool_def_transform(cfg)(body, tools)
@@ -855,10 +859,17 @@ def decode_response(provider: str, chat_wire_shape: str, body: bytes) -> Respons
     # ADR-055: chat_wire_shape is the EFFECTIVE wire shape for this request (after
     # Text.protocol(...) resolution). Only ChatResponsesOpenAI diverges (the
     # output[] envelope); every other value uses the declared response paths.
-    if chat_wire_shape == "ChatResponsesOpenAI":
-        return _parse_responses_envelope(raw)
-
+    # ADR-085: capture the assistant turn as the provider serialized it, from the
+    # ORIGINAL bytes rather than from `raw` — re-encoding the parsed dict would
+    # emit Python's rendering, not the provider's.
     cfg = PROVIDERS[provider]
+    turn = capture_provider_turn(body, cfg, chat_wire_shape)
+
+    if chat_wire_shape == "ChatResponsesOpenAI":
+        resp = _parse_responses_envelope(raw)
+        resp.provider_turn = turn
+        return resp
+
     return Response(
         text=extract_path(raw, cfg.response_text_path),
         usage=decode_usage(raw, provider),
@@ -872,6 +883,7 @@ def decode_response(provider: str, chat_wire_shape: str, body: bytes) -> Respons
             if cfg.finish_message_path
             else ""
         ),
+        provider_turn=turn,
     )
 
 
