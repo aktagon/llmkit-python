@@ -73,6 +73,7 @@ from .structs import (
     LiveResult,
     ModelInfo,
     MusicResponse,
+    ProviderTurn,
     SpeechResponse,
     ToolCall,
     ToolResult,
@@ -157,6 +158,7 @@ __all__ = [
     "Tool",
     "ToolCall",
     "ToolResult",
+    "ProviderTurn",
     # Chat protocol opt-in token (ADR-055).
     "Responses",
     # Symmetric response codec (ADR-076): keyless, IO-free, pure. Not on the
