@@ -91,6 +91,11 @@ def _init_agent(b: "Agent") -> AgentState:
                     content=m.content or "",
                     tool_calls=list(m.tool_calls),
                     tool_result=m.tool_result,
+                    # The return leg of _agent_messages. A turn restored from
+                    # load_history carries its payload back into the loop, which
+                    # is what makes cross-process resume (ADR-023) replay rather
+                    # than reconstruct.
+                    provider_turn=m.provider_turn,
                 )
             )
         agent.history = seeded
@@ -147,6 +152,12 @@ def _agent_messages(legacy_agent: LegacyAgent) -> tuple[Message, ...]:
                 content=m.content or "",
                 tool_calls=public_tool_calls,
                 tool_result=tool_result,
+                # ADR-085: the captured turn crosses to the public shape too.
+                # Without this, .messages hands back a turn the SDK still holds
+                # internally but the caller cannot see, and .save() then
+                # serializes that blind copy — retention would work only for the
+                # lifetime of one live agent.
+                provider_turn=m.provider_turn,
             )
         )
     return tuple(out)
