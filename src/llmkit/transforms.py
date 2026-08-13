@@ -80,6 +80,8 @@ def select_tool_result_transform(cfg: ProviderSpec) -> ToolResultTransform:
         return transform_bedrock_tool_result_msg
     if cfg.chat_wire_shape == "ChatGoogle":
         return transform_google_tool_result_msg
+    if cfg.chat_wire_shape == "ChatResponsesOpenAI":
+        return transform_responses_tool_result_msg
     tc = _tool_call_def(cfg)
     if tc is not None and tc.result_role == "user" and tc.args_format == "map":
         return transform_anthropic_tool_result_msg
@@ -699,6 +701,24 @@ def transform_openai_tool_result_msg(result: ToolResult, _: dict[str, str]) -> d
         "role": "tool",
         "content": result.content,
         "tool_call_id": result.tool_use_id,
+    }
+
+
+def transform_responses_tool_result_msg(result: ToolResult, _: dict[str, str]) -> dict[str, Any]:
+    """
+
+
+
+
+
+
+
+
+"""
+    return {
+        "type": "function_call_output",
+        "call_id": result.tool_use_id,
+        "output": result.content,
     }
 
 
