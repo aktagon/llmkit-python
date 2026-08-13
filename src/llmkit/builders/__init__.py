@@ -100,6 +100,15 @@ class Text:
         return out
 
     def history(self, *msgs: Message) -> "Text":
+        """
+
+
+
+
+
+
+
+"""
         out = copy.copy(self)
         out._history = list(msgs)
         return out
@@ -506,6 +515,15 @@ class Agent:
         return out
 
     def history(self, *msgs: Message) -> "Agent":
+        """
+
+
+
+
+
+
+
+"""
         out = copy.copy(self)
         out._history = list(msgs)
         out._state = None
