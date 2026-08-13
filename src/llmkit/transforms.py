@@ -19,7 +19,11 @@ from .structs import Message, ToolCall, ToolResult
 
 MessageTransform = Callable[[dict[str, Any], list["_Msg"], "Request", ProviderSpec], None]
 ToolDefTransform = Callable[[dict[str, Any], list["Tool"]], None]
-ToolCallTransform = Callable[[list[ToolCall], dict[str, str]], dict[str, Any]]
+#
+#
+#
+#
+ToolCallTransform = Callable[[list[ToolCall], dict[str, str]], list[dict[str, Any]]]
 ToolResultTransform = Callable[[ToolResult, dict[str, str]], dict[str, Any]]
 ToolCallExtractor = Callable[[dict[str, Any], Any], list[ToolCall]]
 
@@ -69,6 +73,8 @@ def select_tool_call_transform(cfg: ProviderSpec) -> ToolCallTransform:
         return transform_bedrock_tool_call_msg
     if cfg.chat_wire_shape == "ChatGoogle":
         return transform_google_tool_call_msg
+    if cfg.chat_wire_shape == "ChatResponsesOpenAI":
+        return transform_responses_tool_call_msgs
     tc = _tool_call_def(cfg)
     if tc is not None and tc.args_format == "map":
         return transform_anthropic_tool_call_msg
@@ -223,20 +229,22 @@ def _flat_projected_entry(
     cfg: ProviderSpec,
     call_t: ToolCallTransform,
     result_t: ToolResultTransform,
-) -> dict[str, Any]:
+) -> list[dict[str, Any]]:
     """
+
+
 
 """
     match m:
         case _MsgResult():
-            return result_t(m.result, cfg.role_mappings)
+            return [result_t(m.result, cfg.role_mappings)]
         case _MsgCalls():
             return call_t(m.calls, cfg.role_mappings)
         case _MsgText():
-            return {
+            return [{
                 "role": map_role(m.role, cfg.role_mappings),
                 "content": m.text,
-            }
+            }]
         case _MsgTurn():
             #
             #
@@ -310,7 +318,7 @@ def _build_flat_message_array(msgs: list[_Msg], req: "Request", cfg: ProviderSpe
         for m in msgs:
             if isinstance(m, _MsgTurn) and _append_flat_replayed_turn(out, m, cfg):
                 continue
-            out.append(_flat_projected_entry(m, cfg, call_t, result_t))
+            out.extend(_flat_projected_entry(m, cfg, call_t, result_t))
     elif req.user:
         if has_media:
             out.append(
@@ -390,8 +398,9 @@ def _google_projected_entry(
     call_t: ToolCallTransform,
     result_t: ToolResultTransform,
     id_to_name: dict[str, str],
-) -> dict[str, Any]:
+) -> list[dict[str, Any]]:
     """
+
 """
     match m:
         case _MsgResult():
@@ -399,16 +408,16 @@ def _google_projected_entry(
             name = id_to_name.get(r.tool_use_id)
             if name:
                 r = ToolResult(tool_use_id=name, content=r.content)
-            return result_t(r, cfg.role_mappings)
+            return [result_t(r, cfg.role_mappings)]
         case _MsgCalls():
             for c in m.calls:
                 id_to_name[c.id] = c.name
             return call_t(m.calls, cfg.role_mappings)
         case _MsgText():
-            return {
+            return [{
                 "role": map_role(m.role, cfg.role_mappings),
                 "parts": [{"text": m.text}],
-            }
+            }]
         case _MsgTurn():
             return _google_projected_entry(m.fallback, cfg, call_t, result_t, id_to_name)
         case _:
@@ -444,7 +453,7 @@ def transform_google_parts(body: dict[str, Any], msgs: list[_Msg], req: "Request
                     continue
                 except ValueError:
                     pass
-            contents.append(_google_projected_entry(m, cfg, call_t, result_t, id_to_name))
+            contents.extend(_google_projected_entry(m, cfg, call_t, result_t, id_to_name))
     elif req.user:
         parts = _build_google_content_parts(req)
         contents.append(
@@ -514,7 +523,7 @@ def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Req
                 case _MsgResult():
                     out.append(result_t(m.result, cfg.role_mappings))
                 case _MsgCalls():
-                    out.append(call_t(m.calls, cfg.role_mappings))
+                    out.extend(call_t(m.calls, cfg.role_mappings))
                 case _MsgText():
                     out.append(
                         {
@@ -629,8 +638,8 @@ def transform_bedrock_tool_defs(body: dict[str, Any], tools: list["Tool"]) -> No
 #
 #
 
-def transform_openai_tool_call_msg(calls: list[ToolCall], role_mappings: dict[str, str]) -> dict[str, Any]:
-    return {
+def transform_openai_tool_call_msg(calls: list[ToolCall], role_mappings: dict[str, str]) -> list[dict[str, Any]]:
+    return [{
         "role": map_role("assistant", role_mappings),
         "tool_calls": [
             {
@@ -638,16 +647,53 @@ def transform_openai_tool_call_msg(calls: list[ToolCall], role_mappings: dict[st
                 "type": "function",
                 "function": {
                     "name": tc.name,
-                    "arguments": json.dumps(tc.input if tc.input is not None else {}),
+                    #
+                    #
+                    #
+                    #
+                    #
+                    #
+                    "arguments": json.dumps(
+                        tc.input if tc.input is not None else {},
+                        separators=(",", ":"),
+                    ),
                 },
             }
             for tc in calls
         ],
-    }
+    }]
 
 
-def transform_anthropic_tool_call_msg(calls: list[ToolCall], role_mappings: dict[str, str]) -> dict[str, Any]:
-    return {
+def transform_responses_tool_call_msgs(calls: list[ToolCall], _: dict[str, str]) -> list[dict[str, Any]]:
+    """
+
+
+
+
+
+
+
+
+
+
+
+"""
+    return [
+        {
+            "type": "function_call",
+            "call_id": tc.id,
+            "name": tc.name,
+            "arguments": json.dumps(
+                tc.input if tc.input is not None else {},
+                separators=(",", ":"),
+            ),
+        }
+        for tc in calls
+    ]
+
+
+def transform_anthropic_tool_call_msg(calls: list[ToolCall], role_mappings: dict[str, str]) -> list[dict[str, Any]]:
+    return [{
         "role": map_role("assistant", role_mappings),
         "content": [
             {
@@ -658,11 +704,11 @@ def transform_anthropic_tool_call_msg(calls: list[ToolCall], role_mappings: dict
             }
             for tc in calls
         ],
-    }
+    }]
 
 
-def transform_google_tool_call_msg(calls: list[ToolCall], role_mappings: dict[str, str]) -> dict[str, Any]:
-    return {
+def transform_google_tool_call_msg(calls: list[ToolCall], role_mappings: dict[str, str]) -> list[dict[str, Any]]:
+    return [{
         "role": map_role("assistant", role_mappings),
         "parts": [
             {
@@ -673,11 +719,11 @@ def transform_google_tool_call_msg(calls: list[ToolCall], role_mappings: dict[st
             }
             for tc in calls
         ],
-    }
+    }]
 
 
-def transform_bedrock_tool_call_msg(calls: list[ToolCall], role_mappings: dict[str, str]) -> dict[str, Any]:
-    return {
+def transform_bedrock_tool_call_msg(calls: list[ToolCall], role_mappings: dict[str, str]) -> list[dict[str, Any]]:
+    return [{
         "role": map_role("assistant", role_mappings),
         "content": [
             {
@@ -689,7 +735,7 @@ def transform_bedrock_tool_call_msg(calls: list[ToolCall], role_mappings: dict[s
             }
             for tc in calls
         ],
-    }
+    }]
 
 
 #
