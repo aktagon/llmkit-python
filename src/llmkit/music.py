@@ -137,7 +137,10 @@ def generate_music(
 
     try:
         headers = _image_auth_headers(provider, cfg, pname)
-        base_url = provider.base_url or cfg.base_url
+        # Explicit override > the provider's distinct music base > the chat
+        # base. Mirrors the video base resolution; mg_cfg.base_url is "" for
+        # every provider whose music API shares the chat host.
+        base_url = provider.base_url or mg_cfg.base_url or cfg.base_url
         url, body = _dispatch_music_http(
             provider, cfg, mg_cfg, request.model, parts, base_url
         )
@@ -227,12 +230,7 @@ def _dispatch_music_http(
         return base_url + endpoint, body
     if mg_cfg.wire_shape == "MusicMinimax":
         body = _build_minimax_music_body(parts, model)
-        url = (
-            mg_cfg.gen_endpoint
-            if mg_cfg.gen_endpoint.startswith("http")
-            else base_url + mg_cfg.gen_endpoint
-        )
-        return url, body
+        return base_url + mg_cfg.gen_endpoint, body
     # MusicGenerateContent (Gemini).
     body = _build_gemini_music_body(parts)
     return _build_music_url(provider, cfg, mg_cfg, model), body

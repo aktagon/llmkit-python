@@ -30,6 +30,8 @@ class MusicGenDef:
     wire_shape: str
     # gen_endpoint is an override; empty = use provider main endpoint.
     gen_endpoint: str = ""
+    # base_url is the music API base when it differs from the chat base; "" = use chat base.
+    base_url: str = ""
     models: tuple[MusicModelDef, ...] = field(default_factory=tuple)
 
 
@@ -37,6 +39,7 @@ _MUSIC_GEN: dict[ProviderName, MusicGenDef] = {
     ProviderName.GOOGLE: MusicGenDef(
         wire_shape="MusicGenerateContent",
         gen_endpoint="",
+        base_url="",
         models=(
             MusicModelDef(
                 model_id="lyria-3-clip-preview",
@@ -60,7 +63,8 @@ _MUSIC_GEN: dict[ProviderName, MusicGenDef] = {
     ),
     ProviderName.MINIMAX: MusicGenDef(
         wire_shape="MusicMinimax",
-        gen_endpoint="https://api.minimax.io/v1/music_generation",
+        gen_endpoint="/v1/music_generation",
+        base_url="https://api.minimax.io",
         models=(
             MusicModelDef(
                 model_id="music-2.6",
@@ -76,6 +80,7 @@ _MUSIC_GEN: dict[ProviderName, MusicGenDef] = {
     ProviderName.VERTEX: MusicGenDef(
         wire_shape="MusicPredict",
         gen_endpoint="",
+        base_url="",
         models=(
             MusicModelDef(
                 model_id="lyria-002",
