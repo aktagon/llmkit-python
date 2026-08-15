@@ -66,6 +66,45 @@ def _navigate(data: Any, path: str) -> Any:
     return current
 
 
+def matching_blocks(
+    data: Any, blocks_path: str, marker_path: str, marker_value: str
+) -> list[dict[str, Any]]:
+    """Elements of the array at ``blocks_path`` that the marker identifies.
+
+    The single primitive behind every "which blocks in this response are of
+    kind X" question — text extraction and tool-call extraction both run
+    through it, so the two cannot come to disagree about what an array element
+    is.
+
+    Marker semantics are exactly the generated config contract::
+
+        marker_path == ""                     homogeneous; every element matches
+        marker_path set, marker_value == ""   matches if the key is PRESENT
+        marker_path and marker_value both set matches if the key EQUALS the value
+
+    Presence rather than equality is not a shortcut: a Bedrock ContentBlock and
+    a Gemini Part are UNIONS whose text member carries no type key at all, so
+    an equality test there would match nothing.
+
+    Navigation reuses ``_navigate``, so there is no second path grammar here.
+    """
+    arr = _navigate(data, blocks_path)
+    if not isinstance(arr, list):
+        return []
+
+    out: list[dict[str, Any]] = []
+    for elem in arr:
+        if not isinstance(elem, dict):
+            continue
+        if marker_path:
+            if marker_path not in elem:
+                continue
+            if marker_value and elem[marker_path] != marker_value:
+                continue
+        out.append(elem)
+    return out
+
+
 def opt_int_path(data: Any, path: str) -> int | None:
     """extract_int_path's honest form (ADR-081 AVAIL-001).
 

@@ -23,6 +23,7 @@ from .paths import (
     deep_merge,
     extract_int_path,
     extract_path,
+    matching_blocks,
     merge_into_parent,
     opt_float_path,
     opt_int_path,
@@ -40,7 +41,8 @@ from .providers.generated.options import (
     option_overrides,
     supported_options,
 )
-from .providers.generated.providers import PROVIDERS, ProviderName
+from .providers.generated.providers import PROVIDERS, ProviderName, ProviderSpec
+from .providers.generated.response import response_text_config
 from .providers.generated.request import (
     AuthScheme,
     SystemPlacement,
@@ -838,6 +840,55 @@ def _add_structured_output(
 # =============================================================================
 
 
+def _extract_response_text(
+    raw: Any, cfg: ProviderSpec, chat_wire_shape: str
+) -> str:
+    """Read the assistant's text out of a parsed provider body.
+
+    Two readers, selected by the WIRE SHAPE, never by provider name:
+
+    - block-array families declare a response_text_config and are read by
+      DISCRIMINATOR, because array position is not stable — Opus 5 and
+      Sonnet 5 think by default, so content[0] is a thinking block (BUG-053);
+    - scalar families declare none, and None SELECTS the fixed-path reader.
+
+    An empty result is a real answer, not a failure: every tool-use turn
+    carries no text block at all. finish_reason is what says why, which is why
+    Response.text stays a plain str rather than becoming optional across seven
+    SDKs to mark something routine.
+    """
+    text_cfg = response_text_config(chat_wire_shape)
+    if text_cfg is None:
+        return extract_path(raw, cfg.response_text_path)
+    blocks = matching_blocks(
+        raw, text_cfg.blocks_path, text_cfg.marker_path, text_cfg.marker_value
+    )
+    if not blocks:
+        return ""
+    return extract_path(blocks[0], text_cfg.value_path)
+
+
+def _encode_response_text(
+    raw: dict[str, Any], cfg: ProviderSpec, chat_wire_shape: str, text: str
+) -> None:
+    """_extract_response_text's inverse, driven by the SAME config.
+
+    The marker is WRITTEN, not just tested. Emitting only the value path would
+    produce {"content": [{"text": "pong"}]} — a body with no type
+    discriminator, which the reader above then finds no matching block in. That
+    is the ADR-076 fixed point breaking, and it is why textMarkerValue is
+    documented as a write instruction rather than a read predicate.
+    """
+    text_cfg = response_text_config(chat_wire_shape)
+    if text_cfg is None:
+        set_wire_path(raw, cfg.response_text_path, text)
+        return
+    block = f"{text_cfg.blocks_path}[0]"
+    if text_cfg.marker_value:
+        set_wire_path(raw, f"{block}.{text_cfg.marker_path}", text_cfg.marker_value)
+    set_wire_path(raw, f"{block}.{text_cfg.value_path}", text)
+
+
 def decode_response(provider: str, chat_wire_shape: str, body: bytes) -> Response:
     """Extract text and usage from a provider response body into the canonical
     Response.
@@ -871,7 +922,7 @@ def decode_response(provider: str, chat_wire_shape: str, body: bytes) -> Respons
         return resp
 
     return Response(
-        text=extract_path(raw, cfg.response_text_path),
+        text=_extract_response_text(raw, cfg, chat_wire_shape),
         usage=decode_usage(raw, provider),
         finish_reason=_opt_str(
             extract_path(raw, cfg.finish_reason_path)
@@ -935,7 +986,7 @@ def encode_response(provider: str, chat_wire_shape: str, response: Response) -> 
 
     cfg = PROVIDERS[provider]
     raw: dict[str, Any] = {}
-    set_wire_path(raw, cfg.response_text_path, response.text)
+    _encode_response_text(raw, cfg, chat_wire_shape, response.text)
     set_wire_path(raw, cfg.usage_input_path, response.usage.input)
     set_wire_path(raw, cfg.usage_output_path, response.usage.output)
     cc = caching_config(ProviderName(provider))
