@@ -889,6 +889,22 @@ def _encode_response_text(
     set_wire_path(raw, f"{block}.{text_cfg.value_path}", text)
 
 
+def _resolve_chat_wire_shape(provider: str, chat_wire_shape: str) -> str:
+    """
+
+
+
+
+
+
+
+
+
+
+"""
+    return chat_wire_shape or PROVIDERS[provider].chat_wire_shape
+
+
 def decode_response(provider: str, chat_wire_shape: str, body: bytes) -> Response:
     """
 
@@ -898,6 +914,7 @@ def decode_response(provider: str, chat_wire_shape: str, body: bytes) -> Respons
 
 
 """
+    chat_wire_shape = _resolve_chat_wire_shape(provider, chat_wire_shape)
     try:
         raw = json.loads(body)
     except ValueError as exc:
@@ -980,6 +997,7 @@ def encode_response(provider: str, chat_wire_shape: str, response: Response) -> 
 
 
 """
+    chat_wire_shape = _resolve_chat_wire_shape(provider, chat_wire_shape)
     _guard_one_way_fields(provider, response)
     if chat_wire_shape == "ChatResponsesOpenAI":
         return json.dumps(_encode_responses_envelope(response)).encode("utf-8")
