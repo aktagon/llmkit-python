@@ -889,6 +889,22 @@ def _encode_response_text(
     set_wire_path(raw, f"{block}.{text_cfg.value_path}", text)
 
 
+def _resolve_chat_wire_shape(provider: str, chat_wire_shape: str) -> str:
+    """Fill in an unspecified wire shape with the provider's DEFAULT chat protocol.
+
+Callers that decode a body they know is Chat Completions — batch result lines,
+chiefly — pass "" to mean "not the Responses envelope". Harmless while the shape
+only chose between the Responses arm and the provider's declared paths; NOT
+harmless once it also selects the TEXT READER, because "" resolved to no config,
+which is the positional reader BUG-053 removed. Batched Anthropic replies with a
+leading thinking block decoded to "" long after the send path was fixed.
+
+Resolving here keeps N=1. ADR-055 requires every provider's default protocol to
+be a Chat Completions family, so this can never resolve INTO the Responses arm.
+    """
+    return chat_wire_shape or PROVIDERS[provider].chat_wire_shape
+
+
 def decode_response(provider: str, chat_wire_shape: str, body: bytes) -> Response:
     """Extract text and usage from a provider response body into the canonical
     Response.
@@ -898,6 +914,7 @@ def decode_response(provider: str, chat_wire_shape: str, body: bytes) -> Respons
     serve two chat protocols, and inferring it silently mis-parses (SYM-003).
     This is the same function the chat send path calls (SYM-004).
     """
+    chat_wire_shape = _resolve_chat_wire_shape(provider, chat_wire_shape)
     try:
         raw = json.loads(body)
     except ValueError as exc:
@@ -980,6 +997,7 @@ def encode_response(provider: str, chat_wire_shape: str, response: Response) -> 
     The contract is the canonical fixed point, decode(encode(decode(b))) ==
     decode(b) (SYM-006).
     """
+    chat_wire_shape = _resolve_chat_wire_shape(provider, chat_wire_shape)
     _guard_one_way_fields(provider, response)
     if chat_wire_shape == "ChatResponsesOpenAI":
         return json.dumps(_encode_responses_envelope(response)).encode("utf-8")
