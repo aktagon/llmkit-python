@@ -11,6 +11,7 @@ from typing import Any
 from .errors import APIError, ValidationError, parse_error
 from .http import do_post, do_sigv4_post
 from .middleware import fire_post, fire_pre, resolve_model, set_event_error
+from .client import _extract_response_text
 from .paths import extract_int_path, extract_path
 from .providers.generated.middleware import Event, MiddlewareOp, Usage
 from .providers.generated.providers import PROVIDERS, ProviderName
@@ -213,7 +214,13 @@ class Agent:
             calls = tc_extractor(raw, tc_cfg)
 
             if not calls:
-                text = extract_path(raw, cfg.response_text_path)
+                #
+                #
+                #
+                #
+                #
+                #
+                text = _extract_response_text(raw, cfg, cfg.chat_wire_shape)
                 #
                 #
                 #

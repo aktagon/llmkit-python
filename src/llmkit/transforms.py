@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, NoReturn
 
 from .errors import ValidationError
-from .paths import parse_data_uri
+from .paths import matching_blocks, parse_data_uri
 from .providers.generated.providers import ProviderSpec
 from .providers.generated.request import (
     SystemPlacement,
@@ -853,13 +853,13 @@ def extract_openai_tool_calls(raw: dict[str, Any], tc_cfg: Any) -> list[ToolCall
 
 
 def extract_anthropic_tool_calls(raw: dict[str, Any], _: Any) -> list[ToolCall]:
-    content = raw.get("content")
-    if not isinstance(content, list):
-        return []
+    #
+    #
+    #
+    #
+    #
     calls: list[ToolCall] = []
-    for block in content:
-        if not isinstance(block, dict) or block.get("type") != "tool_use":
-            continue
+    for block in matching_blocks(raw, "content", "type", "tool_use"):
         inp = block.get("input")
         if not isinstance(inp, dict):
             inp = {}

@@ -66,6 +66,45 @@ def _navigate(data: Any, path: str) -> Any:
     return current
 
 
+def matching_blocks(
+    data: Any, blocks_path: str, marker_path: str, marker_value: str
+) -> list[dict[str, Any]]:
+    """
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"""
+    arr = _navigate(data, blocks_path)
+    if not isinstance(arr, list):
+        return []
+
+    out: list[dict[str, Any]] = []
+    for elem in arr:
+        if not isinstance(elem, dict):
+            continue
+        if marker_path:
+            if marker_path not in elem:
+                continue
+            if marker_value and elem[marker_path] != marker_value:
+                continue
+        out.append(elem)
+    return out
+
+
 def opt_int_path(data: Any, path: str) -> int | None:
     """
 
