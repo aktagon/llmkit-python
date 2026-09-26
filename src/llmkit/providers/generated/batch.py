@@ -24,6 +24,9 @@ class BatchDef:
     endpoint_path: str = ""
     item_body_field: str = ""
     result_body_path: str = ""
+    result_key_path: str = ""
+    result_status_path: str = ""
+    result_error_path: str = ""
     lifecycle: ResourceLifecycleDef | None = None
 
 
@@ -37,6 +40,9 @@ _BATCH: dict[ProviderName, BatchDef] = {
         endpoint_path="",
         item_body_field="params",
         result_body_path="result.message",
+        result_key_path="custom_id",
+        result_status_path="result.type",
+        result_error_path="result.error.error.message",
         lifecycle=(
             ResourceLifecycleDef(
                 create_endpoint="/v1/messages/batches",
@@ -62,6 +68,9 @@ _BATCH: dict[ProviderName, BatchDef] = {
         endpoint_path="",
         item_body_field="",
         result_body_path="",
+        result_key_path="",
+        result_status_path="",
+        result_error_path="",
         lifecycle=None,
     ),
     ProviderName.OPENAI: BatchDef(
@@ -73,6 +82,9 @@ _BATCH: dict[ProviderName, BatchDef] = {
         endpoint_path="/v1/chat/completions",
         item_body_field="",
         result_body_path="response.body",
+        result_key_path="custom_id",
+        result_status_path="",
+        result_error_path="error.message",
         lifecycle=(
             ResourceLifecycleDef(
                 create_endpoint="/v1/batches",
