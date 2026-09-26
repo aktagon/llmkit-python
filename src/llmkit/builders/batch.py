@@ -48,9 +48,18 @@ class BatchHandle(_BatchHandleData):
         request_timeout: float = 600.0,
         poll_deadline: float = DEFAULT_POLL_DEADLINE,
     ) -> list[Response]:
-        """Block until the batch finishes. A thin loop over ``poll`` (ADR-063
-        POLL-003) via the shared engine — the between-poll wait is a cancellable
-        ``asyncio.sleep`` so ``asyncio.CancelledError`` propagates (S06)."""
+        """Block until the batch finishes and return one Response per prompt,
+        at the prompt's index. A failed request keeps its slot: empty text,
+        finish_reason set to the provider's result status ("errored",
+        "expired", "canceled"; "error" when the provider has none) and
+        finish_message set to the provider's error message. A request with no
+        result line reads finish_reason "missing". Results whose request id is
+        not one this SDK assigned (a batch created elsewhere, resumed by ID)
+        follow the indexed ones in file order.
+
+        A thin loop over ``poll`` (ADR-063 POLL-003) via the shared engine — the
+        between-poll wait is a cancellable ``asyncio.sleep`` so
+        ``asyncio.CancelledError`` propagates (S06)."""
         adapter = _new_batch_adapter(
             self, request_timeout, poll_interval, poll_deadline, self.raw
         )
