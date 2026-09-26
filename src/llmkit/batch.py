@@ -411,45 +411,95 @@ def _fetch_batch_results(
 
 
 def _parse_batch_results(provider: str, data: bytes, bc: BatchDef, raw: bool = False) -> list[Response]:
-    from .client import decode_response
+    """Parse JSONL batch results into one Response per submitted request, at
+    that request's index (BUG-072). Mirror of go parseBatchResults.
 
-    out: list[Response] = []
+    Providers return result lines in any order, so a line is placed by the
+    request id at ``bc.result_key_path``: "req-N" goes to index N. A line whose
+    body is missing at ``bc.result_body_path`` is a failed request; it keeps its
+    slot as a Response with empty text, finish_reason from
+    ``bc.result_status_path`` ("error" when the provider has no status) and
+    finish_message from ``bc.result_error_path``. An index with no line gets
+    finish_reason "missing". Lines whose id is not "req-N" (a batch created
+    outside llmkit, or a repeated id) follow the indexed slots in file order. A
+    line that is not JSON cannot be placed and is skipped; its index reads
+    "missing".
+
+    When raw is true, each Response carries raw set to the per-item body (the
+    unwrapped inner body when result_body_path is set, otherwise the line); a
+    failed Response carries the whole line."""
+    slots: list[Response | None] = []
+    unkeyed: list[Response] = []
     for line in data.decode("utf-8", errors="replace").splitlines():
         line = line.strip()
         if not line:
             continue
-        response_bytes = line.encode("utf-8")
-        inner_for_raw: Any = None
-        if bc.result_body_path:
-            # VERBATIM, not parse-navigate-re-encode: the inner body is what
-            # ADR-085 captures the assistant turn from, and json.dumps of a parsed
-            # dict re-renders it (its separators, its non-ASCII escaping). Harmless
-            # while only scalars were read out of it; not harmless once a payload
-            # is captured from the same bytes.
-            inner_text = extract_raw_json_path(line, bc.result_body_path)
-            if inner_text is None:
-                continue
-            try:
-                inner_for_raw = json.loads(inner_text)
-            except ValueError:
-                continue
-            response_bytes = inner_text.encode("utf-8")
+        try:
+            wrapper = json.loads(line)
+        except ValueError:
+            continue
+        resp = _parse_batch_result_line(provider, line, wrapper, bc, raw)
+
+        index = _batch_request_index(extract_path(wrapper, bc.result_key_path)) if bc.result_key_path else None
+        if index is None or (index < len(slots) and slots[index] is not None):
+            unkeyed.append(resp)
+            continue
+        while len(slots) <= index:
+            slots.append(None)
+        slots[index] = resp
+
+    out = [slot if slot is not None else Response(finish_reason="missing") for slot in slots]
+    return out + unkeyed
+
+
+def _parse_batch_result_line(provider: str, line: str, wrapper: Any, bc: BatchDef, raw: bool) -> Response:
+    """Decode one result line. A line whose body is missing at
+    ``bc.result_body_path``, or does not decode, becomes a failed Response."""
+    from .client import decode_response
+
+    body_text: str | None = line
+    body: Any = wrapper
+    if bc.result_body_path:
+        # VERBATIM, not parse-navigate-re-encode: the inner body is what
+        # ADR-085 captures the assistant turn from, and json.dumps of a parsed
+        # dict re-renders it (its separators, its non-ASCII escaping). Harmless
+        # while only scalars were read out of it; not harmless once a payload
+        # is captured from the same bytes.
+        body_text = extract_raw_json_path(line, bc.result_body_path)
+        try:
+            body = json.loads(body_text) if body_text is not None else None
+        except ValueError:
+            body = None
+    if body_text is not None and isinstance(body, dict):
         # Batch is Chat-Completions-only (ADR-055): empty wire shape selects the
         # provider's declared response paths, not the Responses output[] arm.
         try:
-            parsed = decode_response(provider, "", response_bytes)
+            parsed = decode_response(provider, "", body_text.encode("utf-8"))
         except Exception:
-            continue
-        if raw:
-            if inner_for_raw is not None:
-                parsed.raw = inner_for_raw
-            else:
-                try:
-                    parsed.raw = json.loads(line)
-                except Exception:
-                    parsed.raw = None
-        out.append(parsed)
-    return out
+            pass
+        else:
+            if raw:
+                parsed.raw = body
+            return parsed
+
+    reason = "error"
+    if bc.result_status_path:
+        reason = extract_path(wrapper, bc.result_status_path) or reason
+    failed = Response(finish_reason=reason)
+    if bc.result_error_path:
+        failed.finish_message = extract_path(wrapper, bc.result_error_path) or None
+    if raw:
+        failed.raw = wrapper
+    return failed
+
+
+def _batch_request_index(request_id: str) -> int | None:
+    """Read N out of the "req-N" id the SDK sends with request N. Any other id
+    reads None."""
+    digits = request_id.removeprefix("req-")
+    if digits == request_id or not digits or not all("0" <= c <= "9" for c in digits):
+        return None
+    return int(digits)
 
 
 def _build_auth_headers(p: Provider, cfg: ProviderSpec) -> dict[str, str]:
