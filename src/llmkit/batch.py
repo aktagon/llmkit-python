@@ -16,9 +16,16 @@ from .job import (
     _Classification,
 )
 from .middleware import fire_post, fire_pre, resolve_model, set_event_error
-from .paths import extract_path
+from .paths import _navigate, extract_path
 from .provider_turn import extract_raw_json_path
-from .providers.generated.batch import BatchDef, BatchInputMode, batch_config
+from .providers.generated.batch import (
+    BATCH_REQUEST_ID_PREFIX,
+    BATCH_SLOT_ERROR,
+    BATCH_SLOT_MISSING,
+    BatchDef,
+    BatchInputMode,
+    batch_config,
+)
 from .providers.generated.middleware import Event, MiddlewareOp
 from .providers.generated.providers import PROVIDERS, ProviderSpec, ProviderName
 from .providers.generated.request import AuthScheme, auth_scheme
@@ -138,8 +145,8 @@ def submit_batch(
         create_url = base + bc.lifecycle.create_endpoint
         resp_body = do_post(create_url, json_body, headers, timeout=request_timeout)
 
-        raw = json.loads(resp_body)
-        batch_id = extract_path(raw, bc.lifecycle.response_id_path)
+        created = json.loads(resp_body)
+        batch_id = extract_path(created, bc.lifecycle.response_id_path)
         if not batch_id:
             raise APIError(provider=provider.name, message="batch create: empty batch ID", status_code=0)
     except Exception as exc:
@@ -310,7 +317,7 @@ def _build_batch_body(
             apply_caching(req_body, provider, opts, cfg)
         if bc.item_body_field:
             item = {
-                "custom_id": f"req-{i}",
+                "custom_id": f"{BATCH_REQUEST_ID_PREFIX}{i}",
                 bc.item_body_field: req_body,
             }
         else:
@@ -336,7 +343,7 @@ def _build_batch_jsonl(
         if opts.caching:
             apply_caching(req_body, provider, opts, cfg)
         line = {
-            "custom_id": f"req-{i}",
+            "custom_id": f"{BATCH_REQUEST_ID_PREFIX}{i}",
             "method": "POST",
             "url": bc.endpoint_path,
             "body": req_body,
@@ -379,124 +386,182 @@ def _fetch_batch_results(
     raw: bool = False,
     status_raw: dict[str, Any] | None = None,
 ) -> list[Response]:
-    """Fetch and parse completed batch results. ``status_raw`` is the
-    already-decoded poll body when the caller has it (the poll engine does); the
-    two-hop result fetch reads output_file_id from it instead of re-GETting the
-    status. When None (no prior poll), the status is fetched. Mirror of go
-    fetchBatchResults."""
+    """Fetch and parse completed batch results. Mirror of go fetchBatchResults.
+
+    A provider declares up to three result sources (HANDOFF-078): a direct
+    result endpoint (Anthropic), and file ids in the status body for the output
+    file and the error file (OpenAI). Every source that is present is read, in
+    that order; the call fails only when none is. The status body also carries
+    the request count (``bc.request_count_paths``), which fixes the number of
+    result slots.
+
+    ``status_raw`` is the already-decoded poll body when the caller has it (the
+    poll engine does). When None and a file id or the count is needed, the
+    status is fetched."""
     lc = bc.lifecycle
     assert lc is not None
 
-    if lc.result_file_id_path:
-        if status_raw is None:
-            poll_url = base + lc.create_endpoint + "/" + handle.id
-            status_body = do_get(poll_url, headers, timeout=timeout)
-            status_raw = json.loads(status_body)
-        file_id = extract_path(status_raw, lc.result_file_id_path)
-        if not file_id:
-            raise APIError(provider=handle.provider.name, message="batch results: empty output file ID", status_code=0)
-        file_url = base + lc.file_content_endpoint.replace("{id}", file_id)
-        resp_body = do_get(file_url, headers, timeout=timeout)
-    elif lc.result_endpoint:
+    needs_status = bool(lc.result_file_id_path or lc.error_file_id_path or bc.request_count_paths)
+    if status_raw is None and needs_status:
+        poll_url = base + lc.create_endpoint + "/" + handle.id
+        status_raw = json.loads(do_get(poll_url, headers, timeout=timeout))
+
+    sources: list[bytes] = []
+    if lc.result_endpoint:
         result_url = base + lc.result_endpoint.replace("{id}", handle.id)
-        resp_body = do_get(result_url, headers, timeout=timeout)
-    else:
+        sources.append(do_get(result_url, headers, timeout=timeout))
+    for id_path in (lc.result_file_id_path, lc.error_file_id_path):
+        if not id_path:
+            continue
+        file_id = extract_path(status_raw, id_path)
+        if not file_id:
+            continue
+        file_url = base + lc.file_content_endpoint.replace("{id}", file_id)
+        sources.append(do_get(file_url, headers, timeout=timeout))
+    if not sources:
         raise APIError(
             provider=handle.provider.name,
-            message=f"batch result endpoint not configured for {handle.provider.name}",
+            message=f"batch results: no result source for {handle.provider.name} batch {handle.id}",
             status_code=0,
         )
 
-    return _parse_batch_results(handle.provider.name, resp_body, bc, raw)
+    count = _batch_request_count(status_raw, bc.request_count_paths)
+    return _parse_batch_results(handle.provider.name, sources, bc, raw, count)
 
 
-def _parse_batch_results(provider: str, data: bytes, bc: BatchDef, raw: bool = False) -> list[Response]:
-    """Parse JSONL batch results into one Response per submitted request, at
-    that request's index (BUG-072). Mirror of go parseBatchResults.
+def _batch_request_count(status: Any, paths: tuple[str, ...]) -> int | None:
+    """Sum the numbers at ``paths`` in the status body. None when no path
+    resolves to a number. Mirror of go batchRequestCount."""
+    total: int | None = None
+    for path in paths:
+        value = _navigate(status, path)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            total = (total or 0) + int(value)
+    return total
+
+
+def _parse_batch_results(
+    provider: str,
+    sources: list[bytes],
+    bc: BatchDef,
+    raw: bool = False,
+    count: int | None = None,
+) -> list[Response]:
+    """Parse JSONL result sources into one Response per submitted request, at
+    that request's index (BUG-072, HANDOFF-078). Mirror of go parseBatchResults.
 
     Providers return result lines in any order, so a line is placed by the
-    request id at ``bc.result_key_path``: "req-N" goes to index N. A line whose
-    body is missing at ``bc.result_body_path`` is a failed request; it keeps its
-    slot as a Response with empty text, finish_reason from
-    ``bc.result_status_path`` ("error" when the provider has no status) and
-    finish_message from ``bc.result_error_path``. An index with no line gets
-    finish_reason "missing". Lines whose id is not "req-N" (a batch created
-    outside llmkit, or a repeated id) follow the indexed slots in file order. A
-    line that is not JSON cannot be placed and is skipped; its index reads
-    "missing".
+    request id at ``bc.result_key_path``: BATCH_REQUEST_ID_PREFIX + N goes to
+    index N. When one index appears twice, a line that succeeded replaces a
+    failed one, a failed line never replaces a succeeded one, and otherwise the
+    later line follows the indexed slots.
 
-    When raw is true, each Response carries raw set to the per-item body (the
+    With a request ``count`` there are exactly count slots, and an id at or
+    above the count follows them. Without one, slots run to the highest index
+    seen. An index with no line reads BATCH_SLOT_MISSING. Lines whose id has
+    another form (a batch created outside llmkit) follow the indexed slots in
+    file order. A line that is not JSON cannot be placed and is skipped.
+
+    When raw is true, a succeeded Response carries raw set to its body (the
     unwrapped inner body when result_body_path is set, otherwise the line); a
     failed Response carries the whole line."""
-    slots: list[Response | None] = []
+    slots: list[tuple[Response, bool] | None] = [None] * count if count is not None else []
     unkeyed: list[Response] = []
-    for line in data.decode("utf-8", errors="replace").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            wrapper = json.loads(line)
-        except ValueError:
-            continue
-        resp = _parse_batch_result_line(provider, line, wrapper, bc, raw)
+    for data in sources:
+        for line in data.decode("utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                wrapper = json.loads(line)
+            except ValueError:
+                continue
+            resp, succeeded = _parse_batch_result_line(provider, line, wrapper, bc, raw)
 
-        index = _batch_request_index(extract_path(wrapper, bc.result_key_path)) if bc.result_key_path else None
-        if index is None or (index < len(slots) and slots[index] is not None):
-            unkeyed.append(resp)
-            continue
-        while len(slots) <= index:
-            slots.append(None)
-        slots[index] = resp
+            index = (
+                _batch_request_index(extract_path(wrapper, bc.result_key_path))
+                if bc.result_key_path
+                else None
+            )
+            if index is not None and count is not None and index >= count:
+                index = None
+            if index is None:
+                unkeyed.append(resp)
+                continue
+            while len(slots) <= index:
+                slots.append(None)
+            existing = slots[index]
+            if existing is None or (succeeded and not existing[1]):
+                slots[index] = (resp, succeeded)
+            elif existing[1] and not succeeded:
+                pass  # The request succeeded; a failed duplicate adds nothing.
+            else:
+                unkeyed.append(resp)
 
-    out = [slot if slot is not None else Response(finish_reason="missing") for slot in slots]
+    out = [slot[0] if slot is not None else Response(finish_reason=BATCH_SLOT_MISSING) for slot in slots]
     return out + unkeyed
 
 
-def _parse_batch_result_line(provider: str, line: str, wrapper: Any, bc: BatchDef, raw: bool) -> Response:
-    """Decode one result line. A line whose body is missing at
-    ``bc.result_body_path``, or does not decode, becomes a failed Response."""
-    from .client import decode_response
+def _parse_batch_result_line(
+    provider: str, line: str, wrapper: Any, bc: BatchDef, raw: bool
+) -> tuple[Response, bool]:
+    """Decode one result line; the bool reports whether it succeeded. The line
+    succeeded when the value at ``bc.result_status_path`` is one of
+    ``bc.result_success_values`` (any value when the provider declares no
+    status path) and its body decodes. Every other line becomes a failed
+    Response: empty text, the first reason path that resolves as finish_reason
+    (BATCH_SLOT_ERROR when none does) and the first message path that resolves
+    as finish_message."""
+    from .client import _attach_raw, decode_response
 
-    body_text: str | None = line
-    body: Any = wrapper
-    if bc.result_body_path:
-        # VERBATIM, not parse-navigate-re-encode: the inner body is what
-        # ADR-085 captures the assistant turn from, and json.dumps of a parsed
-        # dict re-renders it (its separators, its non-ASCII escaping). Harmless
-        # while only scalars were read out of it; not harmless once a payload
-        # is captured from the same bytes.
-        body_text = extract_raw_json_path(line, bc.result_body_path)
-        try:
-            body = json.loads(body_text) if body_text is not None else None
-        except ValueError:
-            body = None
-    if body_text is not None and isinstance(body, dict):
-        # Batch is Chat-Completions-only (ADR-055): empty wire shape selects the
-        # provider's declared response paths, not the Responses output[] arm.
-        try:
-            parsed = decode_response(provider, "", body_text.encode("utf-8"))
-        except Exception:
-            pass
-        else:
-            if raw:
-                parsed.raw = body
-            return parsed
+    signalled = (
+        not bc.result_status_path
+        or extract_path(wrapper, bc.result_status_path) in bc.result_success_values
+    )
+    if signalled:
+        body_text: str | None = line
+        body: Any = wrapper
+        if bc.result_body_path:
+            # VERBATIM, not parse-navigate-re-encode: the inner body is what
+            # ADR-085 captures the assistant turn from, and json.dumps of a
+            # parsed dict re-renders it (its separators, its non-ASCII
+            # escaping).
+            body_text = extract_raw_json_path(line, bc.result_body_path)
+            try:
+                body = json.loads(body_text) if body_text is not None else None
+            except ValueError:
+                body = None
+        if body_text is not None and isinstance(body, dict):
+            # Batch is Chat-Completions-only (ADR-055): empty wire shape selects
+            # the provider's declared response paths, not the Responses arm.
+            try:
+                parsed = decode_response(provider, "", body_text.encode("utf-8"))
+            except Exception:
+                pass
+            else:
+                return _attach_raw(parsed, body, raw), True
 
-    reason = "error"
-    if bc.result_status_path:
-        reason = extract_path(wrapper, bc.result_status_path) or reason
-    failed = Response(finish_reason=reason)
-    if bc.result_error_path:
-        failed.finish_message = extract_path(wrapper, bc.result_error_path) or None
-    if raw:
-        failed.raw = wrapper
-    return failed
+    failed = Response(
+        finish_reason=_first_path(wrapper, bc.result_reason_paths) or BATCH_SLOT_ERROR,
+        finish_message=_first_path(wrapper, bc.result_message_paths) or None,
+    )
+    return _attach_raw(failed, wrapper, raw), False
+
+
+def _first_path(data: Any, paths: tuple[str, ...]) -> str:
+    """The value at the first path that resolves to a non-empty string, or ""
+    when none does. Mirror of go firstPath."""
+    for path in paths:
+        value = extract_path(data, path)
+        if value:
+            return value
+    return ""
 
 
 def _batch_request_index(request_id: str) -> int | None:
-    """Read N out of the "req-N" id the SDK sends with request N. Any other id
-    reads None."""
-    digits = request_id.removeprefix("req-")
+    """Read N out of the BATCH_REQUEST_ID_PREFIX + N id the SDK sends with
+    request N. Any other id reads None."""
+    digits = request_id.removeprefix(BATCH_REQUEST_ID_PREFIX)
     if digits == request_id or not digits or not all("0" <= c <= "9" for c in digits):
         return None
     return int(digits)
