@@ -26,6 +26,7 @@ class ResourceLifecycleDef:
     result_endpoint: str = ""
     result_response_path: str = ""
     result_file_id_path: str = ""
+    error_file_id_path: str = ""
     file_content_endpoint: str = ""
 
 
@@ -66,6 +67,7 @@ _CACHING: dict[ProviderName, CachingDef] = {
                 result_endpoint="",
                 result_response_path="",
                 result_file_id_path="",
+                error_file_id_path="",
                 file_content_endpoint="",
             )
         ),
