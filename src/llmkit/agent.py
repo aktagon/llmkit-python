@@ -11,7 +11,7 @@ from typing import Any
 from .errors import APIError, ValidationError, parse_error
 from .http import do_post, do_sigv4_post
 from .middleware import fire_post, fire_pre, resolve_model, set_event_error
-from .client import _extract_response_text
+from .client import _attach_raw, _extract_response_text
 from .paths import extract_int_path, extract_path
 from .providers.generated.middleware import Event, MiddlewareOp, Usage
 from .providers.generated.providers import PROVIDERS, ProviderName
@@ -231,14 +231,14 @@ class Agent:
                 )
                 finish_reason = extract_path(raw, cfg.finish_reason_path) if cfg.finish_reason_path else ""
                 finish_message = extract_path(raw, cfg.finish_message_path) if cfg.finish_message_path else ""
-                return Response(
+                resp = Response(
                     text=text,
                     usage=total_usage,
                     finish_reason=finish_reason,
                     finish_message=finish_message,
-                    raw=raw if self.opts.raw else None,
                     provider_turn=turn,
                 )
+                return _attach_raw(resp, raw, self.opts.raw)
 
             # Record the assistant turn. tool_calls is the projection the loop
             # runs tools from; provider_turn is the same turn as the provider
