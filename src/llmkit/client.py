@@ -208,12 +208,7 @@ def prompt(
         _fire_post_err(opts.middleware, base_event, exc, start)
         raise
 
-    resp = decode_response(provider.name, cfg.chat_wire_shape, resp_body)
-    if opts.raw:
-        try:
-            resp.raw = json.loads(resp_body)
-        except Exception:
-            resp.raw = None
+    resp = _decode_response_raw(provider.name, cfg.chat_wire_shape, resp_body, opts.raw)
     post_event = Event(
         op=MiddlewareOp.LLM_REQUEST,
         provider=provider.name,
@@ -953,6 +948,26 @@ def decode_response(provider: str, chat_wire_shape: str, body: bytes) -> Respons
         ),
         provider_turn=turn,
     )
+
+
+def _decode_response_raw(
+    provider: str, chat_wire_shape: str, body: bytes, raw: bool
+) -> Response:
+    """decode_response plus the ADR-014 raw opt-in. Every Response send path
+    (prompt, agent, batch) decodes or attaches through here, so none can forget
+    the caller's .raw() (BUG-073). The public codec keeps its signature
+    (ADR-076)."""
+    resp = decode_response(provider, chat_wire_shape, body)
+    if not raw:
+        return resp
+    return _attach_raw(resp, json.loads(body), raw)
+
+
+def _attach_raw(resp: Response, parsed: Any, raw: bool) -> Response:
+    """Set resp.raw to the parsed provider body when the caller opted in."""
+    if raw:
+        resp.raw = parsed
+    return resp
 
 
 def _opt_str(value: str) -> str | None:

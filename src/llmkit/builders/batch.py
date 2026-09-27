@@ -50,10 +50,10 @@ class BatchHandle(_BatchHandleData):
     ) -> list[Response]:
         """Block until the batch finishes and return one Response per prompt,
         at the prompt's index. A failed request keeps its slot: empty text,
-        finish_reason set to the provider's result status ("errored",
-        "expired", "canceled"; "error" when the provider has none) and
-        finish_message set to the provider's error message. A request with no
-        result line reads finish_reason "missing". Results whose request id is
+        finish_reason set to the provider's error code or result type
+        (BATCH_SLOT_ERROR when the provider gives none) and finish_message set
+        to the provider's error message. A request with no result line reads
+        BATCH_SLOT_MISSING. Results whose request id is
         not one this SDK assigned (a batch created elsewhere, resumed by ID)
         follow the indexed ones in file order.
 
