@@ -92,6 +92,7 @@ from .wire import (
     save_history,
 )
 from .wire_version import WIRE_SCHEMA_VERSION
+from .providers.generated.batch import BATCH_SLOT_ERROR, BATCH_SLOT_MISSING
 from .providers.generated.middleware import (
     Event,
     MiddlewareFn,
@@ -170,6 +171,9 @@ __all__ = [
     "save_history",
     "load_history",
     "WIRE_SCHEMA_VERSION",
+    # Batch slot values (ADR-091).
+    "BATCH_SLOT_ERROR",
+    "BATCH_SLOT_MISSING",
     "MissingWireVersionError",
     "UnknownWireKeyError",
     "UnsupportedWireVersionError",
