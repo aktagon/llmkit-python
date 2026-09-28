@@ -37,7 +37,8 @@ def _build_request(b: "Text", final_text: str) -> Request:
     if b._system:
         req.system = b._system
 
-    # Concatenate accumulated text Parts + final prompt; collect image
+    # Join accumulated text Parts + final prompt with newlines (the
+    # text-parts-openai request-wire golden holds every SDK to it); collect image
     # Parts as InputImage data URIs (ADR-060). Mirrors go/text.go
     # splitTextAndImages — caller order preserved.
     parts_text: list[str] = []
@@ -51,7 +52,7 @@ def _build_request(b: "Text", final_text: str) -> Request:
             parts_text.append(p.text)
     if final_text:
         parts_text.append(final_text)
-    user = "".join(parts_text)
+    user = "\n".join(parts_text)
     if images:
         req.images = images
 
