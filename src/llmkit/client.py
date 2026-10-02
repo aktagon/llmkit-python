@@ -40,6 +40,7 @@ from .providers.generated.options import (
     model_option_overrides,
     option_overrides,
     supported_options,
+    wire_shape_option_overrides,
 )
 from .providers.generated.providers import PROVIDERS, ProviderName, ProviderSpec
 from .providers.generated.response import response_text_config
@@ -559,17 +560,23 @@ def _build_stream_url(p: Provider, cfg, stream_cfg) -> str:
 def _resolve_option_key(
     pname: ProviderName,
     model: str,
+    chat_wire_shape: str,
     param: OptionKey,
     supported: dict[OptionKey, SupportedOptionDef],
 ) -> str | None:
-    """Wire (JSON) key for ``param`` on ``(provider, model)``.
+    """Wire (JSON) key for ``param`` on ``(provider, model)`` under the effective chat wire shape.
 
-    Per-model overrides (ADR-024) outrank the provider default table: an exact
-    model id wins outright, otherwise the longest-prefix glob wins, and failing
-    any override the provider's default supported-options key is used. This is
-    the single resolution path; both the max-tokens site and the general option
-    loop call it (OPT-005).
+    A wire-shape key (BUG-075) outranks everything: the Responses shape names
+    MaxTokens max_output_tokens for every model. Next, per-model overrides
+    (ADR-024) outrank the provider default table: an exact model id wins
+    outright, otherwise the longest-prefix glob wins, and failing any override
+    the provider's default supported-options key is used. This is the single
+    resolution path; both the max-tokens site and the general option loop call
+    it (OPT-005).
     """
+    shape_key = wire_shape_option_overrides(chat_wire_shape).get(param)
+    if shape_key is not None:
+        return shape_key
     best_key: str | None = None
     best_len = -1
     for ov in model_option_overrides(pname):
@@ -633,7 +640,7 @@ def _build_request(
     pname = ProviderName(p.name)
     supported = {o.key: o for o in supported_options(pname)}
 
-    max_json_key = _resolve_option_key(pname, model, OptionKey.MAX_TOKENS, supported)
+    max_json_key = _resolve_option_key(pname, model, cfg.chat_wire_shape, OptionKey.MAX_TOKENS, supported)
     if max_json_key is not None:
         body[max_json_key] = max_tokens
 
@@ -656,14 +663,14 @@ def _build_request(
 
     if cfg.wraps_options_in:
         opt_body: dict[str, Any] = {}
-        _add_options(body, opt_body, opts, p.name, model)
+        _add_options(body, opt_body, opts, p.name, model, cfg.chat_wire_shape)
         if max_json_key is not None:
             set_nested_field(opt_body, max_json_key, max_tokens)
             body.pop(max_json_key.split(".", 1)[0], None)
         if opt_body:
             body[cfg.wraps_options_in] = opt_body
     else:
-        _add_options(body, body, opts, p.name, model)
+        _add_options(body, body, opts, p.name, model, cfg.chat_wire_shape)
 
     if cfg.safety_settings_wire_path and opts.safety_settings:
         body[cfg.safety_settings_wire_path] = [
@@ -696,19 +703,16 @@ def _build_request(
     # ADR-052: additive; never clobbers the provider auth / required header above.
     merge_caller_headers(headers, p.headers)
 
-    # ADR-055 Responses wire-shape body fixup: the Responses API names the
-    # output-token cap max_output_tokens and rejects max_tokens with a 400
-    # (live-verified 2026-07-02). Every other body field is shared with Chat
-    # Completions, so this single rename is the only option-key divergence.
-    #
-    if cfg.chat_wire_shape == "ChatResponsesOpenAI" and "max_tokens" in body:
-        body["max_output_tokens"] = body.pop("max_tokens")
-
     return body, headers
 
 
 def _add_options(
-    root: dict[str, Any], body: dict[str, Any], opts: Options, provider_name: str, model: str
+    root: dict[str, Any],
+    body: dict[str, Any],
+    opts: Options,
+    provider_name: str,
+    model: str,
+    chat_wire_shape: str,
 ) -> None:
     """Apply generation parameters to body, honouring dotted JSON keys + extra_fields.
 
@@ -726,7 +730,7 @@ def _add_options(
     overrides = {ov.key: ov for ov in option_overrides(pname)}
 
     def put(opt_key: OptionKey, value: Any) -> None:
-        json_key = _resolve_option_key(pname, model, opt_key, supported)
+        json_key = _resolve_option_key(pname, model, chat_wire_shape, opt_key, supported)
         if json_key is None:
             return
         set_nested_field(body, json_key, value)
