@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -1118,3 +1119,18 @@ _MODEL_OPTION_OVERRIDES: dict[ProviderName, tuple[ModelOptionOverrideDef, ...]] 
 def model_option_overrides(provider: ProviderName) -> tuple[ModelOptionOverrideDef, ...]:
     """Return per-model wire-key overrides for a provider (ADR-024), precedence-ordered."""
     return _MODEL_OPTION_OVERRIDES[provider]
+
+
+_WIRE_SHAPE_OPTION_OVERRIDES: dict[str, dict[OptionKey, str]] = {
+    "ChatResponsesOpenAI": {
+        OptionKey.MAX_TOKENS: "max_output_tokens",
+    },
+}
+
+
+def wire_shape_option_overrides(chat_wire_shape: str) -> Mapping[OptionKey, str]:
+    """Wire keys a chat wire shape uses for generation params, for every model.
+
+    They outrank model_option_overrides and the provider's supported-options
+    table (BUG-075)."""
+    return _WIRE_SHAPE_OPTION_OVERRIDES.get(chat_wire_shape, {})
