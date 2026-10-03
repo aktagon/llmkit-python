@@ -672,9 +672,10 @@ def _build_request(
     if req.schema:
         _add_structured_output(body, headers, req.schema, p.name, cfg)
 
-    # Files API beta (BUG-017): a document/source:file block referencing an
-    # uploaded file requires the same anthropic-beta the upload used. Compose
+    # Upload beta (BUG-017): a request that references an uploaded file carries
+    # the beta the provider's upload declares (uploadBetaHeader). Compose
     # with any existing value (e.g. structured output) rather than overwrite.
+    # Anthropic declares none since its Files API left beta (BUG-078).
     if req.files:
         fu = file_upload_config(ProviderName(p.name))
         if fu is not None and fu.beta_header:
