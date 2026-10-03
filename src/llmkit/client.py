@@ -700,8 +700,11 @@ def _build_request(
     #
     #
     #
-    if cfg.chat_wire_shape == "ChatResponsesOpenAI" and "max_tokens" in body:
-        body["max_output_tokens"] = body.pop("max_tokens")
+    #
+    if cfg.chat_wire_shape == "ChatResponsesOpenAI":
+        for key in ("max_tokens", "max_completion_tokens"):
+            if key in body:
+                body["max_output_tokens"] = body.pop(key)
 
     return body, headers
 
