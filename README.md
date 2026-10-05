@@ -16,10 +16,12 @@ Also available for Go, TypeScript, Rust, Swift, and Java.
 ## Install
 
 ```bash
-pip install llmkit
+pip install aktagon-llmkit
 # or with uv:
-uv add llmkit
+uv add aktagon-llmkit
 ```
+
+The package is named `aktagon-llmkit` on PyPI; the library imports as `llmkit` (`import llmkit`).
 
 Python 3.10 or later.
 
