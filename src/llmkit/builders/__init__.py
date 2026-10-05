@@ -38,6 +38,13 @@ class ProviderConfig:
     api_key: str
     base_url: str = ""
     headers: dict[str, str] = field(default_factory=dict)
+    # Wait for the next response bytes, in seconds (Client.timeout, BUG-062).
+    # None disables it; Client sets DEFAULT_TIMEOUT.
+    timeout: float | None = None
+
+
+# The defaultSeconds fact of Timeout.
+DEFAULT_TIMEOUT: float = 600.0
 
 from .agent import agent_prompt, agent_reset
 from .batch import text_batch
@@ -704,7 +711,7 @@ class Client:
     instances, the field stays constant."""
 
     def __init__(self, name: ProviderName, api_key: str) -> None:
-        self.provider = ProviderConfig(name=name, api_key=api_key)
+        self.provider = ProviderConfig(name=name, api_key=api_key, timeout=DEFAULT_TIMEOUT)
         # Client-scoped hook list (ADR-054): add_telemetry appends here
         # so paths without a per-builder middleware seam (the models/
         # catalogue runtime, HANDOFF-036 A3) still fire client hooks.
@@ -732,6 +739,11 @@ class Client:
     def base_url(self, url: str) -> "Client":
         """Override the provider's default base URL. Required for providers whose default base URL is a template the caller must substitute (e.g. Vertex AI Imagen) and to point an OpenAI-compatible provider or gateway at a self-hosted endpoint. Returns the same Client."""
         self.provider.base_url = url
+        return self
+
+    def timeout(self, seconds: float | None) -> "Client":
+        """Set how long this client waits for the next bytes from the provider, in seconds, before the request fails with a timeout error. The wait covers the response headers and every gap between body chunks, so a long healthy stream never times out. None disables it. Returns the same Client."""
+        self.provider.timeout = seconds
         return self
 
     def supports(self, cap: str) -> bool:
