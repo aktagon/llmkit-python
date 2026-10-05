@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.1] — 2026-10-05
+
+### Changed
+
+- The package is published on PyPI as `aktagon-llmkit`: install it with `pip install aktagon-llmkit` or `uv add aktagon-llmkit`. PyPI refuses the name `llmkit` as too similar to an existing project. The import name stays `llmkit`, and the code is the same as 3.2.0.
+
 ## [3.2.0] — 2026-10-04
 
 ### Added
