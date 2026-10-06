@@ -36,7 +36,7 @@ from ..providers.generated.video_gen import (
     video_gen_config,
 )
 from ..structs import VideoData, VideoHandle as _VideoHandleData, VideoResponse
-from ..types import Provider
+from ..types import Provider, provider_from_config
 
 if TYPE_CHECKING:
     from . import Video
@@ -97,13 +97,7 @@ class VideoHandle(_VideoHandleData):
 
 
 async def video_submit(b: "Video", msg: str) -> VideoHandle:
-    provider = Provider(
-        name=b.client.provider.name,
-        api_key=b.client.provider.api_key,
-        headers=b.client.provider.headers,
-    )
-    if b.client.provider.base_url:
-        provider.base_url = b.client.provider.base_url
+    provider = provider_from_config(b.client.provider)
 
     # Mirror go/video_builder.go: chain-accumulated parts plus an optional
     # trailing text part from submit(msg).
@@ -330,12 +324,14 @@ def _dispatch_video_submit(
             session_token,
             region,
             cfg.service_name,
+            timeout=provider.timeout,
         )
     else:
         resp_body = do_post(
             submit_url,
             json_body,
             {**post_headers, "content-type": "application/json"},
+            timeout=provider.timeout,
         )
     try:
         raw = json.loads(resp_body)
@@ -441,22 +437,24 @@ def _wait_video(
                 session_token,
                 region,
                 cfg.service_name,
+                timeout=p.timeout,
             )
         elif vertex_poll:
             resp_body = do_post(
                 poll_url,
                 vertex_poll_body,
                 {**headers, "content-type": "application/json"},
+                timeout=p.timeout,
             )
         else:
-            resp_body = do_get(poll_url, headers)
+            resp_body = do_get(poll_url, headers, timeout=p.timeout)
         resp, done = _parse_video_poll(vg_cfg, resp_body)
         if done:
             # Two-hop providers (vg_cfg.file_endpoint set, e.g. minimax): the
             # terminal poll carried a file reference, not a video URL — resolve
             # it with one more GET before returning.
             if vg_cfg.file_endpoint:
-                resp = _resolve_video_file(base, vg_cfg, resp_body, headers)
+                resp = _resolve_video_file(base, vg_cfg, resp_body, headers, p.timeout)
             # Delivery dispatch (VID-005). Download-delivery providers (Veo)
             # returned a temporary fetch URI in VideoData.url; GET it and fill
             # VideoData.bytes (clearing url, per the source-XOR contract). Url-
@@ -828,7 +826,11 @@ def _video_result_from_qwen(
 
 
 def _resolve_video_file(
-    base: str, vg_cfg: VideoGenDef, poll_body: bytes, headers: dict[str, str]
+    base: str,
+    vg_cfg: VideoGenDef,
+    poll_body: bytes,
+    headers: dict[str, str],
+    timeout: float | None,
 ) -> VideoResponse:
     """Perform the two-hop file-retrieve step for providers whose terminal poll
     yields a file reference rather than a finished video URL (vg_cfg.file_endpoint
@@ -848,7 +850,7 @@ def _resolve_video_file(
             message="video file hop: terminal poll carried no file_id", status_code=0
         )
     file_url = base + vg_cfg.file_endpoint.replace("{file_id}", file_id)
-    file_body = do_get(file_url, headers)
+    file_body = do_get(file_url, headers, timeout=timeout)
     try:
         file_raw = json.loads(file_body)
     except ValueError as exc:
@@ -986,7 +988,7 @@ def _download_video_bytes(
         if not video.url:
             continue
         fetch_url = _append_video_auth(video.url, provider, pname, cfg)
-        video.bytes = do_get(fetch_url, headers)
+        video.bytes = do_get(fetch_url, headers, timeout=provider.timeout)
         video.url = ""
     return resp
 

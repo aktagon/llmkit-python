@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import enum
+import http.client
 import io
 import json
 import mimetypes
@@ -32,6 +34,38 @@ def _new_request(
         raise ValueError("llmkit: malformed request URL") from None
 
 
+class ClientTimeout(enum.Enum):
+    """Default of a handle's per-call ``request_timeout``: send with the
+    timeout the handle's provider carries (Client.timeout, BUG-062)."""
+
+    INHERIT = "inherit"
+
+
+def resolve_timeout(
+    request_timeout: float | None | ClientTimeout, provider_timeout: float | None
+) -> float | None:
+    """The caller's per-call ``request_timeout``, else the provider's timeout."""
+    if request_timeout is ClientTimeout.INHERIT:
+        return provider_timeout
+    return request_timeout
+
+
+def _urlopen(req: urllib.request.Request, timeout: float | None) -> http.client.HTTPResponse:
+    """Send ``req``, waiting at most ``timeout`` seconds for the next bytes
+    (Client.timeout, BUG-062). urllib applies the timeout to each socket
+    operation, so it bounds the wait for the response headers and every gap
+    between body chunks; a long healthy stream never expires. None disables it.
+
+    A stall while connecting arrives wrapped in URLError, a stall after it as a
+    bare TimeoutError; unwrap the first so every expiry raises TimeoutError."""
+    try:
+        return urllib.request.urlopen(req, timeout=timeout)
+    except urllib.error.URLError as exc:
+        if isinstance(exc.reason, TimeoutError):
+            raise exc.reason from exc
+        raise
+
+
 def merge_caller_headers(headers: dict[str, str], caller: dict[str, str]) -> None:
     """ADR-052: add caller-supplied custom headers (Client.add_header) that are
     NOT already present (case-insensitively). Call AFTER the SDK-set headers
@@ -53,14 +87,14 @@ from .providers.generated.stream import StreamDef
 def do_get(
     url: str,
     headers: dict[str, str],
-    timeout: float = 600.0,
+    timeout: float | None,
 ) -> bytes:
     """GET and return the response bytes. Raises APIError on 4xx/5xx."""
     req = _new_request(url, method="GET")
     for key, value in headers.items():
         req.add_header(key, value)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _urlopen(req, timeout) as resp:
             data = resp.read()
             if resp.status >= 400:
                 raise APIError(
@@ -82,7 +116,7 @@ def do_post(
     url: str,
     body: bytes,
     headers: dict[str, str],
-    timeout: float = 600.0,
+    timeout: float | None,
 ) -> bytes:
     """POST JSON and return the response bytes. Raises APIError on 4xx/5xx."""
     data, status_code, resp_headers = _do_post_raw(url, body, headers, timeout)
@@ -102,7 +136,7 @@ def _do_post_raw(
     url: str,
     body: bytes,
     headers: dict[str, str],
-    timeout: float,
+    timeout: float | None,
 ) -> tuple[bytes, int, dict[str, str]]:
     """Raw POST: returns (body, status_code, headers) without raising on HTTP errors."""
     req = _new_request(url, data=body, method="POST")
@@ -110,7 +144,7 @@ def _do_post_raw(
     for key, value in headers.items():
         req.add_header(key, value)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _urlopen(req, timeout) as resp:
             return resp.read(), resp.status, dict(resp.headers.items())
     except urllib.error.HTTPError as exc:
         return exc.read(), exc.code, dict(exc.headers.items()) if exc.headers else {}
@@ -124,7 +158,7 @@ def do_sigv4_post(
     session_token: str,
     region: str,
     service: str,
-    timeout: float = 600.0,
+    timeout: float | None,
     custom_headers: dict[str, str] | None = None,
 ) -> bytes:
     """POST signed with AWS SigV4. Raises APIError on 4xx/5xx.
@@ -141,7 +175,7 @@ def do_sigv4_post(
     for key, value in {**(custom_headers or {}), **headers}.items():
         req.add_header(key, value)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _urlopen(req, timeout) as resp:
             return resp.read()
     except urllib.error.HTTPError as exc:
         data = exc.read()
@@ -159,7 +193,7 @@ def do_sigv4_get(
     session_token: str,
     region: str,
     service: str,
-    timeout: float = 600.0,
+    timeout: float | None,
     custom_headers: dict[str, str] | None = None,
 ) -> bytes:
     """GET signed with AWS SigV4 (empty body). Raises APIError on 4xx/5xx.
@@ -180,7 +214,7 @@ def do_sigv4_get(
     for key, value in {**(custom_headers or {}), **headers}.items():
         req.add_header(key, value)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _urlopen(req, timeout) as resp:
             return resp.read()
     except urllib.error.HTTPError as exc:
         data = exc.read()
@@ -206,7 +240,7 @@ def do_multipart_post(
     data: bytes,
     fields: dict[str, str],
     headers: dict[str, str],
-    timeout: float = 600.0,
+    timeout: float | None,
     mime_type: str = "",
 ) -> tuple[bytes, int]:
     """POST multipart/form-data. Returns (body, status_code); does NOT raise on 4xx/5xx.
@@ -239,7 +273,7 @@ def do_multipart_post(
     for key, value in headers.items():
         req.add_header(key, value)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _urlopen(req, timeout) as resp:
             return resp.read(), resp.status
     except urllib.error.HTTPError as exc:
         return exc.read(), exc.code
@@ -250,7 +284,7 @@ def do_multipart_post_multi(
     files: list[tuple[str, str, str, bytes]],
     fields: dict[str, str],
     headers: dict[str, str],
-    timeout: float = 600.0,
+    timeout: float | None,
 ) -> tuple[bytes, int]:
     """POST multipart/form-data with one or more file parts plus zero-or-more
     plain string fields. ``files`` items are ``(field_name, filename, mime_type, data)``;
@@ -282,7 +316,7 @@ def do_multipart_post_multi(
     for key, value in headers.items():
         req.add_header(key, value)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _urlopen(req, timeout) as resp:
             return resp.read(), resp.status
     except urllib.error.HTTPError as exc:
         return exc.read(), exc.code
@@ -304,7 +338,7 @@ def do_stream_post(
     headers: dict[str, str],
     stream_cfg: StreamDef,
     callback: Callable[[str], None],
-    timeout: float = 600.0,
+    timeout: float | None,
     finish_reason_path: str = "",
 ) -> tuple[Usage, str]:
     """POST a streaming request and dispatch SSE events to `callback`.
@@ -319,7 +353,7 @@ def do_stream_post(
     for key, value in headers.items():
         req.add_header(key, value)
     try:
-        resp = urllib.request.urlopen(req, timeout=timeout)
+        resp = _urlopen(req, timeout)
     except urllib.error.HTTPError as exc:
         data = exc.read()
         raise APIError(

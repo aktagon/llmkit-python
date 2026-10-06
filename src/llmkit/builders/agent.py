@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 from ..agent import Agent as LegacyAgent
 from ..structs import Message, ToolCall, ToolResult
-from ..types import Provider, Response
+from ..types import Response, provider_from_config
 
 if TYPE_CHECKING:
     from . import Agent
@@ -29,15 +29,7 @@ class AgentState:
 
 
 def _init_agent(b: "Agent") -> AgentState:
-    provider = Provider(
-        name=b.client.provider.name,
-        api_key=b.client.provider.api_key,
-        headers=b.client.provider.headers,
-    )
-    if b._model:
-        provider.model = b._model
-    if b.client.provider.base_url:
-        provider.base_url = b.client.provider.base_url
+    provider = provider_from_config(b.client.provider, b._model)
 
     kwargs: dict = {}
     if b._max_tokens is not None:

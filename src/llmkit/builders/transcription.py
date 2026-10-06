@@ -21,7 +21,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from ..errors import APIError, ValidationError
-from ..http import _escape_quotes, do_get, do_post
+from ..http import ClientTimeout, _escape_quotes, do_get, do_post, resolve_timeout
 from ..image import Part, _image_auth_headers
 from ..middleware import fire_post, fire_pre, set_event_error
 from ..providers.generated.middleware import Event, MiddlewareFn, MiddlewareOp
@@ -44,19 +44,18 @@ from ..structs import (
     TranscriptionResponse,
     TranscriptSegment,
 )
-from ..types import Provider
+from ..types import Provider, provider_from_config
 
 if TYPE_CHECKING:
     from . import Transcription
 
 
 # Default poll cadence for TranscriptionHandle.wait. AssemblyAI jobs run from
-# seconds to minutes; the SDK polls every poll_interval until request_timeout
-# elapses. Mirror of go/transcription.go transcriptionPollInterval / Timeout.
+# seconds to minutes; the SDK polls every poll_interval until poll_deadline
+# elapses. Mirror of go/transcription.go transcriptionPollInterval.
 _DEFAULT_POLL_INTERVAL = 3.0
-_DEFAULT_REQUEST_TIMEOUT = 600.0
 # The OVERALL poll-loop wall-clock backstop (seconds) — distinct from the
-# per-HTTP-request _DEFAULT_REQUEST_TIMEOUT (S05). Mirror of go
+# per-HTTP-request timeout, which defaults to Client.timeout (S05). Mirror of go
 # transcriptionPollTimeout (10 min).
 _DEFAULT_POLL_DEADLINE = 600.0
 
@@ -72,7 +71,7 @@ class TranscriptionHandle(_TranscriptionHandleData):
         self,
         *,
         poll_interval: float = _DEFAULT_POLL_INTERVAL,
-        request_timeout: float = _DEFAULT_REQUEST_TIMEOUT,
+        request_timeout: float | None | ClientTimeout = ClientTimeout.INHERIT,
         poll_deadline: float = _DEFAULT_POLL_DEADLINE,
     ) -> TranscriptionResponse:
         """Poll until the transcription job reaches a terminal state, then return
@@ -80,7 +79,7 @@ class TranscriptionHandle(_TranscriptionHandleData):
         shared engine; the between-poll wait is a cancellable ``asyncio.sleep`` so
         ``asyncio.CancelledError`` propagates (S06). ``poll_deadline`` is the NEW
         overall wall-clock backstop, distinct from the per-request
-        ``request_timeout`` (S05)."""
+        ``request_timeout`` (S05), which defaults to the client's timeout."""
         adapter = _new_transcription_adapter(
             self, poll_interval, request_timeout, poll_deadline
         )
@@ -89,7 +88,7 @@ class TranscriptionHandle(_TranscriptionHandleData):
     async def poll(
         self,
         *,
-        request_timeout: float = _DEFAULT_REQUEST_TIMEOUT,
+        request_timeout: float | None | ClientTimeout = ClientTimeout.INHERIT,
         poll_deadline: float = _DEFAULT_POLL_DEADLINE,
     ) -> JobStatus[TranscriptionResponse]:
         """Perform exactly ONE provider round-trip and return the normalized
@@ -105,13 +104,7 @@ class TranscriptionHandle(_TranscriptionHandleData):
 async def transcription_submit(
     b: "Transcription", audio_parts: list[Part]
 ) -> TranscriptionHandle:
-    provider = Provider(
-        name=b.client.provider.name,
-        api_key=b.client.provider.api_key,
-        headers=b.client.provider.headers,
-    )
-    if b.client.provider.base_url:
-        provider.base_url = b.client.provider.base_url
+    provider = provider_from_config(b.client.provider)
 
     return await asyncio.to_thread(
         _submit_transcription,
@@ -177,7 +170,7 @@ def _submit_transcription(
 
     try:
         handle_id = _dispatch_transcription_submit(
-            base, tc_cfg, headers, audio_url, audio_bytes
+            base, tc_cfg, headers, audio_url, audio_bytes, provider.timeout
         )
     except Exception as exc:
         post_event = dataclasses.replace(
@@ -202,6 +195,7 @@ def _dispatch_transcription_submit(
     headers: dict[str, str],
     audio_url: str,
     audio_bytes: bytes | None,
+    timeout: float | None,
 ) -> str:
     """Perform the outbound async submit: the optional upload hop (STT-005)
     followed by the submit POST, returning the provider-assigned job id read
@@ -211,7 +205,9 @@ def _dispatch_transcription_submit(
     # submit body can reference. URL parts skip this entirely.
     if audio_bytes is not None:
         upload_headers = {**headers, "content-type": "application/octet-stream"}
-        upload_body = do_post(base + tc_cfg.upload_endpoint, audio_bytes, upload_headers)
+        upload_body = do_post(
+            base + tc_cfg.upload_endpoint, audio_bytes, upload_headers, timeout=timeout
+        )
         try:
             up = json.loads(upload_body)
         except ValueError as exc:
@@ -231,6 +227,7 @@ def _dispatch_transcription_submit(
         base + tc_cfg.submit_endpoint,
         submit_body,
         {**headers, "content-type": "application/json"},
+        timeout=timeout,
     )
     try:
         raw = json.loads(resp_body)
@@ -260,7 +257,7 @@ class _TranscriptionAdapter:
         headers: dict[str, str],
         poll_url: str,
         tc_cfg: TranscriptionDef,
-        request_timeout: float,
+        request_timeout: float | None,
     ) -> None:
         self._lc = lc
         self._headers = headers
@@ -292,7 +289,7 @@ class _TranscriptionAdapter:
 def _new_transcription_adapter(
     handle: TranscriptionHandle,
     poll_interval: float,
-    request_timeout: float,
+    request_timeout: float | None | ClientTimeout,
     poll_deadline: float,
 ) -> _TranscriptionAdapter:
     """Assemble the transcription adapter + its LifecycleConfig. The
@@ -326,19 +323,15 @@ def _new_transcription_adapter(
         poll_interval=poll_interval,
         poll_timeout=poll_deadline,
     )
-    return _TranscriptionAdapter(lc, headers, poll_url, tc_cfg, request_timeout)
+    return _TranscriptionAdapter(
+        lc, headers, poll_url, tc_cfg, resolve_timeout(request_timeout, p.timeout)
+    )
 
 
 async def transcription_transcribe(
     b: "Transcription", audio_parts: list[Part]
 ) -> TranscriptionResponse:
-    provider = Provider(
-        name=b.client.provider.name,
-        api_key=b.client.provider.api_key,
-        headers=b.client.provider.headers,
-    )
-    if b.client.provider.base_url:
-        provider.base_url = b.client.provider.base_url
+    provider = provider_from_config(b.client.provider)
     return await asyncio.to_thread(
         _transcribe_sync,
         provider,
@@ -399,6 +392,7 @@ def _transcribe_sync(
             base + tc_cfg.submit_endpoint,
             body,
             {**headers, "content-type": content_type},
+            timeout=provider.timeout,
         )
         try:
             raw = json.loads(resp_body)

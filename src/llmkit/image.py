@@ -117,7 +117,6 @@ def generate_image(
     safety_settings: list | None = None,
     extra_fields: dict[str, Any] | None = None,
     middleware: list[MiddlewareFn] | None = None,
-    request_timeout: float = 600.0,
     raw: bool = False,
 ) -> ImageResponse:
     """Produce one or more images from a text prompt, optionally conditioned
@@ -271,7 +270,7 @@ def generate_image(
                     url,
                     json_body,
                     {**headers, "content-type": "application/json"},
-                    timeout=request_timeout,
+                    timeout=provider.timeout,
                 )
             elif img_cfg.input_mode == "MultipartForm":
                 if has_images:
@@ -283,7 +282,7 @@ def generate_image(
                         files,
                         fields,
                         headers,
-                        timeout=request_timeout,
+                        timeout=provider.timeout,
                     )
                     if status >= 400:
                         raise parse_error(provider.name, status, resp_body, None)
@@ -296,7 +295,7 @@ def generate_image(
                         base_url + img_cfg.gen_endpoint,
                         json_body,
                         {**headers, "content-type": "application/json"},
-                        timeout=request_timeout,
+                        timeout=provider.timeout,
                     )
             elif img_cfg.input_mode == "JSONGenerations":
                 body = _build_recraft_gen_body(parts, request.model, image_size, count, extra_fields)
@@ -305,7 +304,7 @@ def generate_image(
                     base_url + img_cfg.gen_endpoint,
                     json_body,
                     {**headers, "content-type": "application/json"},
-                    timeout=request_timeout,
+                    timeout=provider.timeout,
                 )
             elif img_cfg.input_mode == "JSONPredict":
                 body = _build_vertex_body(parts, aspect_ratio, count, mask, safety_filter, extra_fields)
@@ -315,7 +314,7 @@ def generate_image(
                     base_url + endpoint,
                     json_body,
                     {**headers, "content-type": "application/json"},
-                    timeout=request_timeout,
+                    timeout=provider.timeout,
                 )
             else:
                 body = _build_image_body(parts, aspect_ratio, image_size, include_text, safety_settings or [])
@@ -325,7 +324,7 @@ def generate_image(
                     url,
                     json_body,
                     {**headers, "content-type": "application/json"},
-                    timeout=request_timeout,
+                    timeout=provider.timeout,
                 )
         except APIError as raw_err:
             # parse_error returned above is already an APIError; only wrap raw HTTP errors.
