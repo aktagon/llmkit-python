@@ -13,23 +13,14 @@ import base64
 from typing import TYPE_CHECKING
 
 from ..client import prompt as legacy_prompt
-from ..types import InputImage, Message, Provider, Request, Response
+from ..types import InputImage, Message, Provider, Request, Response, provider_from_config
 
 if TYPE_CHECKING:
     from . import Text
 
 
 def _build_provider(b: "Text") -> Provider:
-    p = Provider(
-        name=b.client.provider.name,
-        api_key=b.client.provider.api_key,
-        headers=b.client.provider.headers,
-    )
-    if b._model:
-        p.model = b._model
-    if b.client.provider.base_url:
-        p.base_url = b.client.provider.base_url
-    return p
+    return provider_from_config(b.client.provider, b._model)
 
 
 def _build_request(b: "Text", final_text: str) -> Request:

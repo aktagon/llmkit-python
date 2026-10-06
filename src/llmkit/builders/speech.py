@@ -12,20 +12,14 @@ from ..speech import (
     generate_speech as run_speech_generation,
 )
 from ..structs import SpeechResponse
-from ..types import Provider
+from ..types import provider_from_config
 
 if TYPE_CHECKING:
     from . import Speech
 
 
 async def speech_generate(b: "Speech", msg: str) -> SpeechResponse:
-    provider = Provider(
-        name=b.client.provider.name,
-        api_key=b.client.provider.api_key,
-        headers=b.client.provider.headers,
-    )
-    if b.client.provider.base_url:
-        provider.base_url = b.client.provider.base_url
+    provider = provider_from_config(b.client.provider)
 
     request = SpeechRequest(model=b._model, voice=b._voice, text=msg)
 

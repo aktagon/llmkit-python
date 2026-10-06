@@ -21,10 +21,11 @@ from ..batch import (
     _new_batch_adapter,
     submit_batch as legacy_submit_batch,
 )
+from ..http import ClientTimeout
 from ..errors import ValidationError
 from ..job import JobStatus, poll_engine_once, poll_job_async
 from ..structs import BatchHandle as _BatchHandleData
-from ..types import Provider, Response
+from ..types import Provider, Response, provider_from_config
 from .text import _build_request
 
 if TYPE_CHECKING:
@@ -45,7 +46,7 @@ class BatchHandle(_BatchHandleData):
         self,
         *,
         poll_interval: float = DEFAULT_POLL_INTERVAL,
-        request_timeout: float = 600.0,
+        request_timeout: float | None | ClientTimeout = ClientTimeout.INHERIT,
         poll_deadline: float = DEFAULT_POLL_DEADLINE,
     ) -> list[Response]:
         """Block until the batch finishes and return one Response per prompt,
@@ -59,7 +60,8 @@ class BatchHandle(_BatchHandleData):
 
         A thin loop over ``poll`` (ADR-063 POLL-003) via the shared engine — the
         between-poll wait is a cancellable ``asyncio.sleep`` so
-        ``asyncio.CancelledError`` propagates (S06)."""
+        ``asyncio.CancelledError`` propagates (S06). ``request_timeout`` bounds
+        each HTTP request and defaults to the client's timeout."""
         adapter = _new_batch_adapter(
             self, request_timeout, poll_interval, poll_deadline, self.raw
         )
@@ -68,7 +70,7 @@ class BatchHandle(_BatchHandleData):
     async def poll(
         self,
         *,
-        request_timeout: float = 600.0,
+        request_timeout: float | None | ClientTimeout = ClientTimeout.INHERIT,
         poll_deadline: float = DEFAULT_POLL_DEADLINE,
     ) -> JobStatus[list[Response]]:
         """Perform exactly ONE provider round-trip and return the normalized
@@ -82,16 +84,7 @@ class BatchHandle(_BatchHandleData):
 
 
 def _provider_for(b: "Text") -> Provider:
-    p = Provider(
-        name=b.client.provider.name,
-        api_key=b.client.provider.api_key,
-        headers=b.client.provider.headers,
-    )
-    if b._model:
-        p.model = b._model
-    if b.client.provider.base_url:
-        p.base_url = b.client.provider.base_url
-    return p
+    return provider_from_config(b.client.provider, b._model)
 
 
 def _option_kwargs(b: "Text") -> dict:

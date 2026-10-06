@@ -117,7 +117,6 @@ def prompt(
     caching: bool = False,
     cache_ttl: float = 0.0,
     middleware: list | None = None,
-    request_timeout: float = 600.0,
     raw: bool = False,
     protocol: str = "",
 ) -> Response:
@@ -137,7 +136,7 @@ def prompt(
         caching=caching,
         cache_ttl=cache_ttl,
         middleware=list(middleware or []),
-        request_timeout=request_timeout,
+        request_timeout=provider.timeout,
         raw=raw,
     )
 
@@ -239,7 +238,6 @@ def prompt_stream(
     caching: bool = False,
     cache_ttl: float = 0.0,
     middleware: list | None = None,
-    request_timeout: float = 600.0,
 ) -> Response:
     """Streaming variant of `prompt`. Calls on_chunk(text) for each delta; returns accumulated response."""
     opts = Options(
@@ -256,7 +254,7 @@ def prompt_stream(
         caching=caching,
         cache_ttl=cache_ttl,
         middleware=list(middleware or []),
-        request_timeout=request_timeout,
+        request_timeout=provider.timeout,
     )
 
     _validate_provider(provider)
@@ -342,7 +340,6 @@ def upload_file(
     filename: str | None = None,
     mime_type: str = "",
     middleware: list | None = None,
-    request_timeout: float = 600.0,
 ) -> File:
     """Upload a file to a provider and return a File reference.
 
@@ -429,7 +426,7 @@ def upload_file(
             data,
             extra_fields,
             headers,
-            timeout=request_timeout,
+            timeout=provider.timeout,
             mime_type=mime_type,
         )
     except Exception as exc:

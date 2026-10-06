@@ -3,10 +3,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from .providers.generated.middleware import MiddlewareFn
 from .structs import File, Message, Response
+
+if TYPE_CHECKING:
+    from .builders import ProviderConfig
+
+
+def _default_timeout() -> float | None:
+    """The generated DEFAULT_TIMEOUT (BUG-062). Imported at call time: the
+    builders package imports this module, so a module-level import would cycle."""
+    from .builders import DEFAULT_TIMEOUT
+
+    return DEFAULT_TIMEOUT
 
 
 @dataclass
@@ -20,6 +31,22 @@ class Provider:
     # header, so a gateway header (e.g. cf-aig-authorization) rides alongside
     # the provider key without clobbering it.
     headers: dict[str, str] = field(default_factory=dict)
+    # How long to wait for the next response bytes, in seconds (Client.timeout,
+    # BUG-062). None disables it. Every HTTP send for this provider uses it.
+    timeout: float | None = field(default_factory=_default_timeout)
+
+
+def provider_from_config(cfg: "ProviderConfig", model: str = "") -> Provider:
+    """The Provider a builder terminal sends with: the client's stored
+    credentials, custom headers, base URL and timeout, plus the chain's model."""
+    return Provider(
+        name=cfg.name,
+        api_key=cfg.api_key,
+        model=model,
+        base_url=cfg.base_url,
+        headers=cfg.headers,
+        timeout=cfg.timeout,
+    )
 
 
 class Capability(str):
@@ -121,7 +148,8 @@ class Options:
     caching: bool = False
     cache_ttl: float = 0.0
     middleware: list[MiddlewareFn] = field(default_factory=list)
-    request_timeout: float = 600.0
+    # Per-HTTP-request timeout in seconds; the runtime copies Provider.timeout.
+    request_timeout: float | None = field(default_factory=_default_timeout)
     safety_settings: list["SafetySetting"] = field(default_factory=list)
     # Opt-in: populate Response.raw with the parsed provider response body
     # (ADR-014). Plumbed by the typed-builder's .raw() chain method.
