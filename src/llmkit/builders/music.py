@@ -13,20 +13,14 @@ from ..music import (
     generate_music as run_music_generation,
 )
 from ..structs import MusicResponse
-from ..types import Provider
+from ..types import provider_from_config
 
 if TYPE_CHECKING:
     from . import Music
 
 
 async def music_generate(b: "Music", msg: str) -> MusicResponse:
-    provider = Provider(
-        name=b.client.provider.name,
-        api_key=b.client.provider.api_key,
-        headers=b.client.provider.headers,
-    )
-    if b.client.provider.base_url:
-        provider.base_url = b.client.provider.base_url
+    provider = provider_from_config(b.client.provider)
 
     # Mirror go/music_builder.go: chain-accumulated parts plus an optional
     # trailing text part from generate(msg). The XOR (prompt vs parts) is
