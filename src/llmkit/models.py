@@ -253,6 +253,7 @@ def _effective_provider(scoped: "ScopedModels") -> Provider:
         api_key=pc.api_key,
         base_url=pc.base_url,
         headers=pc.headers,  # ADR-052: carry custom headers onto the catalogue request
+        timeout=pc.timeout,
     )
 
 
@@ -274,7 +275,7 @@ def _paginate_sync(
         req_url = _append_cursor(
             _build_catalogue_url(provider, pcfg, endpoint), cursor_param, cursor
         )
-        body = _http_get(req_url, headers)
+        body = _http_get(req_url, headers, provider.timeout)
         page = _dispatch_parser(parser_kind, body)
         all_records.extend(page.records)
         if not page.next_cursor:
@@ -291,11 +292,11 @@ def _get_sync(
 ) -> ParsedModelRecord:
     headers = _build_catalogue_headers(provider, pcfg)
     url = _build_catalogue_url(provider, pcfg, f"{endpoint}/{id}")
-    body = _http_get(url, headers)
+    body = _http_get(url, headers, provider.timeout)
     return _parse_single_record(parser_kind, body)
 
 
-def _http_get(url: str, headers: dict[str, str]) -> bytes:
+def _http_get(url: str, headers: dict[str, str], timeout: float | None) -> bytes:
     try:
         # Request(url) itself raises ValueError for a malformed URL (e.g. an
         # unrecognized scheme) — construct it inside the try so that case is
@@ -303,7 +304,7 @@ def _http_get(url: str, headers: dict[str, str]) -> bytes:
         req = urllib.request.Request(url, method="GET")
         for k, v in headers.items():
             req.add_header(k, v)
-        with urllib.request.urlopen(req, timeout=30.0) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read()
             status = resp.status
     except urllib.error.HTTPError as exc:

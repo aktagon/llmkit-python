@@ -7,7 +7,14 @@ import time
 from typing import Any
 
 from .errors import APIError, ValidationError
-from .http import do_get, do_multipart_post, do_post, merge_caller_headers
+from .http import (
+    ClientTimeout,
+    do_get,
+    do_multipart_post,
+    do_post,
+    merge_caller_headers,
+    resolve_timeout,
+)
 from .job import (
     LifecycleConfig,
     PollBody,
@@ -60,7 +67,6 @@ def submit_batch(
     cache_ttl: float = 0.0,
     middleware: list | None = None,
     safety_settings: list | None = None,
-    request_timeout: float = 600.0,
     raw: bool = False,
 ) -> BatchHandle:
     """Submit a batch and return a handle for polling."""
@@ -93,7 +99,7 @@ def submit_batch(
         cache_ttl=cache_ttl,
         middleware=mws,
         safety_settings=list(safety_settings or []),
-        request_timeout=request_timeout,
+        request_timeout=provider.timeout,
     )
     base_event = Event(
         op=MiddlewareOp.BATCH_SUBMIT,
@@ -121,7 +127,7 @@ def submit_batch(
     try:
         if bc.input_mode == BatchInputMode.FILE_REFERENCE_INPUT:
             jsonl = _build_batch_jsonl(requests, opts, provider, cfg, bc)
-            file_id = _upload_batch_file(base, jsonl, bc, headers, request_timeout)
+            file_id = _upload_batch_file(base, jsonl, bc, headers, opts.request_timeout)
             body = {
                 bc.input_field: file_id,
                 "endpoint": bc.endpoint_path,
@@ -143,7 +149,7 @@ def submit_batch(
             json_body = json.dumps(body).encode("utf-8")
 
         create_url = base + bc.lifecycle.create_endpoint
-        resp_body = do_post(create_url, json_body, headers, timeout=request_timeout)
+        resp_body = do_post(create_url, json_body, headers, timeout=opts.request_timeout)
 
         created = json.loads(resp_body)
         batch_id = extract_path(created, bc.lifecycle.response_id_path)
@@ -170,7 +176,7 @@ class _BatchAdapter:
         bc: BatchDef,
         headers: dict[str, str],
         poll_url: str,
-        request_timeout: float,
+        request_timeout: float | None,
         raw: bool,
     ) -> None:
         self._lc = lc
@@ -217,7 +223,7 @@ class _BatchAdapter:
 
 def _new_batch_adapter(
     handle: BatchHandle,
-    request_timeout: float,
+    request_timeout: float | None | ClientTimeout,
     poll_interval: float,
     poll_deadline: float,
     raw: bool,
@@ -256,7 +262,14 @@ def _new_batch_adapter(
         poll_timeout=poll_deadline,
     )
     return _BatchAdapter(
-        lc, handle, base, bc, headers, poll_url, request_timeout, raw
+        lc,
+        handle,
+        base,
+        bc,
+        headers,
+        poll_url,
+        resolve_timeout(request_timeout, p.timeout),
+        raw,
     )
 
 
@@ -269,7 +282,7 @@ def _non_empty(*values: str) -> tuple[str, ...]:
 def wait_batch(
     handle: BatchHandle,
     *,
-    request_timeout: float = 600.0,
+    request_timeout: float | None | ClientTimeout = ClientTimeout.INHERIT,
     poll_interval: float = DEFAULT_POLL_INTERVAL,
     poll_deadline: float = DEFAULT_POLL_DEADLINE,
     raw: bool = False,
@@ -357,7 +370,7 @@ def _upload_batch_file(
     jsonl: bytes,
     bc: BatchDef,
     headers: dict[str, str],
-    timeout: float,
+    timeout: float | None,
 ) -> str:
     upload_url = base + "/v1/files"
     fields = {"purpose": bc.file_purpose}
@@ -382,7 +395,7 @@ def _fetch_batch_results(
     base: str,
     bc: BatchDef,
     headers: dict[str, str],
-    timeout: float,
+    timeout: float | None,
     raw: bool = False,
     status_raw: dict[str, Any] | None = None,
 ) -> list[Response]:

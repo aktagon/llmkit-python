@@ -11,7 +11,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from ..client import upload_file as _upload_file
-from ..types import File, Provider
+from ..types import File, provider_from_config
 
 if TYPE_CHECKING:
     from . import Upload
@@ -34,13 +34,7 @@ async def upload_run(b: "Upload") -> File:
             "Upload: filename() is required when bytes() is set"
         )
 
-    provider = Provider(
-        name=b.client.provider.name,
-        api_key=b.client.provider.api_key,
-        headers=b.client.provider.headers,
-    )
-    if b.client.provider.base_url:
-        provider.base_url = b.client.provider.base_url
+    provider = provider_from_config(b.client.provider)
 
     source: bytes | str = b._bytes if has_bytes else b._path
     kwargs: dict = {}

@@ -70,7 +70,6 @@ def generate_music(
     request: MusicRequest,
     *,
     middleware: list[MiddlewareFn] | None = None,
-    request_timeout: float = 600.0,
     raw: bool = False,
 ) -> MusicResponse:
     """Produce audio from a text prompt, optionally conditioned on lyrics.
@@ -150,7 +149,7 @@ def generate_music(
                 url,
                 json_body,
                 {**headers, "content-type": "application/json"},
-                timeout=request_timeout,
+                timeout=provider.timeout,
             )
         except APIError as raw_err:
             err = parse_error(

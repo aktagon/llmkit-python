@@ -49,7 +49,6 @@ def generate_speech(
     request: SpeechRequest,
     *,
     middleware: list[MiddlewareFn] | None = None,
-    request_timeout: float = 600.0,
 ) -> SpeechResponse:
     """Synthesize speech audio from text.
 
@@ -106,7 +105,7 @@ def generate_speech(
                 url,
                 json_body,
                 {**headers, "content-type": "application/json"},
-                timeout=request_timeout,
+                timeout=provider.timeout,
             )
         except APIError as raw_err:
             raise parse_error(

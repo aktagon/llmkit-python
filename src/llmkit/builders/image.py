@@ -14,20 +14,14 @@ from ..image import (
     generate_image as run_image_generation,
 )
 from ..structs import ImageResponse
-from ..types import Provider
+from ..types import provider_from_config
 
 if TYPE_CHECKING:
     from . import Image
 
 
 async def image_generate(b: "Image", msg: str) -> ImageResponse:
-    provider = Provider(
-        name=b.client.provider.name,
-        api_key=b.client.provider.api_key,
-        headers=b.client.provider.headers,
-    )
-    if b.client.provider.base_url:
-        provider.base_url = b.client.provider.base_url
+    provider = provider_from_config(b.client.provider)
 
     request = ImageRequest(model=b._model)
     # XOR rule: prompt or parts, never both. If chain accumulated parts,
