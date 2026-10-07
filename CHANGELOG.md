@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.2] — 2026-10-07
+
+### Changed
+- The sdist ships only the package, `README.md`, `CHANGELOG.md` and `LICENSE`.
+- Docstrings and comments ship again.
+- The error for a chat protocol on a terminal other than prompt no longer ends with an internal reference.
+
+### Removed
+- 3.2.1 is no longer available on PyPI. Use 3.2.2.
+
 ## [3.2.1] — 2026-10-05
 
 ### Changed
