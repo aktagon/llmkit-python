@@ -76,7 +76,7 @@ class TextStream:
         if b._protocol:
             raise ValidationError(
                 field="protocol",
-                message="protocol (e.g. Responses) is only supported on the prompt terminal, not stream (ADR-055)",
+                message="protocol (e.g. Responses) is only supported on the prompt terminal, not stream",
             )
         provider = _build_provider(b)
         request = _build_request(b, self._msg)
