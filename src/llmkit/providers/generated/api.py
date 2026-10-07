@@ -248,92 +248,74 @@ API_ENTRY_POINTS: tuple[APIEntryPointDef, ...] = (
     APIEntryPointDef(
         py_func="agent",
         py_param_type="Provider",
-        comment="Constructs a stateful Agent that drives a multi-turn tool-calling loop. Per-language naming: Go NewAgent, TS class Agent, Python class Agent, Rust struct Agent.",
     ),
     APIEntryPointDef(
         py_func="batch",
         py_param_type="list[Request]",
-        comment="Queues a batch and returns a BatchHandle immediately (ADR-064). A text execution mode on the *Text builder (parallel to Stream); the chain's accumulated config (System, Schema, Model, ...) applies to every prompt in the variadic. Use the handle's Wait to block for results, or Poll to drive the loop from your own orchestrator.",
     ),
     APIEntryPointDef(
         py_func="decode_response",
         py_param_type="ChatWireShape",
-        comment="DecodeResponse(provider, chatWireShape, body) -> Response \u2014 parses a provider response body into the canonical Response using the generated response path tables (ADR-076 SYM-004: this is the same function each SDK's own chat send path calls, not a second implementation beside it). Keyless, IO-free and pure: no Client, no credential, no network, no clock. Scope is api:Response and its llm:Usage sub-struct; tool calls and streaming are out (SYM-008).",
     ),
     APIEntryPointDef(
         py_func="encode_response",
         py_param_type="ChatWireShape",
-        comment="EncodeResponse(provider, chatWireShape, response) -> body \u2014 renders a canonical Response back onto the wire, deriving every write location from the same generated path accessors DecodeResponse reads (ADR-076 SYM-005: no second table, no per-provider switch, no path literal). Fails with the SDK's validation error when a canonical field marked llm:OneWay for the (provider, wire shape) carries a non-empty value, rather than fabricating a provider field (SYM-007). The contract is the canonical fixed point Decode(Encode(Decode(body))) == Decode(body); byte equality against the original body is explicitly NOT required and must not be asserted (SYM-006).",
     ),
     APIEntryPointDef(
         py_func="generate_image",
         py_param_type="ImageRequest",
-        comment="Synchronous text-to-image and image-to-image. Input is ImageRequest{ Model, Prompt, Parts []Part } where Parts is a positionally-ordered sequence of llm:Part (text or image MediaRef). Prompt is a sugar field for the text-only case (XOR with Parts; runtime synthesises []Part{Text(Prompt)} when only Prompt is set). Returns ImageResponse{ Images []ImageData, Text string, Usage }.",
     ),
     APIEntryPointDef(
         py_func="generate_music",
         py_param_type="MusicRequest",
-        comment="Synchronous text-to-music. Input is MusicRequest{ Model, Prompt, Parts []Part } where Parts is a positionally-ordered sequence of llm:Part (text prompt or Lyrics). Prompt is a sugar field for the prompt-only case (XOR with Parts; runtime synthesises []Part{Text(Prompt)} when only Prompt is set). Returns MusicResponse{ Audio []AudioData, Text string, Usage }.",
     ),
     APIEntryPointDef(
         py_func="generate_speech",
         py_param_type="SpeechRequest",
-        comment="Synchronous text-to-speech. Input is SpeechRequest{ Model, Voice, Text } \u2014 Text is the single utterance to speak (single-turn; no Message/Role wrapper, ADR-049 SPK-003), Voice is the request-data selector (ADR-021) validated pre-flight against the provider's availableVoice catalogue. Returns SpeechResponse{ Audio AudioData, Usage }.",
     ),
     APIEntryPointDef(
         py_func="poll",
         py_param_type="BatchHandle",
-        comment="Performs exactly ONE provider round-trip and returns the normalized JobStatus{state, result?, cause?, rawStatus} (ADR-063 POLL-001) \u2014 the enterprise seam for callers driving the poll loop from their own orchestrator. Wait is a thin loop over Poll (POLL-003). The shared poll primitive: the same method is on TranscriptionHandle (POLL-007 holds it across all four SDKs).",
     ),
     APIEntryPointDef(
         py_func="prompt",
         py_param_type="Request",
-        comment="One-shot synchronous request. Returns Response with text + Usage tokens.",
     ),
     APIEntryPointDef(
         py_func="prompt_stream",
         py_param_type="Request",
-        comment="Streaming variant. Calls a per-chunk callback as deltas arrive; returns the accumulated Response on stream close.",
     ),
     APIEntryPointDef(
         py_func="submit",
         py_param_type="TranscriptionRequest",
-        comment="Asynchronous speech-to-text submit. Input is TranscriptionRequest{ Parts []Part } carrying exactly one audio Part \u2014 parts.Audio(url) (a public URL submitted directly as audio_url) or parts.AudioBytes(mime, raw) (local bytes the runtime uploads first to obtain an upload_url, STT-005). A request without exactly one audio part is rejected pre-flight (STT-003). Returns a TranscriptionHandle immediately; poll it with Wait.",
     ),
     APIEntryPointDef(
         py_func="submit",
         py_param_type="VideoRequest",
-        comment="Asynchronous text/image-to-video submit. Input is VideoRequest{ Model, Prompt, Parts []Part } where Parts is a positionally-ordered sequence of llm:Part (text prompt or image-to-video reference). Prompt is a sugar field for the prompt-only case (XOR with Parts; runtime synthesises []Part{Text(Prompt)} when only Prompt is set). Returns a VideoHandle immediately; poll it with Wait.",
     ),
     APIEntryPointDef(
         py_func="supports",
         py_param_type="Capability",
-        comment="Client.Supports(Capability) \u2014 true iff an explicit request for the capability will not hard-fail pre-flight on this client's provider (ADR-030). Gated arms (caching, batching, file_upload, image_generation) dispatch the same generated *_config(provider) lookup as the strict validation paths, so the query and the error cannot drift; capabilities with no provider-level pre-flight gate return true. Says nothing about per-model or per-option rejections \u2014 use the catalogue's ModelInfo.Capabilities for model-level facts. Sync, no IO, infallible.",
     ),
     APIEntryPointDef(
         py_func="transcribe",
         py_param_type="TranscriptionRequest",
-        comment="Synchronous speech-to-text (ADR-051): one multipart/form-data POST returns the finished TranscriptionResponse directly \u2014 no job handle. Input is TranscriptionRequest{ Model, Parts } carrying exactly one inline-bytes audio Part (parts.AudioBytes(mime, raw)); a remote URL is rejected pre-flight (OpenAI ingests no URL \u2014 the inverse of AssemblyAI). Available only on sync providers (llm:transcriptionInteraction sync); calling it on an async provider, or Submit/Wait on a sync provider, is a pre-flight ValidationError naming the supported terminal.",
     ),
     APIEntryPointDef(
         py_func="upload_file",
         py_param_type="Bytes",
-        comment="Uploads a file and returns a File handle suitable for inclusion in a Request.files slice.",
     ),
     APIEntryPointDef(
         py_func="wait",
         py_param_type="BatchHandle",
-        comment="Polls the provider until the batch handle reaches terminal state, then returns the ordered list of Responses. Hand-written on BatchHandle (mirrors VideoHandle.Wait / TranscriptionHandle.Wait), not a builder terminal.",
     ),
     APIEntryPointDef(
         py_func="wait",
         py_param_type="TranscriptionHandle",
-        comment="Polls the provider (per the handle's poll endpoint + status mapping) until the job reaches status=completed, then returns a TranscriptionResponse carrying the transcript text and timing segments. A status=error job surfaces as an error (never a silent empty success). Hand-written on TranscriptionHandle (not a *Transcription builder terminal), mirroring VideoHandle.Wait / BatchHandle.Wait.",
     ),
     APIEntryPointDef(
         py_func="wait",
         py_param_type="VideoHandle",
-        comment="Polls the provider (per the handle's submit endpoint + wire shape) until the job reaches a terminal state (status=done), then returns a VideoResponse. Poll cadence + timeout use per-provider defaults, overridable via chain option (ADR-034 D2). A failed/expired job surfaces as an error. Hand-written on VideoHandle (not a *Video builder terminal), mirroring BatchHandle.Wait.",
     ),
 )
 

@@ -74,21 +74,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
-- Clean async-job API (ADR-064). Batch is now a single async terminal on the `text` builder — `c.text.<chain>.batch("q3", "q4")` returns a `BatchHandle` (batch is a text execution mode, parallel to `stream`), and `await handle.wait()` resolves the ordered results. The old two-terminal surface is collapsed: the blocking `c.text.batch(...)` (which returned `list[Response]`) and `c.text.submit_batch(...)` are both gone — `batch` now returns the handle. Migration: `c.text.<chain>.submit_batch(...)` → `c.text.<chain>.batch(...)`; the old blocking `await c.text.<chain>.batch(...)` → `h = c.text.<chain>.batch(...); await h.wait()`.
+- Clean async-job API. Batch is now a single async terminal on the `text` builder — `c.text.<chain>.batch("q3", "q4")` returns a `BatchHandle` (batch is a text execution mode, parallel to `stream`), and `await handle.wait()` resolves the ordered results. The old two-terminal surface is collapsed: the blocking `c.text.batch(...)` (which returned `list[Response]`) and `c.text.submit_batch(...)` are both gone — `batch` now returns the handle. Migration: `c.text.<chain>.submit_batch(...)` → `c.text.<chain>.batch(...)`; the old blocking `await c.text.<chain>.batch(...)` → `h = c.text.<chain>.batch(...); await h.wait()`.
 
 ### Added
 
-- Typed telemetry error kind (ADR-071). The middleware `Event` carries a typed `err_type` set structurally from the error, and the OTLP span's `error.type` attribute now derives from it rather than from string classification of the message. Additive.
+- Typed telemetry error kind. The middleware `Event` carries a typed `err_type` set structurally from the error, and the OTLP span's `error.type` attribute now derives from it rather than from string classification of the message. Additive.
 
 ### Fixed
 
-- Streamed OpenAI usage is no longer `0`: the SDK opts into `stream_options.include_usage` per provider (OpenAI), so streamed calls report real input/output token counts (BUG-028).
-- A batch with an errored or unparseable result line now returns the successful subset instead of discarding the whole batch (HANDOFF-036 A1).
+- Streamed OpenAI usage is no longer `0`: the SDK opts into `stream_options.include_usage` per provider (OpenAI), so streamed calls report real input/output token counts.
+- A batch with an errored or unparseable result line now returns the successful subset instead of discarding the whole batch.
 - Image and file input Parts are carried through the batch request envelope.
-- The `models_list` middleware op now fires real client hooks (HANDOFF-036 A3).
-- `with_capability(...)` now filters the scoped provider list (HANDOFF-036 A4).
-- A malformed 2xx speech-generation body is now a typed decoding error instead of silent empty audio (HANDOFF-036 A5).
-- Multipart field names and filenames are escaped in the file-upload request (HANDOFF-036 A2).
+- The `models_list` middleware op now fires real client hooks.
+- `with_capability(...)` now filters the scoped provider list.
+- A malformed 2xx speech-generation body is now a typed decoding error instead of silent empty audio.
+- Multipart field names and filenames are escaped in the file-upload request.
 - The per-request `anthropic-beta` header is sent on batch submit, so a file-referencing batch item no longer 400s.
 
 ## [2.4.1] — 2026-07-11
@@ -101,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Inline image input on the text/prompt path (ADR-060). `c.text.image(mime, bytes).prompt(...)` now sends the image as the provider's native vision block on all four chat wire shapes (Anthropic, OpenAI, Google, Bedrock). Bytes-based, so it works with no filesystem. Resolves ADR-008 OQ-2 for the image modality; additive (the `.image(...)` builder method previously dropped the image on this path).
+- Inline image input on the text/prompt path. `c.text.image(mime, bytes).prompt(...)` now sends the image as the provider's native vision block on all four chat wire shapes (Anthropic, OpenAI, Google, Bedrock). Bytes-based, so it works with no filesystem. Additive (the `.image(...)` builder method previously dropped the image on this path).
 
 ## [2.3.0] — 2026-06-09
 
@@ -147,27 +147,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
-- Builder chain methods renamed per the ADR-021 naming convention (bare-noun replacers, `add_*` appenders): `tool()` is now `add_tool()` (Agent builder) and `middleware()` is now `add_middleware()` (Text, Image, Agent, and Upload builders). No back-compat aliases; update call sites. Replacers (`system()`, `model()`, `temperature()`, ...) are unchanged.
+- Builder chain methods renamed to one naming convention (bare-noun replacers, `add_*` appenders): `tool()` is now `add_tool()` (Agent builder) and `middleware()` is now `add_middleware()` (Text, Image, Agent, and Upload builders). No back-compat aliases; update call sites. Replacers (`system()`, `model()`, `temperature()`, ...) are unchanged.
 
 ### Added
 
 - `Usage.cost` — provider-reported request cost in USD, default `0.0`. Populated only when the provider itself reports cost in its usage payload: OpenRouter (`usage.cost`; the request must opt into usage accounting by sending `usage: {include: true}` — llmkit does not add this automatically) and xAI Grok (`usage.cost_in_usd_ticks`, converted at 1 USD = 1e10 ticks). Providers that do not report cost (Anthropic, OpenAI, Google, and others) always return `0.0` — this passes through the provider's own figure; it is not a pricing table.
-- Model catalogue (ADR-019): `c.models` and `c.providers` namespaces on `Client`. Static catalogue via `c.models.list()` / `c.models.get(id)` / `c.models.with_capability(cap)` (`ModelInfo` carries `context_window`, `max_output`, `capabilities`, `display_name`). Live per-provider listing via `await c.models.provider(p).list()` / `.get(id)` against the provider's models endpoint (`.raw()` for the unparsed payload; raises `ErrModelsNotSupported` for providers without a live endpoint). Cross-provider sweep via `await c.models.live()` returning `LiveResult` with typed per-provider errors. `c.providers.list()` / `c.providers.supported()` enumerate providers.
-- Conversation history (ADR-020): public `Message` struct and `history(*msgs)` chain method on the Text and Agent builders for seeding multi-turn context.
-- Stable message wire format (ADR-023): versioned serialization for `Message` history with typed decode errors (`UnsupportedWireVersionError`, `MissingWireVersionError`, `UnknownWireKeyError`) instead of silent misparses.
-- `Response.finish_reason` and `Response.finish_message` — provider stop signal + free-text explanation passed through verbatim on `c.text.prompt()`, `c.agent.prompt()`, `c.text.batch()`, and `c.text.stream()` (the latter via the trailing `TextStream.response.finish_reason`). Examples: Anthropic `stop_reason`, OpenAI `choices[0].finish_reason`, Google `candidates[0].finishReason`. Default empty string; populated only when the provider response carries a signal. Streaming uses ADR-013's `event_name:json.path` locator — Anthropic captures from the `message_stop` event body; OpenAI/Grok/Google use last-non-empty-wins on the data frames; Google additionally filters `FINISH_REASON_UNSPECIFIED`. Bedrock Converse streaming is not yet wired.
+- Model catalogue: `c.models` and `c.providers` namespaces on `Client`. Static catalogue via `c.models.list()` / `c.models.get(id)` / `c.models.with_capability(cap)` (`ModelInfo` carries `context_window`, `max_output`, `capabilities`, `display_name`). Live per-provider listing via `await c.models.provider(p).list()` / `.get(id)` against the provider's models endpoint (`.raw()` for the unparsed payload; raises `ErrModelsNotSupported` for providers without a live endpoint). Cross-provider sweep via `await c.models.live()` returning `LiveResult` with typed per-provider errors. `c.providers.list()` / `c.providers.supported()` enumerate providers.
+- Conversation history: public `Message` struct and `history(*msgs)` chain method on the Text and Agent builders for seeding multi-turn context.
+- Stable message wire format: versioned serialization for `Message` history with typed decode errors (`UnsupportedWireVersionError`, `MissingWireVersionError`, `UnknownWireKeyError`) instead of silent misparses.
+- `Response.finish_reason` and `Response.finish_message` — provider stop signal + free-text explanation passed through verbatim on `c.text.prompt()`, `c.agent.prompt()`, `c.text.batch()`, and `c.text.stream()` (the latter via the trailing `TextStream.response.finish_reason`). Examples: Anthropic `stop_reason`, OpenAI `choices[0].finish_reason`, Google `candidates[0].finishReason`. Default empty string; populated only when the provider response carries a signal. Streaming uses an `event_name:json.path` locator — Anthropic captures from the `message_stop` event body; OpenAI/Grok/Google use last-non-empty-wins on the data frames; Google additionally filters `FINISH_REASON_UNSPECIFIED`. Bedrock Converse streaming is not yet wired.
 - `ImageResponse.finish_reason` and `ImageResponse.finish_message` — same shape on `c.image.generate()`. Google populates both (including `IMAGE_OTHER` / `SAFETY` / `MAX_TOKENS` reasons that previously vanished into "no image returned"); Vertex Imagen surfaces `predictions[0].raiFilteredReason` as `finish_reason`; OpenAI Images API and xAI Grok have no equivalent fields and leave them empty. Callers can now render a useful message when `len(resp.images) == 0` instead of synthesizing one.
 
 ### Fixed
 
-- `safety_settings()` chain method on the Text builder raised `TypeError` at the terminal — `prompt()` did not accept the keyword the chain method passed. Caught by the cross-SDK wire-conformance suite (ADR-028 M2).
+- `safety_settings()` chain method on the Text builder raised `TypeError` at the terminal — `prompt()` did not accept the keyword the chain method passed. Caught by the cross-SDK wire-conformance suite.
 - `schema()` structured-output chain method on the Text builder is now applied to the request body (previously silently dropped); Google's structured-output layout corrected.
 
 ## [1.0.0] — 2026-05-09
 
 ### Breaking
 
-- Legacy free-function layer removed from the public API (plan-018 D3, ADR-010). `llmkit.prompt`, `llmkit.prompt_stream`, `llmkit.generate_image`, `llmkit.upload_file`, `llmkit.prompt_batch`, `llmkit.submit_batch`, `llmkit.wait_batch`, the `llmkit.Agent` class, and the `Text(s)` / `Image(m, b)` Part constructors are no longer in the public API. Use the typed builder:
+- Legacy free-function layer removed from the public API. `llmkit.prompt`, `llmkit.prompt_stream`, `llmkit.generate_image`, `llmkit.upload_file`, `llmkit.prompt_batch`, `llmkit.submit_batch`, `llmkit.wait_batch`, the `llmkit.Agent` class, and the `Text(s)` / `Image(m, b)` Part constructors are no longer in the public API. Use the typed builder:
 
   ```python
   from llmkit.builders import new_client
@@ -186,7 +186,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- ADR-011 chain-field propagation lint integrated into `make check`.
+- Chain-field propagation lint integrated into `make check`.
 - All eight sampling/decoding chain methods (`top_p`, `top_k`, `frequency_penalty`, `presence_penalty`, `seed`, `stop_sequences`, `thinking_budget`, `reasoning_effort`) now thread through to the wire body. They had been silently dropping since plan-016 phase 2b.
 - `*Agent` typed builder now propagates `caching()` to the underlying agent (D3.0 wired text but missed agent).
 - `Agent.max_tool_iterations(n)` chain method exposes the tool-loop depth cap (default 10) on the typed builder.
@@ -209,7 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ImageRequest.reference_images` (and the `ImageInput` type) is removed. Use `parts: list[Part]` instead, with the package-level `Text(...)` and `Image(...)` constructors. Migration: `ImageRequest(prompt="X", reference_images=[ImageInput(mime_type=m, data=b)])` becomes `ImageRequest(parts=[Text("X"), Image(m, b)])`. Pure text-to-image callers using only `prompt="X"` are unaffected.
 - `ImageRequest` now requires exactly one of `prompt` or `parts` to be set (XOR). Both empty or both set raises `ValidationError`.
 - `llmkit.Image` (the legacy text-generation vision-input dataclass on `Request.images`) is renamed to `llmkit.InputImage`. Frees the `Image()` Part constructor name. The `Image` symbol is now a function (`def Image(mime: str, data: bytes) -> Part`).
-- Multi-reference compositional generation now works by ordering the parts list (e.g., `[Text("Person:"), Image(mime, ref_a), Text("Outfit:"), Image(mime, ref_b), Text("Generate ...")]`) — the wire shape preserves caller-controlled ordering. See ADR-008.
+- Multi-reference compositional generation now works by ordering the parts list (e.g., `[Text("Person:"), Image(mime, ref_a), Text("Outfit:"), Image(mime, ref_b), Text("Generate ...")]`) — the wire shape preserves caller-controlled ordering.
 
 ### Added
 
