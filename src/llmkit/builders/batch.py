@@ -97,7 +97,7 @@ def _option_kwargs(b: "Text") -> dict:
     if b._protocol:
         raise ValidationError(
             field="protocol",
-            message="protocol (e.g. Responses) is only supported on the prompt terminal, not batch (ADR-055)",
+            message="protocol (e.g. Responses) is only supported on the prompt terminal, not batch",
         )
     kwargs: dict = {}
     if b._max_tokens is not None:
