@@ -52,11 +52,11 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/llmkit"]
 
-# Tests are private (ADR-074 / BUG-039). The wheel is already clean via
-# `packages` above; the sdist otherwise sweeps in every VCS-tracked path, so it
-# must exclude the test tree explicitly. Verified by `tar tzf dist/*.tar.gz`.
+# The sdist ships the package and the files that describe it, nothing else.
+# Without this list hatch sweeps in every tracked path: 3.2.1 shipped the
+# repository's .gitignore and a coverage report.
 [tool.hatch.build.targets.sdist]
-exclude = ["/tests"]
+only-include = ["src/llmkit", "README.md", "CHANGELOG.md", "LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
