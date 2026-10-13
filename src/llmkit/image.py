@@ -731,7 +731,7 @@ def _image_auth_headers(p: Provider, cfg: Any, pname: ProviderName) -> dict[str,
 def _parse_image_response(provider_name: str, body: bytes, img_cfg: Any) -> ImageResponse:
     """Decode an image-gen response. The parser is selected by the config's
     response wire family (img_cfg.response_shape), never by provider name
-    (BUG-024). img_cfg.usage_input_path/usage_output_path are dotted-from-root
+    (BUG-024). img_cfg.usage_{input,output,reasoning}_path are dotted-from-root
     and empty when the endpoint reports no usage."""
     from .structs import ImageResponse  # deferred to break import cycle
     try:
@@ -747,7 +747,10 @@ def _parse_image_response(provider_name: str, body: bytes, img_cfg: Any) -> Imag
         # OpenAI/xAI/Recraft data[].b64_json shape. SVG bytes (Recraft vector
         # models) are sniffed to image/svg+xml inside the parser.
         return _parse_image_response_data_array(
-            raw, img_cfg.usage_input_path, img_cfg.usage_output_path
+            raw,
+            img_cfg.usage_input_path,
+            img_cfg.usage_output_path,
+            img_cfg.usage_reasoning_path,
         )
     if img_cfg.response_shape == "VertexPredictions":
         return _parse_vertex_image_response(raw)
@@ -757,6 +760,7 @@ def _parse_image_response(provider_name: str, body: bytes, img_cfg: Any) -> Imag
     tokens = Usage(
         input=opt_int_path(raw, img_cfg.usage_input_path),
         output=opt_int_path(raw, img_cfg.usage_output_path),
+        reasoning=opt_int_path(raw, img_cfg.usage_reasoning_path),
     )
     return ImageResponse(
         images=images,
@@ -772,6 +776,7 @@ def _parse_image_response_data_array(
     raw: dict[str, Any],
     input_path: str,
     output_path: str,
+    reasoning_path: str,
 ) -> ImageResponse:
     """Walk the data[] array shape used by both OpenAI's and xAI's image
     APIs. Decodes data[i].b64_json into ImageData; honors data[i].mime_type
@@ -812,7 +817,11 @@ def _parse_image_response_data_array(
                 revised.append(rp)
     in_tokens = opt_int_path(raw, input_path)
     out_tokens = opt_int_path(raw, output_path)
-    tokens = Usage(input=in_tokens, output=out_tokens)
+    tokens = Usage(
+        input=in_tokens,
+        output=out_tokens,
+        reasoning=opt_int_path(raw, reasoning_path),
+    )
     return ImageResponse(images=images, text="\n".join(revised), usage=tokens)
 
 

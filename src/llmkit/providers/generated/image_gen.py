@@ -28,6 +28,7 @@ class ImageGenDef:
     # Dotted-from-root usage-token paths; empty when unreported.
     usage_input_path: str
     usage_output_path: str
+    usage_reasoning_path: str
     max_input_count: int
     gen_endpoint: str
     edit_endpoint: str
@@ -41,6 +42,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         response_shape="GoogleParts",
         usage_input_path="usageMetadata.promptTokenCount",
         usage_output_path="usageMetadata.candidatesTokenCount",
+        usage_reasoning_path="usageMetadata.thoughtsTokenCount",
         max_input_count=14,
         gen_endpoint="",
         edit_endpoint="",
@@ -67,6 +69,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         response_shape="DataArrayB64Json",
         usage_input_path="",
         usage_output_path="",
+        usage_reasoning_path="",
         max_input_count=16,
         gen_endpoint="/v1/images/generations",
         edit_endpoint="/v1/images/edits",
@@ -86,6 +89,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         response_shape="DataArrayB64Json",
         usage_input_path="usage.input_tokens",
         usage_output_path="usage.output_tokens",
+        usage_reasoning_path="",
         max_input_count=16,
         gen_endpoint="/v1/images/generations",
         edit_endpoint="/v1/images/edits",
@@ -126,6 +130,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         response_shape="DataArrayB64Json",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
+        usage_reasoning_path="",
         max_input_count=0,
         gen_endpoint="/v1/images",
         edit_endpoint="",
@@ -187,6 +192,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         response_shape="DataArrayB64Json",
         usage_input_path="",
         usage_output_path="",
+        usage_reasoning_path="",
         max_input_count=0,
         gen_endpoint="/v1/images/generations",
         edit_endpoint="",
@@ -213,6 +219,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         response_shape="VertexPredictions",
         usage_input_path="",
         usage_output_path="",
+        usage_reasoning_path="",
         max_input_count=1,
         gen_endpoint="",
         edit_endpoint="",
