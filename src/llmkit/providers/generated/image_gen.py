@@ -17,6 +17,9 @@ class ImageModelDef:
     # (e.g. Grok's single-seed slot); 0 = no llmkit limit, the provider
     # decides volume (BUG-011).
     max_input_images: int = 0
+    # Whether llmkit sends Image Parts for this model; False means the
+    # runtime rejects them (BUG-096).
+    supports_image_input: bool = False
 
 
 @dataclass(frozen=True)
@@ -29,7 +32,6 @@ class ImageGenDef:
     usage_input_path: str
     usage_output_path: str
     usage_reasoning_path: str
-    max_input_count: int
     gen_endpoint: str
     edit_endpoint: str
     models: tuple[ImageModelDef, ...] = field(default_factory=tuple)
@@ -43,7 +45,6 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         usage_input_path="usageMetadata.promptTokenCount",
         usage_output_path="usageMetadata.candidatesTokenCount",
         usage_reasoning_path="usageMetadata.thoughtsTokenCount",
-        max_input_count=14,
         gen_endpoint="",
         edit_endpoint="",
         models=(
@@ -53,6 +54,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=("16:9", "1:1", "21:9", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16"),
                 image_sizes=("1K", "2K", "4K"),
                 max_input_images=0,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="gemini-3.1-flash-image-preview",
@@ -60,6 +62,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=("16:9", "1:1", "1:4", "1:8", "21:9", "2:3", "3:2", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16"),
                 image_sizes=("1K", "2K", "4K", "512"),
                 max_input_images=0,
+                supports_image_input=True,
             ),
         ),
     ),
@@ -70,7 +73,6 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         usage_input_path="",
         usage_output_path="",
         usage_reasoning_path="",
-        max_input_count=16,
         gen_endpoint="/v1/images/generations",
         edit_endpoint="/v1/images/edits",
         models=(
@@ -80,6 +82,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=("16:9", "19.5:9", "1:1", "1:2", "20:9", "2:1", "2:3", "3:2", "3:4", "4:3", "9:16", "9:19.5", "9:20", "auto"),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=True,
             ),
         ),
     ),
@@ -90,7 +93,6 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         usage_input_path="usage.input_tokens",
         usage_output_path="usage.output_tokens",
         usage_reasoning_path="",
-        max_input_count=16,
         gen_endpoint="/v1/images/generations",
         edit_endpoint="/v1/images/edits",
         models=(
@@ -100,6 +102,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="gpt-image-1-mini",
@@ -107,6 +110,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="gpt-image-1.5",
@@ -114,6 +118,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="gpt-image-2",
@@ -121,6 +126,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=True,
             ),
         ),
     ),
@@ -131,7 +137,6 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
         usage_reasoning_path="",
-        max_input_count=0,
         gen_endpoint="/v1/images",
         edit_endpoint="",
         models=(
@@ -141,6 +146,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=False,
             ),
             ImageModelDef(
                 model_id="google/gemini-3-pro-image",
@@ -148,6 +154,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=False,
             ),
             ImageModelDef(
                 model_id="google/gemini-3.1-flash-image",
@@ -155,6 +162,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=False,
             ),
             ImageModelDef(
                 model_id="google/gemini-3.1-flash-lite-image",
@@ -162,6 +170,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=False,
             ),
             ImageModelDef(
                 model_id="openai/gpt-5-image",
@@ -169,6 +178,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=False,
             ),
             ImageModelDef(
                 model_id="openai/gpt-5-image-mini",
@@ -176,6 +186,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=False,
             ),
             ImageModelDef(
                 model_id="openai/gpt-5.4-image-2",
@@ -183,6 +194,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=False,
             ),
         ),
     ),
@@ -193,7 +205,6 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         usage_input_path="",
         usage_output_path="",
         usage_reasoning_path="",
-        max_input_count=0,
         gen_endpoint="/v1/images/generations",
         edit_endpoint="",
         models=(
@@ -203,6 +214,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=False,
             ),
             ImageModelDef(
                 model_id="recraftv3_vector",
@@ -210,6 +222,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
+                supports_image_input=False,
             ),
         ),
     ),
@@ -220,7 +233,6 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         usage_input_path="",
         usage_output_path="",
         usage_reasoning_path="",
-        max_input_count=1,
         gen_endpoint="",
         edit_endpoint="",
         models=(
@@ -229,21 +241,24 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 label="Imagen 3 Fast",
                 aspect_ratios=("16:9", "1:1", "3:4", "4:3", "9:16"),
                 image_sizes=(),
-                max_input_images=0,
+                max_input_images=1,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="imagen-3.0-generate-002",
                 label="Imagen 3",
                 aspect_ratios=("16:9", "1:1", "3:4", "4:3", "9:16"),
                 image_sizes=(),
-                max_input_images=0,
+                max_input_images=1,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="imagen-4.0-generate-preview-06-06",
                 label="Imagen 4 Preview",
                 aspect_ratios=("16:9", "1:1", "3:4", "4:3", "9:16"),
                 image_sizes=(),
-                max_input_images=0,
+                max_input_images=1,
+                supports_image_input=True,
             ),
         ),
     ),

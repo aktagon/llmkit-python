@@ -82,7 +82,9 @@ class ImageRequest:
         compositional generation where caller-controlled ordering matters.
 
     Pre-flight validation requires exactly one of prompt or parts to be
-    non-empty (XOR). Image-typed parts respect img_cfg.max_input_count.
+    non-empty (XOR). Image-typed parts are rejected when the model sets
+    supports_image_input False, and capped by the model's max_input_images
+    when it is non-zero.
     """
 
     model: str = ""
@@ -160,12 +162,19 @@ def generate_image(
             message=f"{image_size} not supported by {request.model}",
         )
     image_count = sum(1 for p in parts if p.image is not None)
-    if image_count > img_cfg.max_input_count:
+    # BUG-096: both limits are llmkit wire facts per model. max_input_images
+    # 0 means no llmkit limit; the provider decides volume.
+    if image_count > 0 and not model.supports_image_input:
+        raise ValidationError(
+            field="parts",
+            message=f"{request.model} takes no image parts",
+        )
+    if model.max_input_images > 0 and image_count > model.max_input_images:
         raise ValidationError(
             field="parts",
             message=(
                 f"{image_count} image parts exceeds maximum "
-                f"{img_cfg.max_input_count} for {provider.name}"
+                f"{model.max_input_images} for {request.model}"
             ),
         )
 
@@ -223,7 +232,7 @@ def generate_image(
         # size (-> `size`) and count (-> `n`); aspect_ratio is not a Recraft
         # wire field (it sizes by an explicit WxH `size`), and the gpt-image /
         # safety knobs are OpenAI / Google / Vertex only. Image parts are
-        # rejected upstream by the max_input_count==0 gate.
+        # rejected upstream because Recraft models set supports_image_input False.
         if aspect_ratio:
             raise ValidationError(field="aspect_ratio", message=f"not supported by {provider.name}; use image_size (Recraft sizes by WxH)")
         if quality:
