@@ -1,10 +1,9 @@
 """Image generation runtime — mirror of go/image.go.
 
 Pre-flight validation rejects unsupported aspect ratios, sizes, and
-reference-image counts before any HTTP call. Dispatch branches on
-img_cfg.input_mode (InlineParts → Google generateContent;
-MultipartForm → OpenAI Image API with /generations vs /edits picked
-dynamically per call based on whether image parts are present).
+reference-image counts before any HTTP call. The request's parts select a
+request variant by the inputs they carry (ADR-096); dispatch and knob
+validation branch on that variant's request shape, never on provider name.
 """
 
 from __future__ import annotations
@@ -20,9 +19,17 @@ from .errors import APIError, ValidationError, parse_error
 from .http import do_multipart_post_multi, do_post, merge_caller_headers
 from .middleware import fire_post, fire_pre, set_event_error
 from .paths import opt_int_path
+from .request_variant import select_request_variant
 from .providers.generated.image_gen import (
+    INLINE_PARTS,
+    JSON_GENERATIONS,
+    JSON_GENERATIONS_OPENAI,
+    JSON_INLINE_REFS,
+    JSON_PREDICT,
+    MULTIPART_FORM,
     ImageGenDef,
     ImageModelDef,
+    RequestVariant,
     image_gen_config,
 )
 from .providers.generated.middleware import Event, MiddlewareFn, MiddlewareOp, Usage
@@ -162,26 +169,23 @@ def generate_image(
             message=f"{image_size} not supported by {request.model}",
         )
     image_count = sum(1 for p in parts if p.image is not None)
-    # BUG-096: both limits are llmkit wire facts per model. max_input_images
-    # 0 means no llmkit limit; the provider decides volume.
-    if image_count > 0 and not model.supports_image_input:
-        raise ValidationError(
-            field="parts",
-            message=f"{request.model} takes no image parts",
-        )
-    if model.max_input_images > 0 and image_count > model.max_input_images:
-        raise ValidationError(
-            field="parts",
-            message=(
-                f"{image_count} image parts exceeds maximum "
-                f"{model.max_input_images} for {request.model}"
-            ),
-        )
+    _validate_image_arity(model, image_count)
 
-    # Per-provider knob validation. Quality/output_format/background are
-    # OpenAI-only on the wire; count (n) is OpenAI + xAI; mask is OpenAI
-    # edits-only. Mirrors go/image.go.
-    if img_cfg.input_mode == "InlineParts":
+    # ADR-096: the request's parts pick the wire request; a config with no
+    # variant for those inputs cannot send it.
+    variant = select_request_variant(provider.name, img_cfg.variants, image_count)
+
+    # Per-request-shape knob validation. Quality/output_format/background are
+    # OpenAI-only on the wire; count (n) is OpenAI + xAI + Recraft + Vertex;
+    # mask rides only the OpenAI multipart edits body. Mirrors go/image.go.
+    if mask is not None and variant.shape != MULTIPART_FORM:
+        if variant.shape == JSON_GENERATIONS_OPENAI:
+            raise ValidationError(
+                field="mask",
+                message="requires at least one image part (edits branch only)",
+            )
+        raise ValidationError(field="mask", message=f"not supported by {provider.name}")
+    if variant.shape == INLINE_PARTS:  # Google
         if quality:
             raise ValidationError(field="quality", message=f"not supported by {provider.name}")
         if output_format:
@@ -190,35 +194,26 @@ def generate_image(
             raise ValidationError(field="background", message=f"not supported by {provider.name}")
         if count is not None:
             raise ValidationError(field="count", message=f"not supported by {provider.name}")
-        if mask is not None:
-            raise ValidationError(field="mask", message=f"not supported by {provider.name}")
         if safety_filter:
             raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
         # safety_settings valid for InlineParts (Google); wired in _build_image_body
-    elif img_cfg.input_mode == "JSONInlineRefs":
+    elif variant.shape == JSON_INLINE_REFS:  # xAI Grok
         if quality:
             raise ValidationError(field="quality", message=f"not supported by {provider.name}")
         if output_format:
             raise ValidationError(field="output_format", message=f"not supported by {provider.name}")
         if background:
             raise ValidationError(field="background", message=f"not supported by {provider.name}")
-        if mask is not None:
-            raise ValidationError(field="mask", message=f"not supported by {provider.name}")
         if safety_filter:
             raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
         if safety_settings:
             raise ValidationError(field="safety_settings", message=f"not supported by {provider.name}")
-    elif img_cfg.input_mode == "MultipartForm":
-        if mask is not None and image_count == 0:
-            raise ValidationError(
-                field="mask",
-                message="requires at least one image part (edits branch only)",
-            )
+    elif variant.shape in (JSON_GENERATIONS_OPENAI, MULTIPART_FORM):  # OpenAI
         if safety_filter:
             raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
         if safety_settings:
             raise ValidationError(field="safety_settings", message=f"not supported by {provider.name}")
-    elif img_cfg.input_mode == "JSONPredict":
+    elif variant.shape == JSON_PREDICT:  # Vertex Imagen
         if quality:
             raise ValidationError(field="quality", message=f"not supported by {provider.name}")
         if output_format:
@@ -227,8 +222,8 @@ def generate_image(
             raise ValidationError(field="background", message=f"not supported by {provider.name}")
         if safety_settings:
             raise ValidationError(field="safety_settings", message=f"not supported by {provider.name}; use safety_filter for Vertex Imagen")
-    elif img_cfg.input_mode == "JSONGenerations":
-        # Recraft (text-to-image only). The flat generations body carries only
+    elif variant.shape == JSON_GENERATIONS:
+        # Recraft, OpenRouter (text-to-image only). The flat generations body carries only
         # size (-> `size`) and count (-> `n`); aspect_ratio is not a Recraft
         # wire field (it sizes by an explicit WxH `size`), and the gpt-image /
         # safety knobs are OpenAI / Google / Vertex only. Image parts are
@@ -241,8 +236,6 @@ def generate_image(
             raise ValidationError(field="output_format", message=f"not supported by {provider.name}")
         if background:
             raise ValidationError(field="background", message=f"not supported by {provider.name}")
-        if mask is not None:
-            raise ValidationError(field="mask", message=f"not supported by {provider.name}")
         if safety_filter:
             raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
         if safety_settings:
@@ -259,82 +252,27 @@ def generate_image(
 
     try:
         headers = _image_auth_headers(provider, cfg, pname)
-        base_url = provider.base_url or cfg.base_url
 
         try:
-            has_images = any(p.image is not None for p in parts)
-            if img_cfg.input_mode == "JSONInlineRefs":
-                if has_images:
-                    body = _build_xai_edit_body(
-                        parts, request.model, aspect_ratio, image_size, count, extra_fields
-                    )
-                    url = base_url + img_cfg.edit_endpoint
-                else:
-                    body = _build_xai_gen_body(
-                        parts, request.model, aspect_ratio, image_size, count, extra_fields
-                    )
-                    url = base_url + img_cfg.gen_endpoint
-                json_body = json.dumps(body).encode("utf-8")
-                resp_body = do_post(
-                    url,
-                    json_body,
-                    {**headers, "content-type": "application/json"},
-                    timeout=provider.timeout,
-                )
-            elif img_cfg.input_mode == "MultipartForm":
-                if has_images:
-                    files, fields = _build_openai_edit_multipart(
-                        parts, request.model, image_size, quality, output_format, background, count, mask, extra_fields
-                    )
-                    resp_body, status = do_multipart_post_multi(
-                        base_url + img_cfg.edit_endpoint,
-                        files,
-                        fields,
-                        headers,
-                        timeout=provider.timeout,
-                    )
-                    if status >= 400:
-                        raise parse_error(provider.name, status, resp_body, None)
-                else:
-                    body = _build_openai_gen_body(
-                        parts, request.model, image_size, quality, output_format, background, count, extra_fields
-                    )
-                    json_body = json.dumps(body).encode("utf-8")
-                    resp_body = do_post(
-                        base_url + img_cfg.gen_endpoint,
-                        json_body,
-                        {**headers, "content-type": "application/json"},
-                        timeout=provider.timeout,
-                    )
-            elif img_cfg.input_mode == "JSONGenerations":
-                body = _build_recraft_gen_body(parts, request.model, image_size, count, extra_fields)
-                json_body = json.dumps(body).encode("utf-8")
-                resp_body = do_post(
-                    base_url + img_cfg.gen_endpoint,
-                    json_body,
-                    {**headers, "content-type": "application/json"},
-                    timeout=provider.timeout,
-                )
-            elif img_cfg.input_mode == "JSONPredict":
-                body = _build_vertex_body(parts, aspect_ratio, count, mask, safety_filter, extra_fields)
-                json_body = json.dumps(body).encode("utf-8")
-                endpoint = (cfg.endpoint or "").replace("{model}", request.model)
-                resp_body = do_post(
-                    base_url + endpoint,
-                    json_body,
-                    {**headers, "content-type": "application/json"},
-                    timeout=provider.timeout,
-                )
-            else:
-                body = _build_image_body(parts, aspect_ratio, image_size, include_text, safety_settings or [])
-                json_body = json.dumps(body).encode("utf-8")
-                url = _build_image_url(provider, cfg, request.model)
-                resp_body = do_post(
-                    url,
-                    json_body,
-                    {**headers, "content-type": "application/json"},
-                    timeout=provider.timeout,
-                )
+            resp_body = _dispatch_image_http(
+                provider,
+                cfg,
+                variant,
+                request.model,
+                parts,
+                headers,
+                aspect_ratio=aspect_ratio,
+                image_size=image_size,
+                include_text=include_text,
+                quality=quality,
+                output_format=output_format,
+                background=background,
+                count=count,
+                mask=mask,
+                safety_filter=safety_filter,
+                safety_settings=safety_settings or [],
+                extra_fields=extra_fields,
+            )
         except APIError as raw_err:
             # parse_error returned above is already an APIError; only wrap raw HTTP errors.
             if raw_err.status_code == 0 or raw_err.message:
@@ -369,6 +307,98 @@ def generate_image(
     )
     fire_post(mws, post_event)
     return result
+
+
+def _validate_image_arity(model: ImageModelDef, image_count: int) -> None:
+    """Reject image parts the model does not take. BUG-096: both limits are
+    llmkit wire facts per model. max_input_images 0 means no llmkit limit;
+    the provider decides volume."""
+    if image_count > 0 and not model.supports_image_input:
+        raise ValidationError(
+            field="parts",
+            message=f"{model.model_id} takes no image parts",
+        )
+    if model.max_input_images > 0 and image_count > model.max_input_images:
+        raise ValidationError(
+            field="parts",
+            message=(
+                f"{image_count} image parts exceeds maximum "
+                f"{model.max_input_images} for {model.model_id}"
+            ),
+        )
+
+
+def _dispatch_image_http(
+    provider: Provider,
+    cfg: Any,
+    variant: RequestVariant,
+    model: str,
+    parts: list[Part],
+    headers: dict[str, str],
+    *,
+    aspect_ratio: str,
+    image_size: str,
+    include_text: bool,
+    quality: str,
+    output_format: str,
+    background: str,
+    count: int | None,
+    mask: MediaRef | None,
+    safety_filter: str,
+    safety_settings: list,
+    extra_fields: dict[str, Any] | None,
+) -> bytes:
+    """Send the request variant the parts selected (ADR-096), switching on
+    its request shape, never on provider name:
+
+      - InlineParts (Google): JSON body, all parts inlined.
+      - JSONGenerationsOpenAI (OpenAI, text only): JSON body; response_format
+        is omitted (gpt-image-* rejects it).
+      - MultipartForm (OpenAI, with reference images): multipart/form-data
+        with one image[] field per image part and the joined text as prompt.
+      - JSONInlineRefs (xAI Grok): JSON body; refs, when present, encoded as
+        data URLs in ``image`` (single) or ``images`` (multi).
+      - JSONPredict (Vertex Imagen, text only): instances/parameters body.
+      - JSONGenerations (Recraft, OpenRouter, text only): flat JSON body.
+
+    The URL is the base plus the variant's endpoint, or the provider's main
+    endpoint template (with {model} substituted) when endpoint is empty.
+    """
+    url = _build_image_url(provider, cfg, model)
+    if variant.endpoint:
+        url = (provider.base_url or cfg.base_url) + variant.endpoint
+
+    shape = variant.shape
+    if shape == MULTIPART_FORM:
+        files, fields = _build_openai_edit_multipart(
+            parts, model, image_size, quality, output_format, background, count, mask, extra_fields
+        )
+        resp_body, status = do_multipart_post_multi(
+            url, files, fields, headers, timeout=provider.timeout
+        )
+        if status >= 400:
+            raise parse_error(provider.name, status, resp_body, None)
+        return resp_body
+    if shape == JSON_GENERATIONS_OPENAI:
+        body = _build_openai_gen_body(
+            parts, model, image_size, quality, output_format, background, count, extra_fields
+        )
+    elif shape == JSON_INLINE_REFS:
+        body = _build_xai_body(parts, model, aspect_ratio, image_size, count, extra_fields)
+    elif shape == JSON_PREDICT:
+        body = _build_vertex_body(parts, aspect_ratio, count, safety_filter, extra_fields)
+    elif shape == JSON_GENERATIONS:
+        body = _build_recraft_gen_body(parts, model, image_size, count, extra_fields)
+    elif shape == INLINE_PARTS:
+        body = _build_image_body(parts, aspect_ratio, image_size, include_text, safety_settings)
+    else:
+        raise ValueError(f"image request shape {shape!r} has no body builder")
+    return do_post(
+        url,
+        json.dumps(body).encode("utf-8"),
+        {**headers, "content-type": "application/json"},
+        timeout=provider.timeout,
+    )
 
 
 def _find_image_model(cfg: ImageGenDef, model_id: str) -> ImageModelDef | None:
@@ -493,7 +523,7 @@ def _build_openai_edit_multipart(
     return files, fields
 
 
-def _build_xai_gen_body(
+def _build_xai_body(
     parts: list[Part],
     model: str,
     aspect_ratio: str,
@@ -501,11 +531,13 @@ def _build_xai_gen_body(
     count: int | None,
     extra_fields: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """JSON body for xAI Grok /v1/images/generations.
+    """JSON body for xAI Grok's /v1/images/generations (text only) and
+    /v1/images/edits (with reference images).
 
     image_size maps to ``resolution`` (xAI's name for the same concept).
     aspect_ratio maps as-is. response_format=b64_json is forced because
-    xAI defaults to URL.
+    xAI defaults to URL. One image part → ``image: {url: "data:..."}``;
+    several → ``images: [...]`` in caller order; none → no image field.
     """
     body: dict[str, Any] = {
         "model": model,
@@ -520,20 +552,6 @@ def _build_xai_gen_body(
         body["n"] = count
     for k, v in (extra_fields or {}).items():
         body[k] = v
-    return body
-
-
-def _build_xai_edit_body(
-    parts: list[Part],
-    model: str,
-    aspect_ratio: str,
-    image_size: str,
-    count: int | None,
-    extra_fields: dict[str, Any] | None,
-) -> dict[str, Any]:
-    """JSON body for xAI Grok /v1/images/edits. Single image part →
-    ``image: {url: "data:..."}``; multiple → ``images: [...]`` in caller order."""
-    body = _build_xai_gen_body(parts, model, aspect_ratio, image_size, count, extra_fields)
     refs: list[dict[str, str]] = []
     for part in parts:
         if part.image is None:
@@ -636,33 +654,19 @@ def _build_vertex_body(
     parts: list[Part],
     aspect_ratio: str,
     count: int | None,
-    mask: Any,
     safety_filter: str,
     extra_fields: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Assemble the Vertex AI Imagen :predict request body.
 
     Vertex uses an instances/parameters envelope: instance carries the
-    per-call inputs (prompt, image ref for editing, mask for inpainting);
-    parameters carries config (sampleCount, aspectRatio). Extra fields like
+    prompt; parameters carries config (sampleCount, aspectRatio). The Imagen
+    generate models take text only (BUG-101), so image parts never reach
+    here: the supports_image_input gate rejects them first. Extra fields like
     negativePrompt and safetySetting spread into parameters so callers can
     reach Imagen-specific knobs without typed chain methods.
     """
     instance: dict[str, Any] = {"prompt": _join_text_parts(parts)}
-    for p in parts:
-        if p.image is not None:
-            instance["image"] = {
-                "bytesBase64Encoded": base64.b64encode(p.image.bytes).decode(
-                    "ascii"
-                )
-            }
-            break  # Vertex Imagen takes a single edit-target image
-    if mask is not None:
-        instance["mask"] = {
-            "image": {
-                "bytesBase64Encoded": base64.b64encode(mask.bytes).decode("ascii")
-            }
-        }
 
     parameters: dict[str, Any] = {"sampleCount": count if count is not None else 1}
     if aspect_ratio:
