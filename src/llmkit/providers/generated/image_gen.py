@@ -4,7 +4,32 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from typing import Final
+
 from .providers import ProviderName
+
+# Carried inputs: the inputs a request variant carries (ADR-096).
+TEXT_ONLY: Final = "TextOnly"
+WITH_REFERENCE_IMAGES: Final = "WithReferenceImages"
+
+# Image request shapes: each names one request body (ADR-096).
+INLINE_PARTS: Final = "InlineParts"
+JSON_GENERATIONS_OPENAI: Final = "JSONGenerationsOpenAI"
+MULTIPART_FORM: Final = "MultipartForm"
+JSON_INLINE_REFS: Final = "JSONInlineRefs"
+JSON_PREDICT: Final = "JSONPredict"
+JSON_GENERATIONS: Final = "JSONGenerations"
+
+
+@dataclass(frozen=True)
+class RequestVariant:
+    """One wire request of an image or video config, keyed by the inputs
+    it carries (ADR-096). shape is "" on a video variant; endpoint ""
+    means the provider's main endpoint template."""
+
+    carries: str
+    shape: str
+    endpoint: str
 
 
 @dataclass(frozen=True)
@@ -24,7 +49,6 @@ class ImageModelDef:
 
 @dataclass(frozen=True)
 class ImageGenDef:
-    input_mode: str
     output_mode: str
     # Response wire family selecting the response parser (BUG-024).
     response_shape: str
@@ -32,21 +56,22 @@ class ImageGenDef:
     usage_input_path: str
     usage_output_path: str
     usage_reasoning_path: str
-    gen_endpoint: str
-    edit_endpoint: str
+    # One request per carried input, TextOnly first (ADR-096).
+    variants: tuple[RequestVariant, ...] = field(default_factory=tuple)
     models: tuple[ImageModelDef, ...] = field(default_factory=tuple)
 
 
 _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
     ProviderName.GOOGLE: ImageGenDef(
-        input_mode="InlineParts",
         output_mode="Base64Inline",
         response_shape="GoogleParts",
         usage_input_path="usageMetadata.promptTokenCount",
         usage_output_path="usageMetadata.candidatesTokenCount",
         usage_reasoning_path="usageMetadata.thoughtsTokenCount",
-        gen_endpoint="",
-        edit_endpoint="",
+        variants=(
+            RequestVariant(carries="TextOnly", shape="InlineParts", endpoint=""),
+            RequestVariant(carries="WithReferenceImages", shape="InlineParts", endpoint=""),
+        ),
         models=(
             ImageModelDef(
                 model_id="gemini-3-pro-image-preview",
@@ -67,14 +92,15 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         ),
     ),
     ProviderName.GROK: ImageGenDef(
-        input_mode="JSONInlineRefs",
         output_mode="Base64Inline",
         response_shape="DataArrayB64Json",
         usage_input_path="",
         usage_output_path="",
         usage_reasoning_path="",
-        gen_endpoint="/v1/images/generations",
-        edit_endpoint="/v1/images/edits",
+        variants=(
+            RequestVariant(carries="TextOnly", shape="JSONInlineRefs", endpoint="/v1/images/generations"),
+            RequestVariant(carries="WithReferenceImages", shape="JSONInlineRefs", endpoint="/v1/images/edits"),
+        ),
         models=(
             ImageModelDef(
                 model_id="grok-imagine-image-quality",
@@ -87,14 +113,15 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         ),
     ),
     ProviderName.OPENAI: ImageGenDef(
-        input_mode="MultipartForm",
         output_mode="Base64Inline",
         response_shape="DataArrayB64Json",
         usage_input_path="usage.input_tokens",
         usage_output_path="usage.output_tokens",
         usage_reasoning_path="",
-        gen_endpoint="/v1/images/generations",
-        edit_endpoint="/v1/images/edits",
+        variants=(
+            RequestVariant(carries="TextOnly", shape="JSONGenerationsOpenAI", endpoint="/v1/images/generations"),
+            RequestVariant(carries="WithReferenceImages", shape="MultipartForm", endpoint="/v1/images/edits"),
+        ),
         models=(
             ImageModelDef(
                 model_id="gpt-image-1",
@@ -131,14 +158,14 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         ),
     ),
     ProviderName.OPENROUTER: ImageGenDef(
-        input_mode="JSONGenerations",
         output_mode="Base64Inline",
         response_shape="DataArrayB64Json",
         usage_input_path="usage.prompt_tokens",
         usage_output_path="usage.completion_tokens",
         usage_reasoning_path="",
-        gen_endpoint="/v1/images",
-        edit_endpoint="",
+        variants=(
+            RequestVariant(carries="TextOnly", shape="JSONGenerations", endpoint="/v1/images"),
+        ),
         models=(
             ImageModelDef(
                 model_id="google/gemini-2.5-flash-image",
@@ -199,14 +226,14 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         ),
     ),
     ProviderName.RECRAFT: ImageGenDef(
-        input_mode="JSONGenerations",
         output_mode="Base64Inline",
         response_shape="DataArrayB64Json",
         usage_input_path="",
         usage_output_path="",
         usage_reasoning_path="",
-        gen_endpoint="/v1/images/generations",
-        edit_endpoint="",
+        variants=(
+            RequestVariant(carries="TextOnly", shape="JSONGenerations", endpoint="/v1/images/generations"),
+        ),
         models=(
             ImageModelDef(
                 model_id="recraftv3",
@@ -227,38 +254,38 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         ),
     ),
     ProviderName.VERTEX: ImageGenDef(
-        input_mode="JSONPredict",
         output_mode="Base64Inline",
         response_shape="VertexPredictions",
         usage_input_path="",
         usage_output_path="",
         usage_reasoning_path="",
-        gen_endpoint="",
-        edit_endpoint="",
+        variants=(
+            RequestVariant(carries="TextOnly", shape="JSONPredict", endpoint=""),
+        ),
         models=(
             ImageModelDef(
                 model_id="imagen-3.0-fast-generate-001",
                 label="Imagen 3 Fast",
                 aspect_ratios=("16:9", "1:1", "3:4", "4:3", "9:16"),
                 image_sizes=(),
-                max_input_images=1,
-                supports_image_input=True,
+                max_input_images=0,
+                supports_image_input=False,
             ),
             ImageModelDef(
                 model_id="imagen-3.0-generate-002",
                 label="Imagen 3",
                 aspect_ratios=("16:9", "1:1", "3:4", "4:3", "9:16"),
                 image_sizes=(),
-                max_input_images=1,
-                supports_image_input=True,
+                max_input_images=0,
+                supports_image_input=False,
             ),
             ImageModelDef(
                 model_id="imagen-4.0-generate-preview-06-06",
                 label="Imagen 4 Preview",
                 aspect_ratios=("16:9", "1:1", "3:4", "4:3", "9:16"),
                 image_sizes=(),
-                max_input_images=1,
-                supports_image_input=True,
+                max_input_images=0,
+                supports_image_input=False,
             ),
         ),
     ),
