@@ -27,9 +27,11 @@ from ..errors import APIError, ValidationError
 from ..http import do_get, do_post, do_sigv4_get, do_sigv4_post
 from ..image import Part, _image_auth_headers
 from ..middleware import fire_post, fire_pre, set_event_error
+from ..request_variant import select_request_variant
 from ..providers.generated.middleware import Event, MiddlewareFn, MiddlewareOp
 from ..providers.generated.providers import PROVIDERS, ProviderName
 from ..providers.generated.request import AuthScheme, auth_scheme
+from ..providers.generated.image_gen import RequestVariant
 from ..providers.generated.video_gen import (
     VideoGenDef,
     VideoModelDef,
@@ -171,6 +173,10 @@ def _submit_video(
             continue
         if not part.text:
             raise ValidationError(field=f"parts[{i}]", message="must have Text set")
+    # ADR-096: a seed frame selects the WithReferenceImages submit request;
+    # a config with no such variant cannot send it.
+    image_count = sum(1 for p in parts if p.image is not None)
+    variant = select_request_variant(provider.name, vg_cfg.variants, image_count)
     # VID-005: output-uri providers (Bedrock Nova Reel) write the video to the
     # caller's own S3 bucket, so the submit MUST carry a destination URI. Reject
     # pre-flight rather than letting the provider 400.
@@ -197,6 +203,7 @@ def _submit_video(
             pname,
             cfg,
             vg_cfg,
+            variant,
             request.model,
             request.output_uri,
             parts,
@@ -223,6 +230,7 @@ def _dispatch_video_submit(
     pname: ProviderName,
     cfg: Any,
     vg_cfg: VideoGenDef,
+    variant: RequestVariant,
     model: str,
     output_uri: str,
     parts: list[Part],
@@ -245,7 +253,8 @@ def _dispatch_video_submit(
         caller S3 URI under outputDataConfig, and is signed with SigV4 (not the
         bearer/query-param header map).
 
-    The body and any per-shape headers are selected by wire shape; the poll
+    The submit endpoint is the selected request variant's (ADR-096). The body
+    and any per-shape headers are selected by wire shape; the poll
     handle id is always read from the config-declared dotted path (OQ7).
     """
     # Submit endpoint from the config-declared base + relative path (Option D);
@@ -308,7 +317,7 @@ def _dispatch_video_submit(
     # (Veo's :predictLongRunning path); a no-op for providers that carry the
     # model in the body. Query-param auth (Google ?key=) is appended last.
     submit_url = _append_video_auth(
-        base_url + vg_cfg.gen_endpoint.replace("{model}", model), provider, pname, cfg
+        base_url + variant.endpoint.replace("{model}", model), provider, pname, cfg
     )
     if auth_scheme(pname) == AuthScheme.SIG_V4:
         # Bedrock signs every request (SigV4); the bearer/query-param header map
