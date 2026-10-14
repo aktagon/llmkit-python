@@ -22,6 +22,8 @@ class MusicModelDef:
     # 0 when unverified; available_output_formats lists emittable MIMEs.
     sample_rate_hz: int = 0
     available_output_formats: tuple[str, ...] = field(default_factory=tuple)
+    # Whether llmkit sends Image Parts for this model.
+    supports_image_input: bool = False
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,7 @@ _MUSIC_GEN: dict[ProviderName, MusicGenDef] = {
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
                 available_output_formats=("audio/mpeg",),
+                supports_image_input=False,
             ),
             MusicModelDef(
                 model_id="lyria-3-pro-preview",
@@ -58,6 +61,7 @@ _MUSIC_GEN: dict[ProviderName, MusicGenDef] = {
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
                 available_output_formats=("audio/mpeg",),
+                supports_image_input=False,
             ),
         ),
     ),
@@ -74,6 +78,7 @@ _MUSIC_GEN: dict[ProviderName, MusicGenDef] = {
                 output_mime="audio/mpeg",
                 sample_rate_hz=44100,
                 available_output_formats=("audio/mpeg", "audio/wav"),
+                supports_image_input=False,
             ),
         ),
     ),
@@ -90,6 +95,7 @@ _MUSIC_GEN: dict[ProviderName, MusicGenDef] = {
                 output_mime="audio/wav",
                 sample_rate_hz=48000,
                 available_output_formats=("audio/wav",),
+                supports_image_input=False,
             ),
         ),
     ),
