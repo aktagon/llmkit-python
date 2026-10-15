@@ -743,7 +743,7 @@ class Client:
         return self
 
     def base_url(self, url: str) -> "Client":
-        """Override the provider's default base URL. Required for providers whose default base URL is a template the caller must substitute (e.g. Vertex AI Imagen) and to point an OpenAI-compatible provider or gateway at a self-hosted endpoint. Returns the same Client."""
+        """Override the provider's default base URL. Required for providers whose default base URL is a template the caller must substitute (e.g. Vertex AI) and to point an OpenAI-compatible provider or gateway at a self-hosted endpoint. Returns the same Client."""
         self.provider.base_url = url
         return self
 
