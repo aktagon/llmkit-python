@@ -509,6 +509,7 @@ def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Req
     if msgs:
         call_t = select_tool_call_transform(cfg)
         result_t = select_tool_result_transform(cfg)
+        prev_result = False
         for m in msgs:
             # Bedrock never replays: ChatBedrock declares
             # assistantTurnUnanchored rather than a position (ADR-085 OQ-5),
@@ -521,7 +522,15 @@ def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Req
                 m = m.fallback
             match m:
                 case _MsgResult():
-                    out.append(result_t(m.result, cfg.role_mappings))
+                    # Converse wants every toolResult answering one assistant
+                    # turn inside ONE user message; one message per result is
+                    # a 400 (live, 2026-10-15). A result that follows a result
+                    # joins the message the first one opened.
+                    entry = result_t(m.result, cfg.role_mappings)
+                    if prev_result:
+                        out[-1]["content"].extend(entry["content"])
+                    else:
+                        out.append(entry)
                 case _MsgCalls():
                     out.extend(call_t(m.calls, cfg.role_mappings))
                 case _MsgText():
@@ -533,6 +542,7 @@ def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Req
                     )
                 case _:
                     _assert_never(m)
+            prev_result = isinstance(m, _MsgResult)
     elif req.user:
         if req.images:
             content = _build_bedrock_content_parts(req)
