@@ -471,7 +471,9 @@ class Video:
     def __init__(self, client: "Client") -> None:
         self.client = client
         self._middleware: list[MiddlewareFn] = []
+        self._reference_images: list[MediaRef] = []
         self._parts: list[Part] = []
+        self._last_frame: MediaRef | None = None
         self._model: str = ""
         self._output_uri: str = ""
         self._raw: bool = False
@@ -481,9 +483,25 @@ class Video:
         out._middleware = [*self._middleware, *fns]
         return out
 
+    def add_reference_image(self, mime: str, data: bytes) -> "Video":  # ordered
+        """Appends an asset reference image, such as a person, character or
+        product the video keeps. Add at most 3, without Image or LastFrame.
+        """
+        out = copy.copy(self)
+        out._reference_images = [*self._reference_images, MediaRef(mime_type=mime, bytes=data)]
+        return out
+
     def image(self, mime: str, data: bytes) -> "Video":  # ordered
         out = copy.copy(self)
         out._parts = [*self._parts, Part(image=MediaRef(mime_type=mime, bytes=data))]
+        return out
+
+    def last_frame(self, mime: str, data: bytes) -> "Video":
+        """Sets the final frame a video ends on. Send it with a first frame (Image)
+        on a model that takes a last frame; otherwise it is rejected before send.
+        """
+        out = copy.copy(self)
+        out._last_frame = MediaRef(mime_type=mime, bytes=data)
         return out
 
     def model(self, name: str) -> "Video":
