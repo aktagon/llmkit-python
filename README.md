@@ -158,7 +158,7 @@ resp = await c.text \
 
 ### Image — text-to-image and edit
 
-Supports Google's Nano Banana 2 (`gemini-3.1-flash-image-preview`) and Pro (`gemini-3-pro-image-preview`); OpenAI's `gpt-image-2`, `gpt-image-1.5`, `gpt-image-1`, and `gpt-image-1-mini`; xAI's `grok-imagine-image-quality`; Google Cloud Vertex AI's Imagen 3 / Imagen 4 (`imagen-3.0-generate-002`, `imagen-3.0-fast-generate-001`, `imagen-4.0-generate-preview-06-06`).
+Supports Google's Nano Banana 2 (`gemini-3.1-flash-image-preview`) and Pro (`gemini-3-pro-image-preview`); OpenAI's `gpt-image-2`, `gpt-image-1.5`, `gpt-image-1`, and `gpt-image-1-mini`; xAI's `grok-imagine-image-quality`.
 
 ```python
 from llmkit.builders import google
@@ -224,33 +224,6 @@ OpenAI gpt-image-\* models require organization verification — see [platform.o
 
 Up to 14 reference images per Google request, 16 per OpenAI request.
 
-#### Vertex AI Imagen (Google Cloud)
-
-Vertex Imagen uses the `:predict` endpoint family and OAuth bearer auth instead of API keys. The SDK takes a bearer token (string); caller manages OAuth refresh externally (e.g. `gcloud auth print-access-token`, service-account JSON, or workload identity).
-
-```python
-import os
-from llmkit.builders import vertex
-
-# Caller substitutes {project_id} and {location} before passing the URL.
-base_url = (
-    "https://us-central1-aiplatform.googleapis.com"
-    "/v1/projects/my-gcp-project/locations/us-central1/publishers/google/models"
-)
-
-c = vertex(os.environ["VERTEX_BEARER_TOKEN"]).base_url(base_url)
-
-resp = await (
-    c.image
-    .model("imagen-3.0-generate-002")
-    .aspect_ratio("16:9")
-    .count(2)
-    .generate("A red circle")
-)
-```
-
-Imagen is text-to-image only: image parts and a mask are rejected before the request is sent. Imagen-specific knobs like `negativePrompt` and `safetySetting` are reachable through `.extra_fields(...)` — they spread into the request's `parameters` block. Vertex's `:predict` response does not carry token counts; `resp.usage` stays zero.
-
 ### Music — text-to-music
 
 Generate audio from a text prompt via the typed-builder chain on `c.music`. Decoded audio bytes come back on `resp.audio[0].bytes`. Models that support vocals take lyrics via `.lyrics(...)` (use section tags like `[verse]`); instrumental-only models reject lyrics before the request is sent.
@@ -278,6 +251,8 @@ song = await c.music.model("lyria-3-pro-preview").lyrics("[verse] neon lights").
 | Google   | `lyria-3-pro-preview`, `lyria-3-clip-preview` | yes    | MP3        |
 | MiniMax  | `music-2.6`                                   | yes    | MP3        |
 
+Vertex uses OAuth bearer auth instead of API keys. Pass an access token (e.g. from `gcloud auth print-access-token`) to `vertex(...)` and a base URL with your `{project_id}` and `{location}` filled in via ``.base_url(...)``: `https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/google/models`. The SDK does not refresh the token.
+
 ### Video — text-to-video
 
 Generate video from a text prompt. Video generation is asynchronous: `submit` returns a handle immediately, and `handle.wait()` polls until the job finishes. The result carries a temporary hosted URL on `resp.videos[0].url` — download it yourself.
@@ -301,18 +276,16 @@ print(f"url={v.url} duration={v.duration_seconds}s mime={v.mime_type}")
 ### Safety Settings
 
 Control content filtering for Gemini providers. `safety_settings` applies to text
-generation, streaming, agents, and Gemini image generation. `safety_filter` applies
-to Vertex Imagen only.
+generation, streaming, agents, and Gemini image generation.
 
 ```python
-from llmkit.builders import google, vertex
+from llmkit.builders import google
 from llmkit.types import (
     SafetySetting,
     HARM_CATEGORY_DANGEROUS_CONTENT,
     HARM_CATEGORY_HARASSMENT,
     HARM_BLOCK_THRESHOLD_NONE,
     HARM_BLOCK_THRESHOLD_HIGH_ONLY,
-    IMAGE_SAFETY_FILTER_BLOCK_FEW,
 )
 
 # Gemini text or agent
@@ -325,20 +298,15 @@ resp = await (
     ])
     .prompt("Write a story")
 )
-
-# Vertex Imagen
-vc = vertex(os.environ["VERTEX_BEARER_TOKEN"])
-img = await (
-    vc.image
-    .model("imagen-3.0-generate-002")
-    .safety_filter(IMAGE_SAFETY_FILTER_BLOCK_FEW)
-    .generate("A landscape")
-)
 ```
 
-`safety_settings` on Vertex Imagen and `safety_filter` on non-Imagen providers raise
-a `ValidationError`. The `HARM_CATEGORY_*`, `HARM_BLOCK_THRESHOLD_*`, and
-`IMAGE_SAFETY_FILTER_*` constants cover all documented values; raw strings also work.
+`safety_settings` on a non-Gemini provider raises a `ValidationError`. The
+`HARM_CATEGORY_*` and `HARM_BLOCK_THRESHOLD_*` constants cover all documented
+values; raw strings also work.
+
+`safety_filter` and the `IMAGE_SAFETY_FILTER_*` constants are deprecated. They
+served Vertex Imagen, which Google shut down; every provider now raises a
+`ValidationError` for them. They will be removed in the next major version.
 
 ### Upload — Path or Bytes
 
