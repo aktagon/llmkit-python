@@ -269,7 +269,7 @@ _PROVIDER_INFO: dict[ProviderName, ProviderInfo] = {
         id=ProviderName.VERTEX,
         slug="vertex",
         env_var="VERTEX_BEARER_TOKEN",
-        default_model="imagen-3.0-generate-002",
+        default_model="lyria-002",
         base_url="https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/google/models",
         browser_callable=False,
     ),

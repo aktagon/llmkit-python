@@ -110,7 +110,9 @@ HARM_BLOCK_THRESHOLD_LOW_AND_ABOVE = "BLOCK_LOW_AND_ABOVE"
 HARM_BLOCK_THRESHOLD_MEDIUM_AND_ABOVE = "BLOCK_MEDIUM_AND_ABOVE"
 HARM_BLOCK_THRESHOLD_HIGH_ONLY = "BLOCK_ONLY_HIGH"
 
-# Vertex Imagen safety filter threshold constants
+# Image safety filter threshold constants for safety_filter.
+# Deprecated: no provider accepts these since 2026-10-15 (Vertex Imagen shut
+# down, BUG-101); removed at the next major.
 IMAGE_SAFETY_FILTER_BLOCK_FEW = "block_few"
 IMAGE_SAFETY_FILTER_BLOCK_SOME = "block_some"
 IMAGE_SAFETY_FILTER_BLOCK_MOST = "block_most"

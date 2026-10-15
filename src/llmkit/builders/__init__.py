@@ -299,6 +299,12 @@ class Image:
         return out
 
     def safety_filter(self, s: str) -> "Image":
+        """Sets a single image safety threshold. Every image provider rejects it
+        with a validation error.
+
+        Deprecated: no provider accepts this since 2026-10-15 (Vertex Imagen
+        shut down, BUG-101); removed at the next major.
+        """
         out = copy.copy(self)
         out._safety_filter = s
         return out
@@ -737,7 +743,7 @@ class Client:
         return self
 
     def base_url(self, url: str) -> "Client":
-        """Override the provider's default base URL. Required for providers whose default base URL is a template the caller must substitute (e.g. Vertex AI Imagen) and to point an OpenAI-compatible provider or gateway at a self-hosted endpoint. Returns the same Client."""
+        """Override the provider's default base URL. Required for providers whose default base URL is a template the caller must substitute (e.g. Vertex AI) and to point an OpenAI-compatible provider or gateway at a self-hosted endpoint. Returns the same Client."""
         self.provider.base_url = url
         return self
 
