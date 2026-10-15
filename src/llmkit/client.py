@@ -52,7 +52,12 @@ from .providers.generated.request import (
     structured_output,
     system_placement,
 )
-from .providers.generated.stream import stream_config
+from .providers.generated.stream import (
+    StreamDef,
+    stream_config,
+    wire_shape_stream_config,
+    wire_shape_stream_finish_reason_path,
+)
 from .provider_turn import capture_provider_turn, resolve_turns
 from .transforms import select_message_transform, select_tool_def_transform, to_internal
 from .types import File, Options, Provider, Request, Response
@@ -238,6 +243,7 @@ def prompt_stream(
     caching: bool = False,
     cache_ttl: float = 0.0,
     middleware: list | None = None,
+    protocol: str = "",
 ) -> Response:
     """Streaming variant of `prompt`. Calls on_chunk(text) for each delta; returns accumulated response."""
     opts = Options(
@@ -265,7 +271,10 @@ def prompt_stream(
     if cfg is None:
         raise ValidationError(field="provider", message=f"unknown: {provider.name}")
 
-    stream_cfg = stream_config(ProviderName(provider.name))
+    # ADR-055: a non-default protocol (Responses) overrides the endpoint and
+    # wire shape, and the wire shape selects the stream facts (HANDOFF-087).
+    cfg = resolve_chat_protocol(cfg, protocol)
+    stream_cfg, finish_reason_path = _stream_settings(provider.name, cfg)
     if stream_cfg is None:
         raise ValidationError(
             field="provider", message=f"streaming not supported: {provider.name}"
@@ -316,7 +325,7 @@ def prompt_stream(
             stream_cfg,
             wrapped,
             timeout=opts.request_timeout,
-            finish_reason_path=cfg.stream_finish_reason_path,
+            finish_reason_path=finish_reason_path,
         )
     except Exception as exc:
         _fire_post_err(opts.middleware, base_event, exc, start)
@@ -331,6 +340,18 @@ def prompt_stream(
     )
     fire_post(opts.middleware, post_event)
     return Response(text="".join(chunks), usage=usage, finish_reason=finish_reason)
+
+
+def _stream_settings(provider_name: str, cfg: ProviderSpec) -> tuple[StreamDef | None, str]:
+    """The stream facts and stream finish locator for the effective wire shape.
+
+    A shape that declares its own (OpenAI Responses: event-typed SSE) outranks
+    the provider's, which describe the provider's default protocol (HANDOFF-087).
+    """
+    shape_cfg = wire_shape_stream_config(cfg.chat_wire_shape)
+    if shape_cfg is not None:
+        return shape_cfg, wire_shape_stream_finish_reason_path(cfg.chat_wire_shape)
+    return stream_config(ProviderName(provider_name)), cfg.stream_finish_reason_path
 
 
 def upload_file(
