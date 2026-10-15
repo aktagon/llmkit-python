@@ -12,6 +12,7 @@ from .providers import ProviderName
 TEXT_ONLY: Final = "TextOnly"
 WITH_REFERENCE_IMAGES: Final = "WithReferenceImages"
 WITH_SEED_FRAME: Final = "WithSeedFrame"
+WITH_LAST_FRAME: Final = "WithLastFrame"
 
 # Image request shapes: each names one request body (ADR-096).
 INLINE_PARTS: Final = "InlineParts"
@@ -27,9 +28,10 @@ JSON_GENERATIONS: Final = "JSONGenerations"
 class RequestVariant:
     """One wire request of an image or video config, keyed by the inputs
     it carries (ADR-096). shape is "" on a video variant; endpoint ""
-    means the provider's main endpoint template."""
+    means the provider's main endpoint template. carries lists the carried
+    inputs; a first-and-last-frame variant carries two."""
 
-    carries: str
+    carries: tuple[str, ...]
     shape: str
     endpoint: str
 
@@ -71,8 +73,8 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         usage_output_path="usageMetadata.candidatesTokenCount",
         usage_reasoning_path="usageMetadata.thoughtsTokenCount",
         variants=(
-            RequestVariant(carries="TextOnly", shape="InlineParts", endpoint=""),
-            RequestVariant(carries="WithReferenceImages", shape="InlineParts", endpoint=""),
+            RequestVariant(carries=("TextOnly",), shape="InlineParts", endpoint=""),
+            RequestVariant(carries=("WithReferenceImages",), shape="InlineParts", endpoint=""),
         ),
         models=(
             ImageModelDef(
@@ -100,8 +102,8 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         usage_output_path="",
         usage_reasoning_path="",
         variants=(
-            RequestVariant(carries="TextOnly", shape="JSONInlineRefs", endpoint="/v1/images/generations"),
-            RequestVariant(carries="WithReferenceImages", shape="JSONInlineRefs", endpoint="/v1/images/edits"),
+            RequestVariant(carries=("TextOnly",), shape="JSONInlineRefs", endpoint="/v1/images/generations"),
+            RequestVariant(carries=("WithReferenceImages",), shape="JSONInlineRefs", endpoint="/v1/images/edits"),
         ),
         models=(
             ImageModelDef(
@@ -121,8 +123,8 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         usage_output_path="usage.output_tokens",
         usage_reasoning_path="",
         variants=(
-            RequestVariant(carries="TextOnly", shape="JSONGenerationsOpenAI", endpoint="/v1/images/generations"),
-            RequestVariant(carries="WithReferenceImages", shape="MultipartForm", endpoint="/v1/images/edits"),
+            RequestVariant(carries=("TextOnly",), shape="JSONGenerationsOpenAI", endpoint="/v1/images/generations"),
+            RequestVariant(carries=("WithReferenceImages",), shape="MultipartForm", endpoint="/v1/images/edits"),
         ),
         models=(
             ImageModelDef(
@@ -166,7 +168,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         usage_output_path="usage.completion_tokens",
         usage_reasoning_path="",
         variants=(
-            RequestVariant(carries="TextOnly", shape="JSONGenerations", endpoint="/v1/images"),
+            RequestVariant(carries=("TextOnly",), shape="JSONGenerations", endpoint="/v1/images"),
         ),
         models=(
             ImageModelDef(
@@ -234,7 +236,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         usage_output_path="",
         usage_reasoning_path="",
         variants=(
-            RequestVariant(carries="TextOnly", shape="JSONGenerations", endpoint="/v1/images/generations"),
+            RequestVariant(carries=("TextOnly",), shape="JSONGenerations", endpoint="/v1/images/generations"),
         ),
         models=(
             ImageModelDef(

@@ -19,7 +19,7 @@ from .errors import APIError, ValidationError, parse_error
 from .http import do_multipart_post_multi, do_post, merge_caller_headers
 from .middleware import fire_post, fire_pre, set_event_error
 from .paths import opt_int_path
-from .request_variant import select_request_variant
+from .request_variant import parts_carry, select_request_variant
 from .providers.generated.image_gen import (
     INLINE_PARTS,
     JSON_GENERATIONS,
@@ -178,7 +178,7 @@ def generate_image(
     # ADR-096: the request's parts pick the wire request; a config with no
     # variant for those inputs cannot send it.
     variant = select_request_variant(
-        provider.name, img_cfg.variants, image_count, WITH_REFERENCE_IMAGES
+        provider.name, img_cfg.variants, parts_carry(image_count, WITH_REFERENCE_IMAGES)
     )
 
     # Per-request-shape knob validation. Quality/output_format/background are

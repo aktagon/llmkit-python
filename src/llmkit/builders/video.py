@@ -27,11 +27,16 @@ from ..errors import APIError, ValidationError
 from ..http import do_get, do_post, do_sigv4_get, do_sigv4_post
 from ..image import Part, _image_auth_headers
 from ..middleware import fire_post, fire_pre, set_event_error
-from ..request_variant import select_request_variant
+from ..request_variant import parts_carry, select_request_variant
 from ..providers.generated.middleware import Event, MiddlewareFn, MiddlewareOp
 from ..providers.generated.providers import PROVIDERS, ProviderName
 from ..providers.generated.request import AuthScheme, auth_scheme
-from ..providers.generated.image_gen import WITH_SEED_FRAME, RequestVariant
+from ..providers.generated.image_gen import (
+    WITH_LAST_FRAME,
+    WITH_REFERENCE_IMAGES,
+    WITH_SEED_FRAME,
+    RequestVariant,
+)
 from ..providers.generated.video_gen import (
     VideoGenDef,
     VideoModelDef,
@@ -75,6 +80,12 @@ class VideoRequest:
     # S3 bucket). Required when the provider's config sets requires_output_uri;
     # ignored otherwise. Set it on the builder via Video.output_uri.
     output_uri: str = ""
+    # last_frame is the final frame the video ends on, sent with a first frame
+    # (an image part). Set it via Video.last_frame (BUG-089).
+    last_frame: MediaRef | None = None
+    # reference_images are asset images the video keeps, at most 3, never
+    # with a first or last frame. Set them via Video.add_reference_image.
+    reference_images: list[MediaRef] = dataclasses.field(default_factory=list)
 
 
 class VideoHandle(_VideoHandleData):
@@ -103,7 +114,12 @@ async def video_submit(b: "Video", msg: str) -> VideoHandle:
 
     # Mirror go/video_builder.go: chain-accumulated parts plus an optional
     # trailing text part from submit(msg).
-    request = VideoRequest(model=b._model, output_uri=b._output_uri)
+    request = VideoRequest(
+        model=b._model,
+        output_uri=b._output_uri,
+        last_frame=b._last_frame,
+        reference_images=list(b._reference_images),
+    )
     if b._parts:
         if msg:
             request.parts = [*b._parts, Part(text=msg)]
@@ -173,11 +189,12 @@ def _submit_video(
             continue
         if not part.text:
             raise ValidationError(field=f"parts[{i}]", message="must have Text set")
-    # ADR-096: a seed frame selects the WithSeedFrame submit request;
-    # a config with no such variant cannot send it.
     image_count = sum(1 for p in parts if p.image is not None)
+    _validate_video_frames(model, image_count, request)
+    # ADR-096: the carried inputs select the submit request; a config with no
+    # such variant cannot send it.
     variant = select_request_variant(
-        provider.name, vg_cfg.variants, image_count, WITH_SEED_FRAME
+        provider.name, vg_cfg.variants, _video_carries(image_count, request)
     )
     # VID-005: output-uri providers (Bedrock Nova Reel) write the video to the
     # caller's own S3 bucket, so the submit MUST carry a destination URI. Reject
@@ -206,8 +223,7 @@ def _submit_video(
             cfg,
             vg_cfg,
             variant,
-            request.model,
-            request.output_uri,
+            request,
             parts,
             base_url,
             headers,
@@ -233,8 +249,7 @@ def _dispatch_video_submit(
     cfg: Any,
     vg_cfg: VideoGenDef,
     variant: RequestVariant,
-    model: str,
-    output_uri: str,
+    request: VideoRequest,
     parts: list[Part],
     base_url: str,
     headers: dict[str, str],
@@ -261,6 +276,7 @@ def _dispatch_video_submit(
     """
     # Submit endpoint from the config-declared base + relative path (Option D);
     # handle id from the config-declared dotted path (OQ7).
+    model, output_uri = request.model, request.output_uri
     post_headers = headers
     if vg_cfg.wire_shape == "VideoQwen":
         body: dict[str, Any] = {
@@ -296,11 +312,20 @@ def _dispatch_video_submit(
         # (read 2026-10-15). The Gemini API shape is not yet live-verified.
         veo_seed = _video_seed_image(parts)
         if veo_seed is not None:
-            instance["image"] = {
-                "bytesBase64Encoded": base64.b64encode(veo_seed.bytes).decode("ascii"),
-                "mimeType": veo_seed.mime_type or "image/png",
-            }
+            instance["image"] = _veo_image(veo_seed)
+        # Last frame and asset reference images (BUG-089): same
+        # {bytesBase64Encoded, mimeType} wrapper. Reference images force an
+        # 8-second video, sent as the NUMBER 8 on both APIs (live 2026-10-15:
+        # the Gemini API rejects the string "8" its docs show).
+        if request.last_frame is not None:
+            instance["lastFrame"] = _veo_image(request.last_frame)
         body = {"instances": [instance]}
+        if request.reference_images:
+            instance["referenceImages"] = [
+                {"image": _veo_image(img), "referenceType": "asset"}
+                for img in request.reference_images
+            ]
+            body["parameters"] = {"durationSeconds": 8}
     elif vg_cfg.wire_shape == "VideoBedrock":
         # Nova Reel carries the model in the BODY (modelId, unlike the Converse
         # chat path) and writes the mp4 to the caller's S3 bucket. The optional
@@ -1063,6 +1088,61 @@ def _video_seed_image(parts: list[Part]) -> MediaRef | None:
             )
         seed = part.image
     return seed
+
+
+def _veo_image(img: MediaRef) -> dict[str, str]:
+    """A Veo image object: raw base64 bytes and the MIME type."""
+    return {
+        "bytesBase64Encoded": base64.b64encode(img.bytes).decode("ascii"),
+        "mimeType": img.mime_type or "image/png",
+    }
+
+
+# The most asset reference images a Veo request takes (Gemini API and Vertex
+# Veo pages, read 2026-10-15).
+MAX_VIDEO_REFERENCE_IMAGES = 3
+
+
+def _validate_video_frames(
+    model: VideoModelDef, image_count: int, request: VideoRequest
+) -> None:
+    """Reject a last frame or reference images the model or the request cannot
+    carry, before any HTTP call (BUG-089). Same rules, order and messages as
+    go/video.go validateVideoFrames."""
+    refs = len(request.reference_images)
+    if request.last_frame is not None and not model.supports_last_frame:
+        raise ValidationError(
+            field="last_frame", message=f"{model.model_id} does not accept a last frame"
+        )
+    if refs > 0 and not model.supports_reference_images:
+        raise ValidationError(
+            field="reference_images",
+            message=f"{model.model_id} does not accept reference images",
+        )
+    if refs > MAX_VIDEO_REFERENCE_IMAGES:
+        raise ValidationError(
+            field="reference_images",
+            message=f"at most {MAX_VIDEO_REFERENCE_IMAGES} reference images, got {refs}",
+        )
+    if refs > 0 and (image_count > 0 or request.last_frame is not None):
+        # Live 2026-10-15: Veo answers 400 "Unsupported video generation
+        # request"; Vertex documents the inputs as exclusive.
+        raise ValidationError(
+            field="reference_images",
+            message="cannot be combined with a first or last frame",
+        )
+    if request.last_frame is not None and image_count == 0:
+        raise ValidationError(field="last_frame", message="requires a first frame")
+
+
+def _video_carries(image_count: int, request: VideoRequest) -> tuple[str, ...]:
+    """The request's carried inputs (ADR-096): reference images, a seed frame
+    with an optional last frame, or text only."""
+    if request.reference_images:
+        return (WITH_REFERENCE_IMAGES,)
+    if image_count > 0 and request.last_frame is not None:
+        return (WITH_SEED_FRAME, WITH_LAST_FRAME)
+    return parts_carry(image_count, WITH_SEED_FRAME)
 
 
 def _video_seed_image_url(parts: list[Part]) -> str:

@@ -38,6 +38,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_add_reference_image",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_add_speaker",
         sub_options=(
         ),
@@ -113,6 +118,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
     ),
     APIOptionDef(
         py_func="with_include_text",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_last_frame",
         sub_options=(
         ),
     ),
