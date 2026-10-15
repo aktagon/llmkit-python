@@ -31,13 +31,13 @@ from ..request_variant import select_request_variant
 from ..providers.generated.middleware import Event, MiddlewareFn, MiddlewareOp
 from ..providers.generated.providers import PROVIDERS, ProviderName
 from ..providers.generated.request import AuthScheme, auth_scheme
-from ..providers.generated.image_gen import RequestVariant
+from ..providers.generated.image_gen import WITH_SEED_FRAME, RequestVariant
 from ..providers.generated.video_gen import (
     VideoGenDef,
     VideoModelDef,
     video_gen_config,
 )
-from ..structs import VideoData, VideoHandle as _VideoHandleData, VideoResponse
+from ..structs import MediaRef, VideoData, VideoHandle as _VideoHandleData, VideoResponse
 from ..types import Provider, provider_from_config
 
 if TYPE_CHECKING:
@@ -173,10 +173,12 @@ def _submit_video(
             continue
         if not part.text:
             raise ValidationError(field=f"parts[{i}]", message="must have Text set")
-    # ADR-096: a seed frame selects the WithReferenceImages submit request;
+    # ADR-096: a seed frame selects the WithSeedFrame submit request;
     # a config with no such variant cannot send it.
     image_count = sum(1 for p in parts if p.image is not None)
-    variant = select_request_variant(provider.name, vg_cfg.variants, image_count)
+    variant = select_request_variant(
+        provider.name, vg_cfg.variants, image_count, WITH_SEED_FRAME
+    )
     # VID-005: output-uri providers (Bedrock Nova Reel) write the video to the
     # caller's own S3 bucket, so the submit MUST carry a destination URI. Reject
     # pre-flight rather than letting the provider 400.
@@ -288,7 +290,17 @@ def _dispatch_video_submit(
         # field. The prompt nests under instances[]; the optional parameters
         # object ({aspectRatio, resolution} for Gemini; {sampleCount, storageUri}
         # for Vertex) is omitted on the prompt-only hot path.
-        body = {"instances": [{"prompt": _join_prompt_text(parts)}]}
+        instance: dict[str, Any] = {"prompt": _join_prompt_text(parts)}
+        # First frame (BUG-089): the seed rides at instances[0].image as raw
+        # base64 + mimeType (no data: prefix), per the Vertex Veo reference
+        # (read 2026-10-15). The Gemini API shape is not yet live-verified.
+        veo_seed = _video_seed_image(parts)
+        if veo_seed is not None:
+            instance["image"] = {
+                "bytesBase64Encoded": base64.b64encode(veo_seed.bytes).decode("ascii"),
+                "mimeType": veo_seed.mime_type or "image/png",
+            }
+        body = {"instances": [instance]}
     elif vg_cfg.wire_shape == "VideoBedrock":
         # Nova Reel carries the model in the BODY (modelId, unlike the Converse
         # chat path) and writes the mp4 to the caller's S3 bucket. The optional
@@ -304,9 +316,9 @@ def _dispatch_video_submit(
         }
     else:
         body = {"model": model, "prompt": _join_prompt_text(parts)}
-        # Image-to-video (BUG-010): when a seed frame is present (only reachable
-        # for grok-imagine-video, the lone supports_image_to_video model this
-        # slice), inline it as a data URL in xAI's image.url field — the same
+        # Image-to-video (BUG-010): when a seed frame is present (reachable in
+        # this arm only for grok-imagine-video; Veo has its own arm above),
+        # inline it as a data URL in xAI's image.url field — the same
         # encoding the Grok image-edit path uses. Absent on the text-to-video
         # hot path, so the existing video-grok golden is unchanged.
         seed = _video_seed_image_url(parts)
@@ -1034,15 +1046,12 @@ def _join_prompt_text(parts: list[Part]) -> str:
     return "\n".join(p.text for p in parts if p.text)
 
 
-def _video_seed_image_url(parts: list[Part]) -> str:
-    """Build the image-to-video seed-frame data URL for wire shapes that
-    condition on a single reference frame (Grok Imagine, BUG-010). The image
-    Part's bytes are inlined as a data URL carried in xAI's image.url field,
-    mirroring the Grok image-edit encoding in image.py. Returns "" when no image
-    part is present (the text-to-video hot path). Raises on more than one image
-    part: Grok animates a single seed frame, so multi-image conditioning is a
-    separate slice — rejecting is honest where silently using the first would
-    reintroduce the silent-drop bug."""
+def _video_seed_image(parts: list[Part]) -> MediaRef | None:
+    """Return the single image-to-video seed frame, or None on the
+    text-to-video hot path. Raises on more than one image part: every wired
+    image-to-video shape (Grok, BUG-010; Veo first frame, BUG-089) conditions
+    on a single seed frame, so rejecting is honest where silently using the
+    first would reintroduce the silent-drop bug."""
     seed = None
     for part in parts:
         if part.image is None:
@@ -1053,6 +1062,15 @@ def _video_seed_image_url(parts: list[Part]) -> str:
                 message="image-to-video conditions on a single seed frame; pass one image part",
             )
         seed = part.image
+    return seed
+
+
+def _video_seed_image_url(parts: list[Part]) -> str:
+    """Build the Grok image-to-video seed-frame data URL (BUG-010): the image
+    Part's bytes inlined as a data URL carried in xAI's image.url field,
+    mirroring the Grok image-edit encoding in image.py. Returns "" when no
+    image part is present (the text-to-video hot path)."""
+    seed = _video_seed_image(parts)
     if seed is None:
         return ""
     mime = seed.mime_type or "image/png"

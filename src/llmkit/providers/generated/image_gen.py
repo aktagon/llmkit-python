@@ -11,6 +11,7 @@ from .providers import ProviderName
 # Carried inputs: the inputs a request variant carries (ADR-096).
 TEXT_ONLY: Final = "TextOnly"
 WITH_REFERENCE_IMAGES: Final = "WithReferenceImages"
+WITH_SEED_FRAME: Final = "WithSeedFrame"
 
 # Image request shapes: each names one request body (ADR-096).
 INLINE_PARTS: Final = "InlineParts"

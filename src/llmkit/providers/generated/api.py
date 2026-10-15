@@ -33,6 +33,21 @@ class APIResponseFieldDef:
 
 API_OPTIONS: tuple[APIOptionDef, ...] = (
     APIOptionDef(
+        py_func="with_add_line",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_add_speaker",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_add_styled_line",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_add_tool",
         sub_options=(
         ),
@@ -198,6 +213,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
     ),
     APIOptionDef(
         py_func="with_stop_sequences",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_style",
         sub_options=(
         ),
     ),
