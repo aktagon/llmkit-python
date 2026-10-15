@@ -404,8 +404,8 @@ def do_stream_post(
                 continue
 
             # ADR-013: capture finish-reason BEFORE the event-level done
-            # break — Anthropic carries stop_reason on the message_stop
-            # event body and dropping the parse would discard it.
+            # break, so a finish locator that names the done event still sees
+            # its body. (Anthropic's is message_delta:delta.stop_reason.)
             if finish_json_path and (finish_event == "" or finish_event == current_event):
                 value = extract_path(parsed, finish_json_path)
                 if value and value != "FINISH_REASON_UNSPECIFIED":
@@ -423,7 +423,12 @@ def do_stream_post(
                     text = extract_path(parsed, stream_cfg.delta_text_path)
                     if text:
                         callback(text)
+                # Anthropic's message_delta carries the cumulative input AND
+                # output counts.
                 if current_event == stream_cfg.usage_event:
+                    value = opt_int_path(parsed, stream_cfg.usage_input_path)
+                    if value is not None:
+                        usage.input = value
                     value = opt_int_path(parsed, stream_cfg.usage_output_path)
                     if value is not None:
                         usage.output = value
