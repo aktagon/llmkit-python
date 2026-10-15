@@ -299,6 +299,12 @@ class Image:
         return out
 
     def safety_filter(self, s: str) -> "Image":
+        """Sets a single image safety threshold. Every image provider rejects it
+        with a validation error.
+
+        Deprecated: no provider accepts this since 2026-10-15 (Vertex Imagen
+        shut down, BUG-101); removed at the next major.
+        """
         out = copy.copy(self)
         out._safety_filter = s
         return out
