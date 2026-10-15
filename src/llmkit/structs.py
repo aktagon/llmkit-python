@@ -69,10 +69,10 @@ class ImageResponse:
     # text is the optional text response accompanying the images (captions, refusals, or model commentary). Populated only when the caller opted into mixed text + image output via the builder's IncludeText() chain method on providers that support it.
     text: str = ""
 
-    # usage holds token consumption metrics for the image-generation call. Google reports image-output tokens in usageMetadata.candidatesTokenCount; OpenAI Images API and Vertex Imagen do not return token counts, so on those providers no dimension is reported at all — absent, not zero.
+    # usage holds token consumption metrics for the image-generation call. Google reports image-output tokens in usageMetadata.candidatesTokenCount; the OpenAI Images API does not return token counts, so on that provider no dimension is reported at all — absent, not zero.
     usage: Usage = field(default_factory=Usage)
 
-    # finish_reason is the provider stop signal. Examples per provider: Google STOP/IMAGE_OTHER/SAFETY/MAX_TOKENS; OpenAI Images API has no equivalent field (always absent); xAI Grok has no equivalent field (always absent); Vertex Imagen surfaces the RAI filter reason when content is blocked.
+    # finish_reason is the provider stop signal. Examples per provider: Google STOP/IMAGE_OTHER/SAFETY/MAX_TOKENS; OpenAI Images API has no equivalent field (always absent); xAI Grok has no equivalent field (always absent).
     finish_reason: str | None = None
 
     # finish_message is the free-text provider explanation of the stop signal. Gemini populates this for non-success FinishReason values; other providers leave it empty. Use as the user-facing message when len(Images) == 0.
