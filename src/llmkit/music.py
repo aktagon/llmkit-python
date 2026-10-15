@@ -238,8 +238,7 @@ def _dispatch_music_http(
 def _build_vertex_music_body(parts: list[Part]) -> dict[str, Any]:
     """Vertex AI Lyria :predict body. Lyria 2 has no lyrics wire-slot, so any
     lyrics parts fold into the prompt text (ADR-037 MUS-008); the instrumental
-    model ignores vocal content. The instances/parameters envelope mirrors
-    Vertex Imagen."""
+    model ignores vocal content."""
     prompt = _join_prompt_text(parts)
     lyrics = _join_lyrics_text(parts)
     if lyrics:

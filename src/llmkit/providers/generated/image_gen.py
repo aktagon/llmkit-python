@@ -17,6 +17,7 @@ INLINE_PARTS: Final = "InlineParts"
 JSON_GENERATIONS_OPENAI: Final = "JSONGenerationsOpenAI"
 MULTIPART_FORM: Final = "MultipartForm"
 JSON_INLINE_REFS: Final = "JSONInlineRefs"
+# Deprecated: no provider accepts this since 2026-10-15 (Vertex Imagen shut down, BUG-101); removed at the next major.
 JSON_PREDICT: Final = "JSONPredict"
 JSON_GENERATIONS: Final = "JSONGenerations"
 
@@ -247,42 +248,6 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 model_id="recraftv3_vector",
                 label="Recraft V3 (vector / SVG)",
                 aspect_ratios=(),
-                image_sizes=(),
-                max_input_images=0,
-                supports_image_input=False,
-            ),
-        ),
-    ),
-    ProviderName.VERTEX: ImageGenDef(
-        output_mode="Base64Inline",
-        response_shape="VertexPredictions",
-        usage_input_path="",
-        usage_output_path="",
-        usage_reasoning_path="",
-        variants=(
-            RequestVariant(carries="TextOnly", shape="JSONPredict", endpoint=""),
-        ),
-        models=(
-            ImageModelDef(
-                model_id="imagen-3.0-fast-generate-001",
-                label="Imagen 3 Fast",
-                aspect_ratios=("16:9", "1:1", "3:4", "4:3", "9:16"),
-                image_sizes=(),
-                max_input_images=0,
-                supports_image_input=False,
-            ),
-            ImageModelDef(
-                model_id="imagen-3.0-generate-002",
-                label="Imagen 3",
-                aspect_ratios=("16:9", "1:1", "3:4", "4:3", "9:16"),
-                image_sizes=(),
-                max_input_images=0,
-                supports_image_input=False,
-            ),
-            ImageModelDef(
-                model_id="imagen-4.0-generate-preview-06-06",
-                label="Imagen 4 Preview",
-                aspect_ratios=("16:9", "1:1", "3:4", "4:3", "9:16"),
                 image_sizes=(),
                 max_input_images=0,
                 supports_image_input=False,
