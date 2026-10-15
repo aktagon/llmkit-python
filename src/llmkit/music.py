@@ -405,11 +405,14 @@ def _parse_gemini_music_response(
                 text_parts.append(text)
     finish_reason = first.get("finishReason") if isinstance(first, dict) else None
     fr_str = finish_reason if isinstance(finish_reason, str) else ""
+    # A filtered call has no content; finishMessage is the only explanation.
+    finish_message = first.get("finishMessage") if isinstance(first, dict) else None
     return MusicResponse(
         audio=audio,
         text="".join(text_parts),
         usage=Usage(),
         finish_reason=fr_str,
+        finish_message=finish_message if isinstance(finish_message, str) and finish_message else None,
     )
 
 
