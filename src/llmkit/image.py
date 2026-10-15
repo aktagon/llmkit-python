@@ -25,7 +25,6 @@ from .providers.generated.image_gen import (
     JSON_GENERATIONS,
     JSON_GENERATIONS_OPENAI,
     JSON_INLINE_REFS,
-    JSON_PREDICT,
     MULTIPART_FORM,
     ImageGenDef,
     ImageModelDef,
@@ -130,6 +129,10 @@ def generate_image(
 ) -> ImageResponse:
     """Produce one or more images from a text prompt, optionally conditioned
     on reference images for editing/composition.
+
+    ``safety_filter`` is deprecated: no provider accepts it since 2026-10-15
+    (Vertex Imagen shut down, BUG-101), so every provider raises
+    ValidationError for it; removed at the next major.
     """
     if not provider.api_key:
         raise ValidationError(field="api_key", message="required")
@@ -176,7 +179,7 @@ def generate_image(
     variant = select_request_variant(provider.name, img_cfg.variants, image_count)
 
     # Per-request-shape knob validation. Quality/output_format/background are
-    # OpenAI-only on the wire; count (n) is OpenAI + xAI + Recraft + Vertex;
+    # OpenAI-only on the wire; count (n) is OpenAI + xAI + Recraft;
     # mask rides only the OpenAI multipart edits body. Mirrors go/image.go.
     if mask is not None and variant.shape != MULTIPART_FORM:
         if variant.shape == JSON_GENERATIONS_OPENAI:
@@ -213,20 +216,11 @@ def generate_image(
             raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
         if safety_settings:
             raise ValidationError(field="safety_settings", message=f"not supported by {provider.name}")
-    elif variant.shape == JSON_PREDICT:  # Vertex Imagen
-        if quality:
-            raise ValidationError(field="quality", message=f"not supported by {provider.name}")
-        if output_format:
-            raise ValidationError(field="output_format", message=f"not supported by {provider.name}")
-        if background:
-            raise ValidationError(field="background", message=f"not supported by {provider.name}")
-        if safety_settings:
-            raise ValidationError(field="safety_settings", message=f"not supported by {provider.name}; use safety_filter for Vertex Imagen")
     elif variant.shape == JSON_GENERATIONS:
         # Recraft, OpenRouter (text-to-image only). The flat generations body carries only
         # size (-> `size`) and count (-> `n`); aspect_ratio is not a Recraft
         # wire field (it sizes by an explicit WxH `size`), and the gpt-image /
-        # safety knobs are OpenAI / Google / Vertex only. Image parts are
+        # safety knobs are OpenAI / Google only. Image parts are
         # rejected upstream because Recraft models set supports_image_input False.
         if aspect_ratio:
             raise ValidationError(field="aspect_ratio", message=f"not supported by {provider.name}; use image_size (Recraft sizes by WxH)")
@@ -269,7 +263,6 @@ def generate_image(
                 background=background,
                 count=count,
                 mask=mask,
-                safety_filter=safety_filter,
                 safety_settings=safety_settings or [],
                 extra_fields=extra_fields,
             )
@@ -344,7 +337,6 @@ def _dispatch_image_http(
     background: str,
     count: int | None,
     mask: MediaRef | None,
-    safety_filter: str,
     safety_settings: list,
     extra_fields: dict[str, Any] | None,
 ) -> bytes:
@@ -358,7 +350,6 @@ def _dispatch_image_http(
         with one image[] field per image part and the joined text as prompt.
       - JSONInlineRefs (xAI Grok): JSON body; refs, when present, encoded as
         data URLs in ``image`` (single) or ``images`` (multi).
-      - JSONPredict (Vertex Imagen, text only): instances/parameters body.
       - JSONGenerations (Recraft, OpenRouter, text only): flat JSON body.
 
     The URL is the base plus the variant's endpoint, or the provider's main
@@ -385,8 +376,6 @@ def _dispatch_image_http(
         )
     elif shape == JSON_INLINE_REFS:
         body = _build_xai_body(parts, model, aspect_ratio, image_size, count, extra_fields)
-    elif shape == JSON_PREDICT:
-        body = _build_vertex_body(parts, aspect_ratio, count, safety_filter, extra_fields)
     elif shape == JSON_GENERATIONS:
         body = _build_recraft_gen_body(parts, model, image_size, count, extra_fields)
     elif shape == INLINE_PARTS:
@@ -650,73 +639,6 @@ def _build_image_body(
     return body
 
 
-def _build_vertex_body(
-    parts: list[Part],
-    aspect_ratio: str,
-    count: int | None,
-    safety_filter: str,
-    extra_fields: dict[str, Any] | None,
-) -> dict[str, Any]:
-    """Assemble the Vertex AI Imagen :predict request body.
-
-    Vertex uses an instances/parameters envelope: instance carries the
-    prompt; parameters carries config (sampleCount, aspectRatio). The Imagen
-    generate models take text only (BUG-101), so image parts never reach
-    here: the supports_image_input gate rejects them first. Extra fields like
-    negativePrompt and safetySetting spread into parameters so callers can
-    reach Imagen-specific knobs without typed chain methods.
-    """
-    instance: dict[str, Any] = {"prompt": _join_text_parts(parts)}
-
-    parameters: dict[str, Any] = {"sampleCount": count if count is not None else 1}
-    if aspect_ratio:
-        parameters["aspectRatio"] = aspect_ratio
-    if safety_filter:
-        parameters["safetySetting"] = safety_filter
-    if extra_fields:
-        for k, v in extra_fields.items():
-            parameters[k] = v
-
-    return {"instances": [instance], "parameters": parameters}
-
-
-def _parse_vertex_image_response(raw: dict[str, Any]) -> ImageResponse:
-    """Decode Vertex AI Imagen :predict responses. Shape:
-    {predictions: [{bytesBase64Encoded, mimeType}]}. Vertex does not return
-    token counts in the predict response so Usage stays zero.
-    """
-    from .structs import ImageResponse  # deferred to break import cycle
-    preds = raw.get("predictions") if isinstance(raw, dict) else None
-    images: list[ImageData] = []
-    finish_reason: str | None = None
-    if isinstance(preds, list):
-        for entry in preds:
-            if not isinstance(entry, dict):
-                continue
-            if not finish_reason:
-                rai = entry.get("raiFilteredReason")
-                if isinstance(rai, str) and rai:
-                    finish_reason = rai
-            b64 = entry.get("bytesBase64Encoded")
-            if not isinstance(b64, str) or not b64:
-                continue
-            mime_val = entry.get("mimeType")
-            mime = (
-                mime_val if isinstance(mime_val, str) and mime_val else "image/png"
-            )
-            try:
-                decoded = base64.b64decode(b64)
-            except (ValueError, TypeError):
-                continue
-            images.append(ImageData(mime_type=mime, bytes=decoded))
-    return ImageResponse(
-        images=images,
-        text="",
-        usage=Usage(),
-        finish_reason=finish_reason,
-    )
-
-
 def _build_image_url(p: Provider, cfg: Any, model: str) -> str:
     base = p.base_url or cfg.base_url
     endpoint = cfg.endpoint
@@ -765,9 +687,6 @@ def _parse_image_response(provider_name: str, body: bytes, img_cfg: Any) -> Imag
             img_cfg.usage_output_path,
             img_cfg.usage_reasoning_path,
         )
-    if img_cfg.response_shape == "VertexPredictions":
-        return _parse_vertex_image_response(raw)
-
     # GoogleParts: candidates[].content.parts inline data.
     images, text, finish_reason, finish_message = _extract_google_image_parts(raw)
     tokens = Usage(
