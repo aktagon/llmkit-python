@@ -24,7 +24,7 @@ from ..providers.generated.middleware import MiddlewareFn
 from ..providers.generated.providers import ProviderName
 from ..providers.generated.request import file_upload_config
 from ..structs import File, ImageResponse, Message, MusicResponse, Response, SpeechResponse
-from ..types import Capability, SafetySetting, Tool
+from ..types import Capability, SafetySetting, SpeechLine, SpeechSpeaker, Tool
 from .agent import _agent_messages
 from .batch import BatchHandle
 
@@ -378,18 +378,53 @@ class Speech:
 
     def __init__(self, client: "Client") -> None:
         self.client = client
+        self._lines: list[SpeechLine] = []
         self._middleware: list[MiddlewareFn] = []
+        self._speakers: list[SpeechSpeaker] = []
         self._model: str = ""
+        self._style: str = ""
         self._voice: str = ""
+
+    def add_line(self, speaker: str, text: str) -> "Speech":  # ordered
+        """Appends a line said by a declared speaker. Lines are spoken in call
+        order. When lines are set, the text passed to Generate must be empty.
+        """
+        out = copy.copy(self)
+        out._lines = [*self._lines, SpeechLine(speaker, "", text)]
+        return out
 
     def add_middleware(self, *fns: MiddlewareFn) -> "Speech":
         out = copy.copy(self)
         out._middleware = [*self._middleware, *fns]
         return out
 
+    def add_speaker(self, name: str, voice: str) -> "Speech":  # ordered
+        """Declares a named speaker and its voice for a multi-speaker speech
+        request. Declare exactly 2 speakers, and do not set a Voice with them.
+        """
+        out = copy.copy(self)
+        out._speakers = [*self._speakers, SpeechSpeaker(name, voice)]
+        return out
+
+    def add_styled_line(self, speaker: str, style: str, text: str) -> "Speech":  # ordered
+        """Appends a line said by a declared speaker in a delivery style, such as
+        "calm and relaxed". Otherwise it works like AddLine.
+        """
+        out = copy.copy(self)
+        out._lines = [*self._lines, SpeechLine(speaker, style, text)]
+        return out
+
     def model(self, name: str) -> "Speech":
         out = copy.copy(self)
         out._model = name
+        return out
+
+    def style(self, s: str) -> "Speech":
+        """Sets the delivery style for a single-voice speech request, such as
+        "cheerful". A model that does not take a style rejects it before send.
+        """
+        out = copy.copy(self)
+        out._style = s
         return out
 
     def voice(self, id: str) -> "Speech":

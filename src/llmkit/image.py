@@ -26,6 +26,7 @@ from .providers.generated.image_gen import (
     JSON_GENERATIONS_OPENAI,
     JSON_INLINE_REFS,
     MULTIPART_FORM,
+    WITH_REFERENCE_IMAGES,
     ImageGenDef,
     ImageModelDef,
     RequestVariant,
@@ -176,7 +177,9 @@ def generate_image(
 
     # ADR-096: the request's parts pick the wire request; a config with no
     # variant for those inputs cannot send it.
-    variant = select_request_variant(provider.name, img_cfg.variants, image_count)
+    variant = select_request_variant(
+        provider.name, img_cfg.variants, image_count, WITH_REFERENCE_IMAGES
+    )
 
     # Per-request-shape knob validation. Quality/output_format/background are
     # OpenAI-only on the wire; count (n) is OpenAI + xAI + Recraft;
