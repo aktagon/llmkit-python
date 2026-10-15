@@ -432,6 +432,37 @@ _STREAMS: dict[ProviderName, StreamDef] = {
     ),
 }
 
+_WIRE_SHAPE_STREAMS: dict[str, StreamDef] = {
+    "ChatResponsesOpenAI": StreamDef(
+        endpoint="",
+        param="stream",
+        param_value="true",
+        delta_text_path="delta",
+        done_signal="",
+        uses_event_types=True,
+        content_event="response.output_text.delta",
+        done_event="",
+        usage_event="response.completed",
+        usage_input_path="response.usage.input_tokens",
+        usage_output_path="response.usage.output_tokens",
+        usage_opt_in=False,
+    ),
+}
+
+_WIRE_SHAPE_STREAM_FINISH_REASON_PATHS: dict[str, str] = {
+    "ChatResponsesOpenAI": "response.completed:response.status",
+}
+
 
 def stream_config(provider: ProviderName) -> StreamDef | None:
     return _STREAMS.get(provider)
+
+
+def wire_shape_stream_config(chat_wire_shape: str) -> StreamDef | None:
+    """The streaming config a chat wire shape declares, or None when the provider's holds."""
+    return _WIRE_SHAPE_STREAMS.get(chat_wire_shape)
+
+
+def wire_shape_stream_finish_reason_path(chat_wire_shape: str) -> str:
+    """The ADR-013 stream finish locator read with wire_shape_stream_config."""
+    return _WIRE_SHAPE_STREAM_FINISH_REASON_PATHS.get(chat_wire_shape, "")
