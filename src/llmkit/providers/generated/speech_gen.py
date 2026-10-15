@@ -18,45 +18,75 @@ class SpeechModelDef:
     output_mime: str = ""
     # ADR-037 advisory fact (queryable, never gated); 0 when unverified.
     sample_rate_hz: int = 0
+    # Speakers a multi-speaker request declares; 0 = one voice only (BUG-091).
+    max_speakers: int = 0
+    # Whether a style (style, add_styled_line) is sent to this model (BUG-091).
+    supports_speech_style: bool = False
 
 
 @dataclass(frozen=True)
 class SpeechGenDef:
-    # wire_shape is SpeechInworld | SpeechOpenAI.
+    # wire_shape is SpeechInworld | SpeechOpenAI | SpeechGemini.
     wire_shape: str
-    # audio_response_encoding selects the response decoder: "base64Envelope" | "rawBody" (ADR-051).
+    # audio_response_encoding selects the response decoder: "base64Envelope" | "rawBody" | "base64InteractionSteps" (ADR-051).
     audio_response_encoding: str = "base64Envelope"
     # gen_endpoint is an override; empty = use provider main endpoint.
     gen_endpoint: str = ""
-    # voices is the catalogue the Voice setter validates against.
-    voices: tuple[str, ...] = field(default_factory=tuple)
     models: tuple[SpeechModelDef, ...] = field(default_factory=tuple)
 
 
 _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
+    ProviderName.GOOGLE: SpeechGenDef(
+        wire_shape="SpeechGemini",
+        audio_response_encoding="base64InteractionSteps",
+        gen_endpoint="/v1beta/interactions",
+        models=(
+            SpeechModelDef(
+                model_id="gemini-3.8-flash-lite-tts",
+                label="Gemini 3.8 Flash-Lite TTS",
+                output_mime="audio/wav",
+                sample_rate_hz=24000,
+                max_speakers=2,
+                supports_speech_style=True,
+            ),
+            SpeechModelDef(
+                model_id="gemini-3.8-flash-tts",
+                label="Gemini 3.8 Flash TTS",
+                output_mime="audio/wav",
+                sample_rate_hz=24000,
+                max_speakers=2,
+                supports_speech_style=True,
+            ),
+        ),
+    ),
     ProviderName.INWORLD: SpeechGenDef(
         wire_shape="SpeechInworld",
         audio_response_encoding="base64Envelope",
         gen_endpoint="/tts/v1/voice",
-        voices=("Alex", "Ashley", "Dennis"),
         models=(
             SpeechModelDef(
                 model_id="inworld-tts-1.5-max",
                 label="Inworld TTS 1.5 Max",
                 output_mime="audio/wav",
                 sample_rate_hz=0,
+                max_speakers=0,
+                supports_speech_style=False,
             ),
             SpeechModelDef(
                 model_id="inworld-tts-1.5-mini",
                 label="Inworld TTS 1.5 Mini",
                 output_mime="audio/wav",
                 sample_rate_hz=0,
+                max_speakers=0,
+                supports_speech_style=False,
             ),
             SpeechModelDef(
                 model_id="inworld-tts-2",
                 label="Inworld TTS 2",
                 output_mime="audio/wav",
                 sample_rate_hz=0,
+                max_speakers=0,
+                supports_speech_style=False,
             ),
         ),
     ),
@@ -64,25 +94,30 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
         wire_shape="SpeechOpenAI",
         audio_response_encoding="rawBody",
         gen_endpoint="/v1/audio/speech",
-        voices=("alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"),
         models=(
             SpeechModelDef(
                 model_id="gpt-4o-mini-tts",
                 label="GPT-4o mini TTS",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
+                max_speakers=0,
+                supports_speech_style=True,
             ),
             SpeechModelDef(
                 model_id="tts-1",
                 label="TTS 1",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
+                max_speakers=0,
+                supports_speech_style=False,
             ),
             SpeechModelDef(
                 model_id="tts-1-hd",
                 label="TTS 1 HD",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
+                max_speakers=0,
+                supports_speech_style=False,
             ),
         ),
     ),

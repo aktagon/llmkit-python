@@ -21,7 +21,14 @@ if TYPE_CHECKING:
 async def speech_generate(b: "Speech", msg: str) -> SpeechResponse:
     provider = provider_from_config(b.client.provider)
 
-    request = SpeechRequest(model=b._model, voice=b._voice, text=msg)
+    request = SpeechRequest(
+        model=b._model,
+        voice=b._voice,
+        text=msg,
+        style=b._style,
+        speakers=list(b._speakers),
+        lines=list(b._lines),
+    )
 
     kwargs: dict = {}
     if b._middleware:

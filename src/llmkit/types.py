@@ -91,6 +91,21 @@ class Tool:
 
 
 @dataclass
+class SpeechSpeaker:
+    """One named speaker of a multi-speaker speech request and its voice (BUG-091)."""
+    name: str
+    voice: str
+
+
+@dataclass
+class SpeechLine:
+    """One line of a multi-speaker speech request; style "" means none (BUG-091)."""
+    speaker: str
+    style: str
+    text: str
+
+
+@dataclass
 class SafetySetting:
     """Per-category content safety filter for Gemini providers."""
     category: str

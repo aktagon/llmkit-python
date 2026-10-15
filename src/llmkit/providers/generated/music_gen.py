@@ -63,6 +63,16 @@ _MUSIC_GEN: dict[ProviderName, MusicGenDef] = {
                 available_output_formats=("audio/mpeg",),
                 supports_image_input=False,
             ),
+            MusicModelDef(
+                model_id="lyria-3.5",
+                label="Lyria 3.5",
+                supports_lyrics=True,
+                max_duration_seconds=0,
+                output_mime="audio/mpeg",
+                sample_rate_hz=0,
+                available_output_formats=("audio/mpeg",),
+                supports_image_input=False,
+            ),
         ),
     ),
     ProviderName.MINIMAX: MusicGenDef(
