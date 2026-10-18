@@ -172,6 +172,22 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         ),
         models=(
             ImageModelDef(
+                model_id="bytedance-seed/seedream-4.5",
+                label="Seedream 4.5",
+                aspect_ratios=(),
+                image_sizes=(),
+                max_input_images=0,
+                supports_image_input=False,
+            ),
+            ImageModelDef(
+                model_id="bytedance-seed/seedream-5-0-flash",
+                label="Seedream 5.0 Flash",
+                aspect_ratios=(),
+                image_sizes=(),
+                max_input_images=0,
+                supports_image_input=False,
+            ),
+            ImageModelDef(
                 model_id="google/gemini-2.5-flash-image",
                 label="Nano Banana (Gemini 2.5 Flash Image)",
                 aspect_ratios=(),
@@ -204,6 +220,14 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 supports_image_input=False,
             ),
             ImageModelDef(
+                model_id="meta/muse-image",
+                label="Muse Image",
+                aspect_ratios=(),
+                image_sizes=(),
+                max_input_images=0,
+                supports_image_input=False,
+            ),
+            ImageModelDef(
                 model_id="openai/gpt-5-image",
                 label="GPT-5 Image",
                 aspect_ratios=(),
@@ -222,6 +246,30 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
             ImageModelDef(
                 model_id="openai/gpt-5.4-image-2",
                 label="GPT-5.4 Image 2",
+                aspect_ratios=(),
+                image_sizes=(),
+                max_input_images=0,
+                supports_image_input=False,
+            ),
+            ImageModelDef(
+                model_id="openai/gpt-image-2",
+                label="GPT Image 2",
+                aspect_ratios=(),
+                image_sizes=(),
+                max_input_images=0,
+                supports_image_input=False,
+            ),
+            ImageModelDef(
+                model_id="openai/gpt-image-2.5-sunburst",
+                label="GPT Image 2.5 Sunburst",
+                aspect_ratios=(),
+                image_sizes=(),
+                max_input_images=0,
+                supports_image_input=False,
+            ),
+            ImageModelDef(
+                model_id="tencent/hy-image-v3.5-preview",
+                label="Hy Image 3.5 Preview",
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
