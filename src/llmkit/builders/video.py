@@ -617,7 +617,12 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
     if vg_cfg.wire_shape == "VideoOpenRouter":
         status = raw.get("status") if isinstance(raw, dict) else None
         if status == "completed":
-            return _video_result_from_openrouter(vg_cfg, raw), True
+            # A completed poll without unsigned_urls[0] must be an error, not an
+            # empty success (mirrors the Veo done-without-uri guard).
+            result = _video_result_from_openrouter(vg_cfg, raw)
+            if not result.videos or not result.videos[0].url:
+                raise APIError(message="video generation: completed but carried no unsigned_urls", status_code=0)
+            return result, True
         if status in ("failed", "cancelled", "expired"):
             msg = raw.get("error")
             if not isinstance(msg, str) or not msg:
