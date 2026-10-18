@@ -3,9 +3,9 @@ ts/src/speech.ts (ADR-049).
 
 Pre-flight validation (model + text or lines required; voice or speakers;
 provider supports speech; model known; speakers and style the model takes)
-runs before any HTTP call. Voices are free-form: there is no catalogue. Three
-wire shapes: SpeechInworld, SpeechOpenAI and SpeechGemini. Sync, single
-AudioData.
+runs before any HTTP call. Voices are free-form: there is no catalogue. Four
+wire shapes: SpeechInworld, SpeechOpenAI, SpeechGemini and SpeechMiniMax.
+Sync, single AudioData.
 """
 
 from __future__ import annotations
@@ -96,7 +96,9 @@ def generate_speech(
 
     try:
         headers = _image_auth_headers(provider, cfg, pname)
-        base_url = provider.base_url or cfg.base_url
+        # Speech base: explicit override > the config's distinct speech base
+        # (MiniMax, HANDOFF-094) > chat base, the music base contract.
+        base_url = provider.base_url or sg_cfg.base_url or cfg.base_url
         url, body = _dispatch_speech_http(cfg, sg_cfg, request, base_url, provider.api_key)
         json_body = json.dumps(body).encode("utf-8")
         try:
@@ -192,8 +194,9 @@ def _find_speech_model(cfg: SpeechGenDef, model_id: str) -> SpeechModelDef | Non
 # provider name). SpeechInworld is a flat-JSON POST whose response carries
 # base64 audio; SpeechOpenAI is a flat-JSON POST whose response body is the raw
 # audio bytes; SpeechGemini is an Interactions API POST whose audio sits in
-# steps[]. Query-param-key providers (Google) carry the key in the URL, as on
-# every other Google call.
+# steps[]; SpeechMiniMax is a flat-JSON POST whose reply carries hex audio at
+# data.audio. Query-param-key providers (Google) carry the key in the URL, as
+# on every other Google call.
 def _dispatch_speech_http(
     cfg: Any,
     sg_cfg: SpeechGenDef,
@@ -210,7 +213,20 @@ def _dispatch_speech_http(
         return url, _build_openai_speech_body(request)
     if sg_cfg.wire_shape == "SpeechGemini":
         return url, _build_gemini_speech_body(request)
+    if sg_cfg.wire_shape == "SpeechMiniMax":
+        return url, _build_minimax_speech_body(request)
     return url, _build_inworld_speech_body(request)
+
+
+# _build_minimax_speech_body assembles the MiniMax /v1/t2a_v2 request body
+# (HANDOFF-094): only the fields the reference marks required. stream,
+# output_format (hex) and audio_setting (mp3) take their defaults.
+def _build_minimax_speech_body(request: SpeechRequest) -> dict[str, Any]:
+    return {
+        "model": request.model,
+        "text": request.text,
+        "voice_setting": {"voice_id": request.voice},
+    }
 
 
 # _build_gemini_speech_body assembles the Gemini TTS request body on the
@@ -280,7 +296,8 @@ def _build_inworld_speech_body(request: SpeechRequest) -> dict[str, Any]:
 # _parse_speech_response decodes the synthesized audio per the wire shape's
 # audio response encoding (ADR-051 OAA-002). "rawBody" (OpenAI) takes the
 # response body verbatim as the audio bytes; "base64Envelope" (Inworld) parses
-# a JSON envelope and base64-decodes the audio field.
+# a JSON envelope and base64-decodes the audio field; "hexEnvelope" (MiniMax)
+# hex-decodes data.audio and raises on a nonzero base_resp.
 def _parse_speech_response(
     provider_name: str, audio_encoding: str, fallback_mime: str, resp_body: bytes
 ) -> SpeechResponse:
@@ -290,6 +307,8 @@ def _parse_speech_response(
         )
     if audio_encoding == "base64InteractionSteps":
         return _parse_interaction_steps_speech(provider_name, fallback_mime, resp_body)
+    if audio_encoding == "hexEnvelope":
+        return _parse_hex_envelope_speech(provider_name, fallback_mime, resp_body)
     # base64Envelope: {"audioContent": "<base64>", "usage": {...}}. A 2xx body
     # that does not parse to audio is a decoding error (HANDOFF-036 A5) --
     # never a silent empty clip.
@@ -366,4 +385,54 @@ def _parse_interaction_steps_speech(
     return SpeechResponse(
         audio=AudioData(mime_type=mime if isinstance(mime, str) and mime else fallback_mime, bytes=decoded),
         usage=Usage(),
+    )
+
+
+# _parse_hex_envelope_speech decodes a MiniMax t2a_v2 reply (HANDOFF-094):
+# {"data": {"audio": "<hex>"}, "base_resp": {"status_code", "status_msg"}}.
+# MiniMax reports failures in base_resp on an HTTP 200, so a nonzero
+# status_code is an APIError carrying status_msg. A success with missing audio,
+# or invalid hex, is a decoding error (HANDOFF-036 A5).
+def _parse_hex_envelope_speech(
+    provider_name: str, fallback_mime: str, resp_body: bytes
+) -> SpeechResponse:
+    try:
+        raw = json.loads(resp_body)
+    except json.JSONDecodeError as exc:
+        raise APIError(
+            provider=provider_name,
+            status_code=200,
+            message=f"speech response: not valid JSON: {exc}",
+        ) from exc
+    if not isinstance(raw, dict):
+        raw = {}
+    base_resp = raw.get("base_resp")
+    if isinstance(base_resp, dict):
+        code = base_resp.get("status_code")
+        if isinstance(code, int) and code != 0:
+            msg = base_resp.get("status_msg")
+            raise APIError(
+                provider=provider_name,
+                status_code=200,
+                type=str(code),
+                message=msg if isinstance(msg, str) else "",
+            )
+    data = raw.get("data")
+    audio = data.get("audio") if isinstance(data, dict) else None
+    if not isinstance(audio, str) or not audio:
+        raise APIError(
+            provider=provider_name,
+            status_code=200,
+            message="speech response: missing or empty data.audio",
+        )
+    try:
+        decoded = bytes.fromhex(audio)
+    except ValueError as exc:
+        raise APIError(
+            provider=provider_name,
+            status_code=200,
+            message=f"speech response: invalid hex in data.audio: {exc}",
+        ) from exc
+    return SpeechResponse(
+        audio=AudioData(mime_type=fallback_mime, bytes=decoded), usage=Usage()
     )
