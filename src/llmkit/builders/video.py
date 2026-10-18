@@ -339,6 +339,17 @@ def _dispatch_video_submit(
             },
             "outputDataConfig": {"s3OutputDataConfig": {"s3Uri": output_uri}},
         }
+    elif vg_cfg.wire_shape == "VideoOpenRouter":
+        body = {"model": model, "prompt": _join_prompt_text(parts)}
+        # Image-to-video (HANDOFF-091): each frame is an OpenRouter
+        # ContentPartImage plus frame_type, first_frame then last_frame (live
+        # probe 2026-10-18; openrouter.ai/openapi.json).
+        or_seed = _video_seed_image(parts)
+        if or_seed is not None:
+            frames = [_openrouter_frame(or_seed, "first_frame")]
+            if request.last_frame is not None:
+                frames.append(_openrouter_frame(request.last_frame, "last_frame"))
+            body["frame_images"] = frames
     else:
         body = {"model": model, "prompt": _join_prompt_text(parts)}
         # Image-to-video (BUG-010): when a seed frame is present (reachable in
@@ -1121,6 +1132,17 @@ def _video_seed_image(parts: list[Part]) -> MediaRef | None:
             )
         seed = part.image
     return seed
+
+
+def _openrouter_frame(img: MediaRef, frame_type: str) -> dict[str, Any]:
+    """One OpenRouter frame_images item."""
+    mime = img.mime_type or "image/png"
+    encoded = base64.b64encode(img.bytes).decode("ascii")
+    return {
+        "type": "image_url",
+        "image_url": {"url": f"data:{mime};base64,{encoded}"},
+        "frame_type": frame_type,
+    }
 
 
 def _veo_image(img: MediaRef) -> dict[str, str]:
