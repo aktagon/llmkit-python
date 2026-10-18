@@ -41,6 +41,8 @@ class VideoGenDef:
     poll_endpoint: str = ""
     # file_endpoint is the file-retrieve template with {file_id} for two-hop providers; "" = single-hop.
     file_endpoint: str = ""
+    # cancel_endpoint is the cancel template with {model} and {operation_id}; "" = no documented cancel.
+    cancel_endpoint: str = ""
     # submit_handle_field is a dotted path to the poll handle id.
     submit_handle_field: str = ""
     requires_output_uri: bool = False
@@ -57,6 +59,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
         ),
         poll_endpoint="/async-invoke/{id}",
         file_endpoint="",
+        cancel_endpoint="",
         submit_handle_field="invocationArn",
         requires_output_uri=True,
         models=(
@@ -85,6 +88,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
         ),
         poll_endpoint="/v1beta/{id}",
         file_endpoint="",
+        cancel_endpoint="",
         submit_handle_field="name",
         requires_output_uri=False,
         models=(
@@ -133,6 +137,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
         ),
         poll_endpoint="/v1/videos/{id}",
         file_endpoint="",
+        cancel_endpoint="",
         submit_handle_field="request_id",
         requires_output_uri=False,
         models=(
@@ -158,6 +163,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
         ),
         poll_endpoint="/v1/query/video_generation?task_id={id}",
         file_endpoint="/v1/files/retrieve?file_id={file_id}",
+        cancel_endpoint="",
         submit_handle_field="task_id",
         requires_output_uri=False,
         models=(
@@ -183,6 +189,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
         ),
         poll_endpoint="/openapi/v2/video/result/{id}",
         file_endpoint="",
+        cancel_endpoint="",
         submit_handle_field="Resp.video_id",
         requires_output_uri=False,
         models=(
@@ -230,6 +237,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
         ),
         poll_endpoint="/api/v1/tasks/{id}",
         file_endpoint="",
+        cancel_endpoint="",
         submit_handle_field="output.task_id",
         requires_output_uri=False,
         models=(
@@ -255,6 +263,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
         ),
         poll_endpoint="/v2/videos/{id}",
         file_endpoint="",
+        cancel_endpoint="",
         submit_handle_field="id",
         requires_output_uri=False,
         models=(
@@ -283,6 +292,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
         ),
         poll_endpoint="/{model}:fetchPredictOperation",
         file_endpoint="",
+        cancel_endpoint="/{model}/operations/{operation_id}:cancel",
         submit_handle_field="name",
         requires_output_uri=False,
         models=(
@@ -341,6 +351,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
         ),
         poll_endpoint="/ent/v2/tasks/{id}/creations",
         file_endpoint="",
+        cancel_endpoint="",
         submit_handle_field="task_id",
         requires_output_uri=False,
         models=(
@@ -388,6 +399,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
         ),
         poll_endpoint="/v4/async-result/{id}",
         file_endpoint="",
+        cancel_endpoint="",
         submit_handle_field="id",
         requires_output_uri=False,
         models=(
