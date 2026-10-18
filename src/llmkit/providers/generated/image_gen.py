@@ -22,6 +22,7 @@ JSON_INLINE_REFS: Final = "JSONInlineRefs"
 # Deprecated: no provider accepts this since 2026-10-15 (Vertex Imagen shut down, BUG-101); removed at the next major.
 JSON_PREDICT: Final = "JSONPredict"
 JSON_GENERATIONS: Final = "JSONGenerations"
+JSON_GENERATIONS_INPUT_REFS: Final = "JSONGenerationsInputRefs"
 
 
 @dataclass(frozen=True)
@@ -169,6 +170,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         usage_reasoning_path="",
         variants=(
             RequestVariant(carries=("TextOnly",), shape="JSONGenerations", endpoint="/v1/images"),
+            RequestVariant(carries=("WithReferenceImages",), shape="JSONGenerationsInputRefs", endpoint="/v1/images"),
         ),
         models=(
             ImageModelDef(
@@ -177,7 +179,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
-                supports_image_input=False,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="bytedance-seed/seedream-5-0-flash",
@@ -185,7 +187,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
-                supports_image_input=False,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="google/gemini-2.5-flash-image",
@@ -193,7 +195,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
-                supports_image_input=False,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="google/gemini-3-pro-image",
@@ -201,7 +203,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
-                supports_image_input=False,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="google/gemini-3.1-flash-image",
@@ -209,7 +211,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
-                supports_image_input=False,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="google/gemini-3.1-flash-lite-image",
@@ -217,7 +219,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
-                supports_image_input=False,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="meta/muse-image",
@@ -233,7 +235,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
-                supports_image_input=False,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="openai/gpt-5-image-mini",
@@ -241,7 +243,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
-                supports_image_input=False,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="openai/gpt-5.4-image-2",
@@ -249,7 +251,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
-                supports_image_input=False,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="openai/gpt-image-2",
@@ -257,7 +259,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
-                supports_image_input=False,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="openai/gpt-image-2.5-sunburst",
@@ -265,7 +267,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
-                supports_image_input=False,
+                supports_image_input=True,
             ),
             ImageModelDef(
                 model_id="tencent/hy-image-v3.5-preview",
@@ -273,7 +275,7 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
                 aspect_ratios=(),
                 image_sizes=(),
                 max_input_images=0,
-                supports_image_input=False,
+                supports_image_input=True,
             ),
         ),
     ),
