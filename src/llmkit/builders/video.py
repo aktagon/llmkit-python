@@ -585,6 +585,8 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
     "in_progress", "outputs": {"video_url"}}.
     VideoQwen: {"output": {"task_status": "SUCCEEDED"|"FAILED"|"CANCELED"|
     "PENDING"|"RUNNING"|"UNKNOWN", "video_url"}}.
+    VideoOpenRouter: {"status": "completed"|"failed"|"cancelled"|"expired"|
+    "pending"|"in_progress", "unsigned_urls": [url], "error": "..."}.
     """
     try:
         raw = json.loads(body)
@@ -610,6 +612,18 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         if status in ("failed", "cancelled"):
             raise APIError(message=f"video generation {status}", status_code=0)
         # queued, in_progress (or any non-terminal status)
+        return VideoResponse(), False
+
+    if vg_cfg.wire_shape == "VideoOpenRouter":
+        status = raw.get("status") if isinstance(raw, dict) else None
+        if status == "completed":
+            return _video_result_from_openrouter(vg_cfg, raw), True
+        if status in ("failed", "cancelled", "expired"):
+            msg = raw.get("error")
+            if not isinstance(msg, str) or not msg:
+                msg = status
+            raise APIError(message=f"video generation {status}: {msg}", status_code=0)
+        # pending, in_progress (or any non-terminal status)
         return VideoResponse(), False
 
     if vg_cfg.wire_shape == "VideoZhipu":
@@ -835,6 +849,20 @@ def _video_result_from_pixverse(
     return VideoResponse(
         videos=[VideoData(mime_type=mime, url=url if isinstance(url, str) else "")]
     )
+
+
+def _video_result_from_openrouter(
+    vg_cfg: VideoGenDef, raw: dict[str, Any]
+) -> VideoResponse:
+    """Extract the finished video from an OpenRouter poll response. OpenRouter
+    uses download delivery: unsigned_urls[0] is an absolute content URL that
+    needs the API key, so it goes into VideoData.url for the download step. The
+    signed urls[] array is a secret and is never read."""
+    mime = _video_fallback_mime(vg_cfg)
+    urls = raw.get("unsigned_urls") if isinstance(raw, dict) else None
+    if not isinstance(urls, list) or not urls or not isinstance(urls[0], str):
+        return VideoResponse()
+    return VideoResponse(videos=[VideoData(mime_type=mime, url=urls[0])])
 
 
 def _video_result_from_together(
