@@ -26,12 +26,14 @@ class SpeechModelDef:
 
 @dataclass(frozen=True)
 class SpeechGenDef:
-    # wire_shape is SpeechInworld | SpeechOpenAI | SpeechGemini.
+    # wire_shape is SpeechInworld | SpeechOpenAI | SpeechGemini | SpeechMiniMax.
     wire_shape: str
-    # audio_response_encoding selects the response decoder: "base64Envelope" | "rawBody" | "base64InteractionSteps" (ADR-051).
+    # audio_response_encoding selects the response decoder: "base64Envelope" | "rawBody" | "base64InteractionSteps" | "hexEnvelope" (ADR-051).
     audio_response_encoding: str = "base64Envelope"
     # gen_endpoint is an override; empty = use provider main endpoint.
     gen_endpoint: str = ""
+    # base_url is the speech API base when it differs from the chat base; "" = use chat base.
+    base_url: str = ""
     models: tuple[SpeechModelDef, ...] = field(default_factory=tuple)
 
 
@@ -40,6 +42,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
         wire_shape="SpeechGemini",
         audio_response_encoding="base64InteractionSteps",
         gen_endpoint="/v1beta/interactions",
+        base_url="",
         models=(
             SpeechModelDef(
                 model_id="gemini-3.8-flash-lite-tts",
@@ -63,6 +66,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
         wire_shape="SpeechInworld",
         audio_response_encoding="base64Envelope",
         gen_endpoint="/tts/v1/voice",
+        base_url="",
         models=(
             SpeechModelDef(
                 model_id="inworld-tts-1.5-max",
@@ -90,10 +94,51 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
             ),
         ),
     ),
+    ProviderName.MINIMAX: SpeechGenDef(
+        wire_shape="SpeechMiniMax",
+        audio_response_encoding="hexEnvelope",
+        gen_endpoint="/v1/t2a_v2",
+        base_url="https://api.minimax.io",
+        models=(
+            SpeechModelDef(
+                model_id="speech-2.6-hd",
+                label="MiniMax Speech 2.6 HD",
+                output_mime="audio/mpeg",
+                sample_rate_hz=0,
+                max_speakers=0,
+                supports_speech_style=False,
+            ),
+            SpeechModelDef(
+                model_id="speech-2.6-turbo",
+                label="MiniMax Speech 2.6 Turbo",
+                output_mime="audio/mpeg",
+                sample_rate_hz=0,
+                max_speakers=0,
+                supports_speech_style=False,
+            ),
+            SpeechModelDef(
+                model_id="speech-2.8-hd",
+                label="MiniMax Speech 2.8 HD",
+                output_mime="audio/mpeg",
+                sample_rate_hz=0,
+                max_speakers=0,
+                supports_speech_style=False,
+            ),
+            SpeechModelDef(
+                model_id="speech-2.8-turbo",
+                label="MiniMax Speech 2.8 Turbo",
+                output_mime="audio/mpeg",
+                sample_rate_hz=0,
+                max_speakers=0,
+                supports_speech_style=False,
+            ),
+        ),
+    ),
     ProviderName.OPENAI: SpeechGenDef(
         wire_shape="SpeechOpenAI",
         audio_response_encoding="rawBody",
         gen_endpoint="/v1/audio/speech",
+        base_url="",
         models=(
             SpeechModelDef(
                 model_id="gpt-4o-mini-tts",
@@ -125,6 +170,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
         wire_shape="SpeechOpenAI",
         audio_response_encoding="rawBody",
         gen_endpoint="/v1/audio/speech",
+        base_url="",
         models=(
             SpeechModelDef(
                 model_id="elevenlabs/eleven-v3",
