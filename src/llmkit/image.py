@@ -23,6 +23,7 @@ from .request_variant import parts_carry, select_request_variant
 from .providers.generated.image_gen import (
     INLINE_PARTS,
     JSON_GENERATIONS,
+    JSON_GENERATIONS_INPUT_REFS,
     JSON_GENERATIONS_OPENAI,
     JSON_INLINE_REFS,
     MULTIPART_FORM,
@@ -219,12 +220,12 @@ def generate_image(
             raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
         if safety_settings:
             raise ValidationError(field="safety_settings", message=f"not supported by {provider.name}")
-    elif variant.shape == JSON_GENERATIONS:
-        # Recraft, OpenRouter (text-to-image only). The flat generations body carries only
+    elif variant.shape in (JSON_GENERATIONS, JSON_GENERATIONS_INPUT_REFS):
+        # Recraft, OpenRouter. The flat generations body carries only
         # size (-> `size`) and count (-> `n`); aspect_ratio is not a Recraft
         # wire field (it sizes by an explicit WxH `size`), and the gpt-image /
-        # safety knobs are OpenAI / Google only. Image parts are
-        # rejected upstream because Recraft models set supports_image_input False.
+        # safety knobs are OpenAI / Google only. JSON_GENERATIONS_INPUT_REFS is
+        # the same body plus input_references, so the same knobs apply.
         if aspect_ratio:
             raise ValidationError(field="aspect_ratio", message=f"not supported by {provider.name}; use image_size (Recraft sizes by WxH)")
         if quality:
@@ -381,6 +382,9 @@ def _dispatch_image_http(
         body = _build_xai_body(parts, model, aspect_ratio, image_size, count, extra_fields)
     elif shape == JSON_GENERATIONS:
         body = _build_recraft_gen_body(parts, model, image_size, count, extra_fields)
+    elif shape == JSON_GENERATIONS_INPUT_REFS:
+        body = _build_recraft_gen_body(parts, model, image_size, count, extra_fields)
+        body["input_references"] = _image_url_content_parts(parts)
     elif shape == INLINE_PARTS:
         body = _build_image_body(parts, aspect_ratio, image_size, include_text, safety_settings)
     else:
@@ -412,6 +416,20 @@ def _normalize_image_parts(request: ImageRequest) -> list[Part]:
     if not has_prompt and not has_parts:
         raise ValidationError(field="prompt", message="set either prompt or parts")
     return [Part(text=request.prompt)] if has_prompt else list(request.parts)
+
+
+def _image_url_content_parts(parts: list[Part]) -> list[dict[str, Any]]:
+    """Each image part, in caller order, as an OpenRouter ContentPartImage
+    {type:"image_url", image_url:{url}} with the bytes as a base64 data URL
+    (live probe 2026-10-18)."""
+    refs: list[dict[str, Any]] = []
+    for part in parts:
+        if part.image is None:
+            continue
+        mime = part.image.mime_type or "image/png"
+        encoded = base64.b64encode(part.image.bytes).decode("ascii")
+        refs.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{encoded}"}})
+    return refs
 
 
 def _join_text_parts(parts: list[Part]) -> str:
