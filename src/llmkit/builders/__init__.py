@@ -244,6 +244,9 @@ class Image:
         return out
 
     def aspect_ratio(self, r: str) -> "Image":
+        """Sets the output aspect ratio, such as "16:9". A ratio the model does
+        not list is rejected before send. On a video, only OpenRouter sends it.
+        """
         out = copy.copy(self)
         out._aspect_ratio = r
         return out
@@ -472,11 +475,14 @@ class Video:
         self.client = client
         self._middleware: list[MiddlewareFn] = []
         self._reference_images: list[MediaRef] = []
+        self._aspect_ratio: str = ""
+        self._duration: int = 0
         self._parts: list[Part] = []
         self._last_frame: MediaRef | None = None
         self._model: str = ""
         self._output_uri: str = ""
         self._raw: bool = False
+        self._resolution: str = ""
 
     def add_middleware(self, *fns: MiddlewareFn) -> "Video":
         out = copy.copy(self)
@@ -489,6 +495,22 @@ class Video:
         """
         out = copy.copy(self)
         out._reference_images = [*self._reference_images, MediaRef(mime_type=mime, bytes=data)]
+        return out
+
+    def aspect_ratio(self, r: str) -> "Video":
+        """Sets the output aspect ratio, such as "16:9". A ratio the model does
+        not list is rejected before send. On a video, only OpenRouter sends it.
+        """
+        out = copy.copy(self)
+        out._aspect_ratio = r
+        return out
+
+    def duration(self, seconds: int) -> "Video":
+        """Sets the video length in whole seconds; 0 means the provider default.
+        Only OpenRouter sends it. Above the model's maximum, it is rejected before send.
+        """
+        out = copy.copy(self)
+        out._duration = seconds
         return out
 
     def image(self, mime: str, data: bytes) -> "Video":  # ordered
@@ -517,6 +539,14 @@ class Video:
     def raw(self) -> "Video":
         out = copy.copy(self)
         out._raw = True
+        return out
+
+    def resolution(self, r: str) -> "Video":
+        """Sets the video resolution, such as "720p". Only OpenRouter sends it.
+        A resolution the model does not list is rejected before send.
+        """
+        out = copy.copy(self)
+        out._resolution = r
         return out
 
     def text(self, s: str) -> "Video":  # ordered
