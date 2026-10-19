@@ -30,6 +30,8 @@ class SpeechGenDef:
     wire_shape: str
     # audio_response_encoding selects the response decoder: "base64Envelope" | "rawBody" | "base64InteractionSteps" | "hexEnvelope" (ADR-051).
     audio_response_encoding: str = "base64Envelope"
+    # requested_output_format is the format token the body sends (mp3, LINEAR16); "" = the body sends no format (HANDOFF-098).
+    requested_output_format: str = ""
     # gen_endpoint is an override; empty = use provider main endpoint.
     gen_endpoint: str = ""
     models: tuple[SpeechModelDef, ...] = field(default_factory=tuple)
@@ -41,6 +43,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
     ProviderName.GOOGLE: SpeechGenDef(
         wire_shape="SpeechGemini",
         audio_response_encoding="base64InteractionSteps",
+        requested_output_format="",
         gen_endpoint="/v1beta/interactions",
         models=(
             SpeechModelDef(
@@ -73,6 +76,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
     ProviderName.GROK: SpeechGenDef(
         wire_shape="SpeechXAI",
         audio_response_encoding="rawBody",
+        requested_output_format="mp3",
         gen_endpoint="/v1/tts",
         models=(
             SpeechModelDef(
@@ -89,6 +93,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
     ProviderName.INWORLD: SpeechGenDef(
         wire_shape="SpeechInworld",
         audio_response_encoding="base64Envelope",
+        requested_output_format="LINEAR16",
         gen_endpoint="/tts/v1/voice",
         models=(
             SpeechModelDef(
@@ -121,6 +126,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
     ProviderName.MINIMAX: SpeechGenDef(
         wire_shape="SpeechMiniMax",
         audio_response_encoding="hexEnvelope",
+        requested_output_format="",
         gen_endpoint="/v1/t2a_v2",
         models=(
             SpeechModelDef(
@@ -161,6 +167,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
     ProviderName.OPENAI: SpeechGenDef(
         wire_shape="SpeechOpenAI",
         audio_response_encoding="rawBody",
+        requested_output_format="mp3",
         gen_endpoint="/v1/audio/speech",
         models=(
             SpeechModelDef(
@@ -193,6 +200,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
     ProviderName.OPENROUTER: SpeechGenDef(
         wire_shape="SpeechOpenAI",
         audio_response_encoding="rawBody",
+        requested_output_format="mp3",
         gen_endpoint="/v1/audio/speech",
         models=(
             SpeechModelDef(
