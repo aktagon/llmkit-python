@@ -238,6 +238,8 @@ def generate_image(
             raise ValidationError(field="safety_filter", message=f"not supported by {provider.name}")
         if safety_settings:
             raise ValidationError(field="safety_settings", message=f"not supported by {provider.name}")
+    else:
+        raise ValueError(f"image: unsupported request shape {variant.shape!r}")
 
     mws = list(middleware or [])
     base_event = Event(
@@ -707,6 +709,13 @@ def _parse_image_response(provider_name: str, body: bytes, img_cfg: Any) -> Imag
             img_cfg.usage_input_path,
             img_cfg.usage_output_path,
             img_cfg.usage_reasoning_path,
+        )
+    if img_cfg.response_shape != "GoogleParts":
+        # VertexPredictions has no parser (Vertex Imagen removed, BUG-101).
+        raise APIError(
+            provider=provider_name,
+            message=f"image: unsupported response shape {img_cfg.response_shape!r}",
+            status_code=0,
         )
     # GoogleParts: candidates[].content.parts inline data.
     images, text, finish_reason, finish_message = _extract_google_image_parts(raw)
