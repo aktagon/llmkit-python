@@ -26,7 +26,7 @@ class SpeechModelDef:
 
 @dataclass(frozen=True)
 class SpeechGenDef:
-    # wire_shape is SpeechInworld | SpeechOpenAI | SpeechGemini | SpeechMiniMax.
+    # wire_shape is SpeechInworld | SpeechOpenAI | SpeechGemini | SpeechMiniMax | SpeechXAI.
     wire_shape: str
     # audio_response_encoding selects the response decoder: "base64Envelope" | "rawBody" | "base64InteractionSteps" | "hexEnvelope" (ADR-051).
     audio_response_encoding: str = "base64Envelope"
@@ -66,6 +66,22 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 sample_rate_hz=24000,
                 max_speakers=2,
                 supports_speech_style=True,
+            ),
+        ),
+        base_url="",
+    ),
+    ProviderName.GROK: SpeechGenDef(
+        wire_shape="SpeechXAI",
+        audio_response_encoding="rawBody",
+        gen_endpoint="/v1/tts",
+        models=(
+            SpeechModelDef(
+                model_id="grok-tts",
+                label="Grok TTS",
+                output_mime="audio/mpeg",
+                sample_rate_hz=0,
+                max_speakers=0,
+                supports_speech_style=False,
             ),
         ),
         base_url="",
