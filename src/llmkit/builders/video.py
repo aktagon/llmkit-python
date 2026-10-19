@@ -86,6 +86,16 @@ class VideoRequest:
     # reference_images are asset images the video keeps, at most 3, never
     # with a first or last frame. Set them via Video.add_reference_image.
     reference_images: list[MediaRef] = dataclasses.field(default_factory=list)
+    # duration_seconds is the video length in whole seconds; 0 means unset
+    # (the provider default). Only the VideoOpenRouter wire shape sends it, as
+    # the JSON integer `duration`. Set it via Video.duration (HANDOFF-097).
+    duration_seconds: int = 0
+    # aspect_ratio is the output aspect ratio, such as "16:9"; "" means unset.
+    # Only VideoOpenRouter sends it. Set it via Video.aspect_ratio.
+    aspect_ratio: str = ""
+    # resolution is the output resolution, such as "720p"; "" means unset.
+    # Only VideoOpenRouter sends it. Set it via Video.resolution.
+    resolution: str = ""
 
 
 class VideoHandle(_VideoHandleData):
@@ -119,6 +129,9 @@ async def video_submit(b: "Video", msg: str) -> VideoHandle:
         output_uri=b._output_uri,
         last_frame=b._last_frame,
         reference_images=list(b._reference_images),
+        duration_seconds=b._duration,
+        aspect_ratio=b._aspect_ratio,
+        resolution=b._resolution,
     )
     if b._parts:
         if msg:
@@ -191,6 +204,7 @@ def _submit_video(
             raise ValidationError(field=f"parts[{i}]", message="must have Text set")
     image_count = sum(1 for p in parts if p.image is not None)
     _validate_video_frames(model, image_count, request)
+    _validate_video_options(provider.name, vg_cfg, model, request)
     # ADR-096: the carried inputs select the submit request; a config with no
     # such variant cannot send it.
     variant = select_request_variant(
@@ -350,6 +364,16 @@ def _dispatch_video_submit(
             if request.last_frame is not None:
                 frames.append(_openrouter_frame(request.last_frame, "last_frame"))
             body["frame_images"] = frames
+        # Video options (HANDOFF-097): body-root fields, each sent only when
+        # set, so the prompt-only body stays {model, prompt}. duration is a
+        # JSON integer; _validate_video_options has already checked each value
+        # against the model.
+        if request.duration_seconds > 0:
+            body["duration"] = request.duration_seconds
+        if request.aspect_ratio:
+            body["aspect_ratio"] = request.aspect_ratio
+        if request.resolution:
+            body["resolution"] = request.resolution
     else:
         body = {"model": model, "prompt": _join_prompt_text(parts)}
         # Image-to-video (BUG-010): when a seed frame is present (reachable in
@@ -1188,6 +1212,54 @@ def _validate_video_frames(
         )
     if request.last_frame is not None and image_count == 0:
         raise ValidationError(field="last_frame", message="requires a first frame")
+
+
+def _validate_video_options(
+    provider_name: str,
+    vg_cfg: VideoGenDef,
+    model: VideoModelDef,
+    request: VideoRequest,
+) -> None:
+    """Reject a duration, aspect ratio or resolution the provider or the model
+    cannot take, before any HTTP call (HANDOFF-097). Same rules, order and
+    messages as go/video.go validateVideoOptions:
+
+    1. A set option on a wire shape other than VideoOpenRouter: that shape has
+       no body field for it. The first set option is named, in the order
+       duration, aspect_ratio, resolution.
+    2. A negative duration.
+    3. A duration above the model's max_duration_seconds (0 = no known limit).
+    4. A resolution the model does not list (empty list = no fixed set).
+    5. An aspect ratio the model does not list (empty list = no fixed set)."""
+    if vg_cfg.wire_shape != "VideoOpenRouter":
+        for field, is_set in (
+            ("duration", request.duration_seconds != 0),
+            ("aspect_ratio", request.aspect_ratio != ""),
+            ("resolution", request.resolution != ""),
+        ):
+            if is_set:
+                raise ValidationError(
+                    field=field, message=f"{provider_name} video does not send {field}"
+                )
+        return
+    duration = request.duration_seconds
+    if duration < 0:
+        raise ValidationError(field="duration", message="must be positive")
+    if duration > 0 and model.max_duration_seconds > 0 and duration > model.max_duration_seconds:
+        raise ValidationError(
+            field="duration",
+            message=f"{model.model_id} takes at most {model.max_duration_seconds} seconds, got {duration}",
+        )
+    if request.resolution and model.resolutions and request.resolution not in model.resolutions:
+        raise ValidationError(
+            field="resolution",
+            message=f"{model.model_id} does not support resolution {request.resolution}",
+        )
+    if request.aspect_ratio and model.aspect_ratios and request.aspect_ratio not in model.aspect_ratios:
+        raise ValidationError(
+            field="aspect_ratio",
+            message=f"{model.model_id} does not support aspect ratio {request.aspect_ratio}",
+        )
 
 
 def _video_carries(image_count: int, request: VideoRequest) -> tuple[str, ...]:
