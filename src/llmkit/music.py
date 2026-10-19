@@ -230,9 +230,13 @@ def _dispatch_music_http(
     if mg_cfg.wire_shape == "MusicMinimax":
         body = _build_minimax_music_body(parts, model)
         return base_url + mg_cfg.gen_endpoint, body
-    # MusicGenerateContent (Gemini).
-    body = _build_gemini_music_body(parts)
-    return _build_music_url(provider, cfg, mg_cfg, model), body
+    if mg_cfg.wire_shape == "MusicGenerateContent":
+        body = _build_gemini_music_body(parts)
+        return _build_music_url(provider, cfg, mg_cfg, model), body
+    raise APIError(
+        message=f"music: unsupported wire shape {mg_cfg.wire_shape!r}",
+        status_code=0,
+    )
 
 
 def _build_vertex_music_body(parts: list[Part]) -> dict[str, Any]:
@@ -327,7 +331,12 @@ def _parse_music_response(
         return _parse_vertex_music_response(raw, fallback_mime)
     if wire_shape == "MusicMinimax":
         return _parse_minimax_music_response(raw, fallback_mime)
-    return _parse_gemini_music_response(raw, fallback_mime)
+    if wire_shape == "MusicGenerateContent":
+        return _parse_gemini_music_response(raw, fallback_mime)
+    raise APIError(
+        message=f"music: unsupported wire shape {wire_shape!r}",
+        status_code=0,
+    )
 
 
 def _parse_vertex_music_response(
