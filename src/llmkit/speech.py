@@ -215,15 +215,21 @@ def _dispatch_speech_http(
     if auth_scheme(ProviderName(cfg.name)) == AuthScheme.QUERY_PARAM_KEY:
         sep = "&" if "?" in url else "?"
         url = url + sep + cfg.auth_query_param + "=" + api_key
+    fmt = sg_cfg.requested_output_format
     if sg_cfg.wire_shape == "SpeechOpenAI":
-        return url, _build_openai_speech_body(request)
+        return url, _build_openai_speech_body(request, fmt)
     if sg_cfg.wire_shape == "SpeechGemini":
         return url, _build_gemini_speech_body(request)
     if sg_cfg.wire_shape == "SpeechMiniMax":
         return url, _build_minimax_speech_body(request)
     if sg_cfg.wire_shape == "SpeechXAI":
-        return url, _build_xai_speech_body(request)
-    return url, _build_inworld_speech_body(request)
+        return url, _build_xai_speech_body(request, fmt)
+    if sg_cfg.wire_shape == "SpeechInworld":
+        return url, _build_inworld_speech_body(request, fmt)
+    raise APIError(
+        message=f"speech: unsupported wire shape {sg_cfg.wire_shape!r}",
+        status_code=0,
+    )
 
 
 # _build_minimax_speech_body assembles the MiniMax /v1/t2a_v2 request body
@@ -240,13 +246,14 @@ def _build_minimax_speech_body(request: SpeechRequest) -> dict[str, Any]:
 # _build_xai_speech_body assembles the xAI /v1/tts request body (HANDOFF-095).
 # The endpoint has no model field. language is always "auto" (llmkit has no
 # language option), and with_timestamps is never sent: it switches the reply
-# from raw audio bytes to JSON.
-def _build_xai_speech_body(request: SpeechRequest) -> dict[str, Any]:
+# from raw audio bytes to JSON. output_format.codec is the config's requested
+# output format (HANDOFF-098).
+def _build_xai_speech_body(request: SpeechRequest, output_format: str) -> dict[str, Any]:
     return {
         "text": request.text,
         "voice_id": request.voice,
         "language": "auto",
-        "output_format": {"codec": "mp3"},
+        "output_format": {"codec": output_format},
     }
 
 
@@ -286,12 +293,12 @@ def _build_gemini_speech_body(request: SpeechRequest) -> dict[str, Any]:
 # _build_openai_speech_body assembles the OpenAI /v1/audio/speech request body.
 # Slice 1 fixes response_format=mp3 (KISS); format selection is a later slice.
 # A style is sent as instructions (BUG-091), which gpt-4o-mini-tts accepts.
-def _build_openai_speech_body(request: SpeechRequest) -> dict[str, Any]:
+def _build_openai_speech_body(request: SpeechRequest, output_format: str) -> dict[str, Any]:
     body: dict[str, Any] = {
         "model": request.model,
         "input": request.text,
         "voice": request.voice,
-        "response_format": "mp3",
+        "response_format": output_format,
     }
     if request.style:
         body["instructions"] = request.style
@@ -301,13 +308,13 @@ def _build_openai_speech_body(request: SpeechRequest) -> dict[str, Any]:
 # _build_inworld_speech_body assembles the Inworld /tts/v1/voice request body.
 # Slice 1 sends a fixed audioConfig (LINEAR16/22050 -> WAV) and BALANCED
 # delivery; format/sample-rate selection is a later slice (ADR-049 OQ-5).
-def _build_inworld_speech_body(request: SpeechRequest) -> dict[str, Any]:
+def _build_inworld_speech_body(request: SpeechRequest, output_format: str) -> dict[str, Any]:
     return {
         "text": request.text,
         "voiceId": request.voice,
         "modelId": request.model,
         "audioConfig": {
-            "audioEncoding": "LINEAR16",
+            "audioEncoding": output_format,
             "sampleRateHertz": 22050,
         },
         "deliveryMode": "BALANCED",
@@ -330,6 +337,12 @@ def _parse_speech_response(
         return _parse_interaction_steps_speech(provider_name, fallback_mime, resp_body)
     if audio_encoding == "hexEnvelope":
         return _parse_hex_envelope_speech(provider_name, fallback_mime, resp_body)
+    if audio_encoding != "base64Envelope":
+        raise APIError(
+            provider=provider_name,
+            message=f"speech: unsupported audio encoding {audio_encoding!r}",
+            status_code=0,
+        )
     # base64Envelope: {"audioContent": "<base64>", "usage": {...}}. A 2xx body
     # that does not parse to audio is a decoding error (HANDOFF-036 A5) --
     # never a silent empty clip.
