@@ -3,9 +3,9 @@ ts/src/speech.ts (ADR-049).
 
 Pre-flight validation (model + text or lines required; voice or speakers;
 provider supports speech; model known; speakers and style the model takes)
-runs before any HTTP call. Voices are free-form: there is no catalogue. Four
-wire shapes: SpeechInworld, SpeechOpenAI, SpeechGemini and SpeechMiniMax.
-Sync, single AudioData.
+runs before any HTTP call. Voices are free-form: there is no catalogue. Five
+wire shapes: SpeechInworld, SpeechOpenAI, SpeechGemini, SpeechMiniMax and
+SpeechXAI. Sync, single AudioData.
 """
 
 from __future__ import annotations
@@ -195,7 +195,8 @@ def _find_speech_model(cfg: SpeechGenDef, model_id: str) -> SpeechModelDef | Non
 # base64 audio; SpeechOpenAI is a flat-JSON POST whose response body is the raw
 # audio bytes; SpeechGemini is an Interactions API POST whose audio sits in
 # steps[]; SpeechMiniMax is a flat-JSON POST whose reply carries hex audio at
-# data.audio. Query-param-key providers (Google) carry the key in the URL, as
+# data.audio; SpeechXAI is a flat-JSON POST whose response body is the raw
+# audio bytes. Query-param-key providers (Google) carry the key in the URL, as
 # on every other Google call.
 def _dispatch_speech_http(
     cfg: Any,
@@ -215,6 +216,8 @@ def _dispatch_speech_http(
         return url, _build_gemini_speech_body(request)
     if sg_cfg.wire_shape == "SpeechMiniMax":
         return url, _build_minimax_speech_body(request)
+    if sg_cfg.wire_shape == "SpeechXAI":
+        return url, _build_xai_speech_body(request)
     return url, _build_inworld_speech_body(request)
 
 
@@ -226,6 +229,19 @@ def _build_minimax_speech_body(request: SpeechRequest) -> dict[str, Any]:
         "model": request.model,
         "text": request.text,
         "voice_setting": {"voice_id": request.voice},
+    }
+
+
+# _build_xai_speech_body assembles the xAI /v1/tts request body (HANDOFF-095).
+# The endpoint has no model field. language is always "auto" (llmkit has no
+# language option), and with_timestamps is never sent: it switches the reply
+# from raw audio bytes to JSON.
+def _build_xai_speech_body(request: SpeechRequest) -> dict[str, Any]:
+    return {
+        "text": request.text,
+        "voice_id": request.voice,
+        "language": "auto",
+        "output_format": {"codec": "mp3"},
     }
 
 
@@ -294,8 +310,8 @@ def _build_inworld_speech_body(request: SpeechRequest) -> dict[str, Any]:
 
 
 # _parse_speech_response decodes the synthesized audio per the wire shape's
-# audio response encoding (ADR-051 OAA-002). "rawBody" (OpenAI) takes the
-# response body verbatim as the audio bytes; "base64Envelope" (Inworld) parses
+# audio response encoding (ADR-051 OAA-002). "rawBody" (OpenAI, xAI) takes
+# the response body verbatim as the audio bytes; "base64Envelope" (Inworld) parses
 # a JSON envelope and base64-decodes the audio field; "hexEnvelope" (MiniMax)
 # hex-decodes data.audio and raises on a nonzero base_resp.
 def _parse_speech_response(
