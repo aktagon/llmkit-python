@@ -87,14 +87,18 @@ class VideoRequest:
     # with a first or last frame. Set them via Video.add_reference_image.
     reference_images: list[MediaRef] = dataclasses.field(default_factory=list)
     # duration_seconds is the video length in whole seconds; 0 means unset
-    # (the provider default). Only the VideoOpenRouter wire shape sends it, as
-    # the JSON integer `duration`. Set it via Video.duration (HANDOFF-097).
+    # (the provider default). VideoOpenRouter and VideoGrok send it as the
+    # JSON integer `duration`; VideoVeo and VideoVertexVeo send it as the JSON
+    # number parameters.durationSeconds (HANDOFF-097, HANDOFF-100). Set it via
+    # Video.duration.
     duration_seconds: int = 0
     # aspect_ratio is the output aspect ratio, such as "16:9"; "" means unset.
-    # Only VideoOpenRouter sends it. Set it via Video.aspect_ratio.
+    # Sent as `aspect_ratio` or parameters.aspectRatio, on the same wire shapes
+    # as duration_seconds. Set it via Video.aspect_ratio.
     aspect_ratio: str = ""
     # resolution is the output resolution, such as "720p"; "" means unset.
-    # Only VideoOpenRouter sends it. Set it via Video.resolution.
+    # Sent as `resolution` or parameters.resolution, on the same wire shapes
+    # as duration_seconds. Set it via Video.resolution.
     resolution: str = ""
 
 
@@ -318,8 +322,7 @@ def _dispatch_video_submit(
         # Veo (Gemini API) and Vertex Veo share the submit body: the model is in
         # the PATH (:predictLongRunning), not the body, so the body has no model
         # field. The prompt nests under instances[]; the optional parameters
-        # object ({aspectRatio, resolution} for Gemini; {sampleCount, storageUri}
-        # for Vertex) is omitted on the prompt-only hot path.
+        # object is omitted on the prompt-only hot path.
         instance: dict[str, Any] = {"prompt": _join_prompt_text(parts)}
         # First frame (BUG-089): the seed rides at instances[0].image as raw
         # base64 + mimeType (no data: prefix), per the Vertex Veo reference
@@ -334,12 +337,25 @@ def _dispatch_video_submit(
         if request.last_frame is not None:
             instance["lastFrame"] = _veo_image(request.last_frame)
         body = {"instances": [instance]}
+        params: dict[str, Any] = {}
         if request.reference_images:
             instance["referenceImages"] = [
                 {"image": _veo_image(img), "referenceType": "asset"}
                 for img in request.reference_images
             ]
-            body["parameters"] = {"durationSeconds": 8}
+            params["durationSeconds"] = 8
+        # Video options (HANDOFF-100): parameters.durationSeconds (a JSON
+        # number), aspectRatio and resolution, each only when set. With
+        # reference images _validate_video_options allows only 8, so a set
+        # duration matches the forced 8.
+        if request.duration_seconds > 0:
+            params["durationSeconds"] = request.duration_seconds
+        if request.aspect_ratio:
+            params["aspectRatio"] = request.aspect_ratio
+        if request.resolution:
+            params["resolution"] = request.resolution
+        if params:
+            body["parameters"] = params
     elif vg_cfg.wire_shape == "VideoBedrock":
         # Nova Reel carries the model in the BODY (modelId, unlike the Converse
         # chat path) and writes the mp4 to the caller's S3 bucket. The optional
@@ -364,16 +380,7 @@ def _dispatch_video_submit(
             if request.last_frame is not None:
                 frames.append(_openrouter_frame(request.last_frame, "last_frame"))
             body["frame_images"] = frames
-        # Video options (HANDOFF-097): body-root fields, each sent only when
-        # set, so the prompt-only body stays {model, prompt}. duration is a
-        # JSON integer; _validate_video_options has already checked each value
-        # against the model.
-        if request.duration_seconds > 0:
-            body["duration"] = request.duration_seconds
-        if request.aspect_ratio:
-            body["aspect_ratio"] = request.aspect_ratio
-        if request.resolution:
-            body["resolution"] = request.resolution
+        _set_root_video_options(body, request)
     elif vg_cfg.wire_shape in (
         "VideoGrok",
         "VideoZhipu",
@@ -390,6 +397,10 @@ def _dispatch_video_submit(
         seed = _video_seed_image_url(parts)
         if seed:
             body["image"] = {"url": seed}
+        # Only VideoGrok in this arm sends the options (HANDOFF-100); the
+        # other shapes reject a set option in _validate_video_options.
+        if vg_cfg.wire_shape == "VideoGrok":
+            _set_root_video_options(body, request)
     else:
         raise APIError(
             message=f"video submit: unsupported wire shape {vg_cfg.wire_shape!r}",
@@ -1225,6 +1236,26 @@ def _validate_video_frames(
         raise ValidationError(field="last_frame", message="requires a first frame")
 
 
+def _set_root_video_options(body: dict[str, Any], request: VideoRequest) -> None:
+    """Set the body-root duration, aspect_ratio and resolution of the
+    VideoOpenRouter and VideoGrok bodies (HANDOFF-097, HANDOFF-100), each only
+    when set, so the prompt-only body stays {model, prompt}. duration is a JSON
+    integer; _validate_video_options has already checked each value against
+    the model."""
+    if request.duration_seconds > 0:
+        body["duration"] = request.duration_seconds
+    if request.aspect_ratio:
+        body["aspect_ratio"] = request.aspect_ratio
+    if request.resolution:
+        body["resolution"] = request.resolution
+
+
+def _video_shape_sends_options(shape: str) -> bool:
+    """Whether a video wire shape has body fields for duration, aspect ratio
+    and resolution (HANDOFF-097, HANDOFF-100)."""
+    return shape in ("VideoOpenRouter", "VideoGrok", "VideoVeo", "VideoVertexVeo")
+
+
 def _validate_video_options(
     provider_name: str,
     vg_cfg: VideoGenDef,
@@ -1235,14 +1266,16 @@ def _validate_video_options(
     cannot take, before any HTTP call (HANDOFF-097). Same rules, order and
     messages as go/video.go validateVideoOptions:
 
-    1. A set option on a wire shape other than VideoOpenRouter: that shape has
-       no body field for it. The first set option is named, in the order
-       duration, aspect_ratio, resolution.
+    1. A set option on a wire shape with no body field for it (see
+       _video_shape_sends_options). The first set option is named, in the
+       order duration, aspect_ratio, resolution.
     2. A negative duration.
     3. A duration above the model's max_duration_seconds (0 = no known limit).
-    4. A resolution the model does not list (empty list = no fixed set).
-    5. An aspect ratio the model does not list (empty list = no fixed set)."""
-    if vg_cfg.wire_shape != "VideoOpenRouter":
+    4. A duration other than 8 with reference images: Veo forces 8 seconds
+       (ai.google.dev/gemini-api/docs/veo, read 2026-10-19; HANDOFF-100).
+    5. A resolution the model does not list (empty list = no fixed set).
+    6. An aspect ratio the model does not list (empty list = no fixed set)."""
+    if not _video_shape_sends_options(vg_cfg.wire_shape):
         for field, is_set in (
             ("duration", request.duration_seconds != 0),
             ("aspect_ratio", request.aspect_ratio != ""),
@@ -1260,6 +1293,11 @@ def _validate_video_options(
         raise ValidationError(
             field="duration",
             message=f"{model.model_id} takes at most {model.max_duration_seconds} seconds, got {duration}",
+        )
+    if duration > 0 and request.reference_images and duration != 8:
+        raise ValidationError(
+            field="duration",
+            message=f"reference images take 8 seconds, got {duration}",
         )
     if request.resolution and model.resolutions and request.resolution not in model.resolutions:
         raise ValidationError(
