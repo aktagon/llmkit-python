@@ -248,7 +248,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=15,
                 output_mime="video/mp4",
                 resolutions=("1080p", "480p", "4K", "720p"),
-                aspect_ratios=("16:9", "1:1", "21:9", "3:4", "4:3", "9:16"),
+                aspect_ratios=("16:9", "1:1", "21:9", "3:4", "4:3", "9:16", "9:21"),
                 max_input_images=0,
             ),
             VideoModelDef(
@@ -260,7 +260,7 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 max_duration_seconds=15,
                 output_mime="video/mp4",
                 resolutions=("480p", "720p"),
-                aspect_ratios=("16:9", "1:1", "21:9", "3:4", "4:3", "9:16"),
+                aspect_ratios=("16:9", "1:1", "21:9", "3:4", "4:3", "9:16", "9:21"),
                 max_input_images=0,
             ),
             VideoModelDef(
