@@ -87,6 +87,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
         ),
     ),
     APIOptionDef(
+        py_func="with_duration",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
         py_func="with_file",
         sub_options=(
         ),
@@ -198,6 +203,11 @@ API_OPTIONS: tuple[APIOptionDef, ...] = (
     ),
     APIOptionDef(
         py_func="with_reasoning_effort",
+        sub_options=(
+        ),
+    ),
+    APIOptionDef(
+        py_func="with_resolution",
         sub_options=(
         ),
     ),
