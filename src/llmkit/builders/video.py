@@ -271,8 +271,8 @@ def _dispatch_video_submit(
     """POST the submit body per wire shape (never by provider name) and
     return the provider-assigned poll handle id.
 
-      - VideoGrok (xAI), VideoZhipu (CogVideoX), and VideoTogether share the
-        simple {model, prompt} submit body. They differ only in which
+      - VideoGrok (xAI), VideoZhipu (CogVideoX), VideoTogether, VideoMinimax
+        and VideoVidu share the simple {model, prompt} submit body. They differ only in which
         response field carries the poll handle: Grok returns it as
         request_id, Zhipu and Together as the top-level id.
       - VideoQwen (DashScope) nests the prompt under an ``input`` object
@@ -374,7 +374,13 @@ def _dispatch_video_submit(
             body["aspect_ratio"] = request.aspect_ratio
         if request.resolution:
             body["resolution"] = request.resolution
-    else:
+    elif vg_cfg.wire_shape in (
+        "VideoGrok",
+        "VideoZhipu",
+        "VideoTogether",
+        "VideoMinimax",
+        "VideoVidu",
+    ):
         body = {"model": model, "prompt": _join_prompt_text(parts)}
         # Image-to-video (BUG-010): when a seed frame is present (reachable in
         # this arm only for grok-imagine-video; Veo has its own arm above),
@@ -384,6 +390,11 @@ def _dispatch_video_submit(
         seed = _video_seed_image_url(parts)
         if seed:
             body["image"] = {"url": seed}
+    else:
+        raise APIError(
+            message=f"video submit: unsupported wire shape {vg_cfg.wire_shape!r}",
+            status_code=0,
+        )
     json_body = json.dumps(body).encode("utf-8")
     # {model} in the submit endpoint is substituted with the per-call model
     # (Veo's :predictLongRunning path); a no-op for providers that carry the
