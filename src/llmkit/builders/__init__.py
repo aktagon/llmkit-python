@@ -245,7 +245,7 @@ class Image:
 
     def aspect_ratio(self, r: str) -> "Image":
         """Sets the output aspect ratio, such as "16:9". A ratio the model does
-        not list is rejected before send. On a video, only OpenRouter sends it.
+        not list is rejected before send. On a video, OpenRouter, Grok and Veo send it.
         """
         out = copy.copy(self)
         out._aspect_ratio = r
@@ -499,7 +499,7 @@ class Video:
 
     def aspect_ratio(self, r: str) -> "Video":
         """Sets the output aspect ratio, such as "16:9". A ratio the model does
-        not list is rejected before send. On a video, only OpenRouter sends it.
+        not list is rejected before send. On a video, OpenRouter, Grok and Veo send it.
         """
         out = copy.copy(self)
         out._aspect_ratio = r
@@ -507,7 +507,8 @@ class Video:
 
     def duration(self, seconds: int) -> "Video":
         """Sets the video length in whole seconds; 0 means the provider default.
-        Only OpenRouter sends it. Above the model's maximum, it is rejected before send.
+        OpenRouter, Grok and Veo send it. Above the model's maximum, it is rejected
+        before send. With Veo reference images, only 8 is accepted.
         """
         out = copy.copy(self)
         out._duration = seconds
@@ -542,7 +543,7 @@ class Video:
         return out
 
     def resolution(self, r: str) -> "Video":
-        """Sets the video resolution, such as "720p". Only OpenRouter sends it.
+        """Sets the video resolution, such as "720p". OpenRouter, Grok and Veo send it.
         A resolution the model does not list is rejected before send.
         """
         out = copy.copy(self)
