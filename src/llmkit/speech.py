@@ -83,7 +83,7 @@ def generate_speech(
             field="model",
             message=f"{request.model} is not a known speech-generation model for {provider.name}",
         )
-    _validate_speech_model(request, model)
+    _validate_speech_model(request, sg_cfg, model)
 
     mws = list(middleware or [])
     base_event = Event(
@@ -163,21 +163,26 @@ def _validate_speech_inputs(request: SpeechRequest) -> None:
             raise ValidationError(field="lines", message=f"{line.speaker} is not a declared speaker")
 
 
-def _validate_speech_model(request: SpeechRequest, model: SpeechModelDef) -> None:
-    """Check the request against the model's speaker and style facts (BUG-091)."""
+def _validate_speech_model(
+    request: SpeechRequest, cfg: SpeechGenDef, model: SpeechModelDef
+) -> None:
+    """Check the request against what the config's body can carry and the
+    model's stated speaker and style facts (BUG-091). An unknown model fact
+    (None) sends the request; only a stated false or a stated speaker count
+    that does not match blocks it (decision 009, HANDOFF-099)."""
     if request.speakers:
-        if model.max_speakers == 0:
+        if not cfg.multi_speaker or model.max_speakers == 1:
             raise ValidationError(
                 field="speakers",
                 message=f"{model.model_id} does not support multiple speakers",
             )
-        if len(request.speakers) != model.max_speakers:
+        if model.max_speakers is not None and len(request.speakers) != model.max_speakers:
             raise ValidationError(
                 field="speakers",
                 message=f"exactly {model.max_speakers} speakers are required, got {len(request.speakers)}",
             )
     styled = bool(request.style) or any(line.style for line in request.lines)
-    if styled and not model.supports_speech_style:
+    if styled and (not cfg.carries_speech_style or model.supports_speech_style is False):
         raise ValidationError(
             field="style", message=f"{model.model_id} does not support a speech style"
         )

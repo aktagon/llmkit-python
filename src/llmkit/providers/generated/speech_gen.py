@@ -18,10 +18,11 @@ class SpeechModelDef:
     output_mime: str = ""
     # ADR-037 advisory fact (queryable, never gated); 0 when unverified.
     sample_rate_hz: int = 0
-    # Speakers a multi-speaker request declares; 0 = one voice only (BUG-091).
-    max_speakers: int = 0
-    # Whether a style (style, add_styled_line) is sent to this model (BUG-091).
-    supports_speech_style: bool = False
+    # Speakers the model takes (1 or 2); None = unknown, which sends (decision 009).
+    max_speakers: int | None = None
+    # Whether the provider accepts a style (style, add_styled_line); None =
+    # unknown, only False blocks (decision 009).
+    supports_speech_style: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,10 @@ class SpeechGenDef:
     models: tuple[SpeechModelDef, ...] = field(default_factory=tuple)
     # base_url is the speech API base when it differs from the chat base; "" = use chat base.
     base_url: str = ""
+    # llmkit's body for this config can carry a style; False rejects every style (HANDOFF-099).
+    carries_speech_style: bool = False
+    # The config has a multi-speaker body; False rejects every speaker request (HANDOFF-099).
+    multi_speaker: bool = False
 
 
 _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
@@ -48,8 +53,8 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="Gemini 3.1 Flash TTS Preview",
                 output_mime="audio/l16",
                 sample_rate_hz=0,
-                max_speakers=0,
-                supports_speech_style=False,
+                max_speakers=None,
+                supports_speech_style=None,
             ),
             SpeechModelDef(
                 model_id="gemini-3.8-flash-lite-tts",
@@ -69,6 +74,8 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
             ),
         ),
         base_url="",
+        carries_speech_style=True,
+        multi_speaker=True,
     ),
     ProviderName.GROK: SpeechGenDef(
         wire_shape="SpeechXAI",
@@ -80,11 +87,13 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="Grok TTS",
                 output_mime="audio/mpeg",
                 sample_rate_hz=24000,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=True,
             ),
         ),
         base_url="",
+        carries_speech_style=False,
+        multi_speaker=False,
     ),
     ProviderName.INWORLD: SpeechGenDef(
         wire_shape="SpeechInworld",
@@ -96,7 +105,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="Inworld TTS 1.5 Max",
                 output_mime="audio/wav",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=False,
             ),
             SpeechModelDef(
@@ -104,7 +113,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="Inworld TTS 1.5 Mini",
                 output_mime="audio/wav",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=False,
             ),
             SpeechModelDef(
@@ -112,11 +121,13 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="Inworld TTS 2",
                 output_mime="audio/wav",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=True,
             ),
         ),
         base_url="",
+        carries_speech_style=False,
+        multi_speaker=False,
     ),
     ProviderName.MINIMAX: SpeechGenDef(
         wire_shape="SpeechMiniMax",
@@ -128,7 +139,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="MiniMax Speech 2.6 HD",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=True,
             ),
             SpeechModelDef(
@@ -136,7 +147,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="MiniMax Speech 2.6 Turbo",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=True,
             ),
             SpeechModelDef(
@@ -144,7 +155,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="MiniMax Speech 2.8 HD",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=True,
             ),
             SpeechModelDef(
@@ -152,11 +163,13 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="MiniMax Speech 2.8 Turbo",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=True,
             ),
         ),
         base_url="https://api.minimax.io",
+        carries_speech_style=False,
+        multi_speaker=False,
     ),
     ProviderName.OPENAI: SpeechGenDef(
         wire_shape="SpeechOpenAI",
@@ -168,7 +181,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="GPT-4o mini TTS",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=True,
             ),
             SpeechModelDef(
@@ -176,7 +189,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="TTS 1",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=False,
             ),
             SpeechModelDef(
@@ -184,11 +197,13 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="TTS 1 HD",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=False,
             ),
         ),
         base_url="",
+        carries_speech_style=True,
+        multi_speaker=False,
     ),
     ProviderName.OPENROUTER: SpeechGenDef(
         wire_shape="SpeechOpenAI",
@@ -224,7 +239,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="Fish Audio Drama 3",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=True,
             ),
             SpeechModelDef(
@@ -232,7 +247,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="Fish Audio S2.1 Pro",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=True,
             ),
             SpeechModelDef(
@@ -240,7 +255,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="Gemini 3.1 Flash TTS Preview",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=True,
             ),
             SpeechModelDef(
@@ -248,7 +263,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="Gemini 3.8 Flash Lite TTS",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=True,
             ),
             SpeechModelDef(
@@ -256,7 +271,7 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
                 label="Gemini 3.8 Flash TTS",
                 output_mime="audio/mpeg",
                 sample_rate_hz=0,
-                max_speakers=0,
+                max_speakers=None,
                 supports_speech_style=True,
             ),
             SpeechModelDef(
@@ -277,6 +292,8 @@ _SPEECH_GEN: dict[ProviderName, SpeechGenDef] = {
             ),
         ),
         base_url="",
+        carries_speech_style=False,
+        multi_speaker=False,
     ),
 }
 
