@@ -25,8 +25,6 @@ compiled_in_models: list[ModelInfo] = [
     ModelInfo(id="gemini-2.5-flash", provider=Provider(name="google", api_key=""), capabilities=[Capability.CHAT_COMPLETION, Capability.REASONING, Capability.TOOL_CALLING], display_name="Gemini 2.5 Flash", description="Stable version of Gemini 2.5 Flash", context_window=1048576, max_output=65536),
     ModelInfo(id="gemini-2.5-flash-lite", provider=Provider(name="google", api_key=""), capabilities=[Capability.CHAT_COMPLETION, Capability.TOOL_CALLING], display_name="Gemini 2.5 Flash-Lite", description="Stable version of Gemini 2.5 Flash-Lite", context_window=1048576, max_output=65536),
     ModelInfo(id="gemini-2.5-pro", provider=Provider(name="google", api_key=""), capabilities=[Capability.CHAT_COMPLETION, Capability.REASONING, Capability.TOOL_CALLING], display_name="Gemini 2.5 Pro", description="Stable release of Gemini 2.5 Pro", context_window=1048576, max_output=65536),
-    ModelInfo(id="gemini-3-pro-image-preview", provider=Provider(name="google", api_key=""), capabilities=[Capability.IMAGE_GENERATION], display_name="Nano Banana Pro", description="Gemini 3 Pro Image Preview", context_window=131072, max_output=32768),
-    ModelInfo(id="gemini-3-pro-preview", provider=Provider(name="google", api_key=""), capabilities=[Capability.CHAT_COMPLETION, Capability.REASONING, Capability.TOOL_CALLING], display_name="Gemini 3 Pro Preview", description="Gemini 3 Pro Preview", context_window=1048576, max_output=65536),
     ModelInfo(id="gemini-nano-banana-2.1", provider=Provider(name="google", api_key=""), capabilities=[Capability.IMAGE_GENERATION], display_name="Nano Banana 2.1", description="Gemini Nano Banana 2.1", context_window=131072, max_output=32768),
     ModelInfo(id="gpt-4o", provider=Provider(name="openai", api_key=""), capabilities=[Capability.CHAT_COMPLETION, Capability.TOOL_CALLING]),
     ModelInfo(id="gpt-4o-mini", provider=Provider(name="openai", api_key=""), capabilities=[Capability.CHAT_COMPLETION, Capability.TOOL_CALLING]),
@@ -53,8 +51,6 @@ ontology_capabilities: dict[str, dict[str, list[Capability]]] = {
         "gemini-2.5-flash": [Capability.CHAT_COMPLETION, Capability.REASONING, Capability.TOOL_CALLING],
         "gemini-2.5-flash-lite": [Capability.CHAT_COMPLETION, Capability.TOOL_CALLING],
         "gemini-2.5-pro": [Capability.CHAT_COMPLETION, Capability.REASONING, Capability.TOOL_CALLING],
-        "gemini-3-pro-image-preview": [Capability.IMAGE_GENERATION],
-        "gemini-3-pro-preview": [Capability.CHAT_COMPLETION, Capability.REASONING, Capability.TOOL_CALLING],
         "gemini-nano-banana-2.1": [Capability.IMAGE_GENERATION],
     },
     "openai": {

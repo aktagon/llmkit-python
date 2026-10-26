@@ -79,14 +79,6 @@ _IMAGE_GEN: dict[ProviderName, ImageGenDef] = {
         ),
         models=(
             ImageModelDef(
-                model_id="gemini-3-pro-image-preview",
-                label="Nano Banana Pro",
-                aspect_ratios=("16:9", "1:1", "21:9", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16"),
-                image_sizes=("1K", "2K", "4K"),
-                max_input_images=0,
-                supports_image_input=True,
-            ),
-            ImageModelDef(
                 model_id="gemini-nano-banana-2.1",
                 label="Nano Banana 2.1",
                 aspect_ratios=("16:9", "1:1", "1:4", "1:8", "21:9", "2:3", "3:2", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16"),
