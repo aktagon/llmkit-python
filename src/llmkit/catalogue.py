@@ -76,6 +76,7 @@ class CatalogueConfig:
     endpoint: str
     pagination: str
     cursor_param: str = ""
+    list_query: str = ""
     parser_kind: str = ""
     spec_url: str = ""
     spec_format: str = ""
@@ -95,7 +96,7 @@ catalogue_by_provider: dict[str, CatalogueConfig] = {
     "moonshot": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
     "ollama": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels", spec_url="https://raw.githubusercontent.com/ollama/ollama/main/docs/openapi.yaml", spec_format="OpenAPI3"),
     "openai": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels", spec_url="https://github.com/openai/openai-openapi/blob/master/openapi.yaml", spec_format="OpenAPI3"),
-    "openrouter": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels", spec_url="https://openrouter.ai/openapi.json", spec_format="OpenAPI3"),
+    "openrouter": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels", list_query="output_modalities=all", spec_url="https://openrouter.ai/openapi.json", spec_format="OpenAPI3"),
     "qwen": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
     "together": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels", spec_url="https://raw.githubusercontent.com/togethercomputer/openapi/main/openapi.yaml", spec_format="OpenAPI3"),
     "vllm": CatalogueConfig(endpoint="/v1/models", pagination="PaginationNone", cursor_param="", parser_kind="ParseOpenAICohortModels"),
