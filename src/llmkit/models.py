@@ -16,7 +16,12 @@ import urllib.parse
 import urllib.request
 from typing import TYPE_CHECKING
 
-from .catalogue import catalogue_by_provider, compiled_in_models, ontology_capabilities
+from .catalogue import (
+    CatalogueConfig,
+    catalogue_by_provider,
+    compiled_in_models,
+    ontology_capabilities,
+)
 from .http import merge_caller_headers
 from .middleware import fire_post, fire_pre, set_event_error
 from .providers.generated.middleware import Event, MiddlewareOp
@@ -160,7 +165,7 @@ async def catalogue_run_list(scoped: "ScopedModels") -> list[ModelInfo]:
     effective = _effective_provider(scoped)
     try:
         records = await asyncio.to_thread(
-            _paginate_sync, effective, pcfg, cfg.endpoint, cfg.cursor_param, cfg.parser_kind
+            _paginate_sync, effective, pcfg, cfg
         )
     except BaseException as exc:
         post = Event(
@@ -260,9 +265,7 @@ def _effective_provider(scoped: "ScopedModels") -> Provider:
 def _paginate_sync(
     provider: Provider,
     pcfg: ProviderSpec,
-    endpoint: str,
-    cursor_param: str,
-    parser_kind: str,
+    cfg: CatalogueConfig,
 ) -> list[ParsedModelRecord]:
     """Synchronous pagination loop. Runs in a worker thread per
     asyncio.to_thread so other live fan-out tasks proceed in parallel.
@@ -272,11 +275,9 @@ def _paginate_sync(
     cursor = ""
     all_records: list[ParsedModelRecord] = []
     while True:
-        req_url = _append_cursor(
-            _build_catalogue_url(provider, pcfg, endpoint), cursor_param, cursor
-        )
+        req_url = _list_page_url(provider, pcfg, cfg, cursor)
         body = _http_get(req_url, headers, provider.timeout)
-        page = _dispatch_parser(parser_kind, body)
+        page = _dispatch_parser(cfg.parser_kind, body)
         all_records.extend(page.records)
         if not page.next_cursor:
             return all_records
@@ -360,6 +361,19 @@ def _parse_single_record(kind: str, body: bytes) -> ParsedModelRecord:
     if not page.records:
         raise ErrModelsUnavailable(f"empty single-record response for {kind}")
     return page.records[0]
+
+
+def _list_page_url(
+    provider: Provider, pcfg: ProviderSpec, cfg: CatalogueConfig, cursor: str
+) -> str:
+    # One list page: the endpoint, the provider's fixed list query (BUG-107:
+    # OpenRouter lists text-output models only without output_modalities=all),
+    # then the cursor. Get-by-id never sends the list query.
+    req_url = _build_catalogue_url(provider, pcfg, cfg.endpoint)
+    if cfg.list_query:
+        sep = "&" if "?" in req_url else "?"
+        req_url = f"{req_url}{sep}{cfg.list_query}"
+    return _append_cursor(req_url, cfg.cursor_param, cursor)
 
 
 def _append_cursor(raw_url: str, cursor_param: str, cursor: str) -> str:
