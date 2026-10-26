@@ -88,8 +88,8 @@ class VideoRequest:
     reference_images: list[MediaRef] = dataclasses.field(default_factory=list)
     # duration_seconds is the video length in whole seconds; 0 means unset
     # (the provider default). VideoOpenRouter and VideoGrok send it as the
-    # JSON integer `duration`; VideoVeo and VideoVertexVeo send it as the JSON
-    # number parameters.durationSeconds (HANDOFF-097, HANDOFF-100). Set it via
+    # JSON integer `duration`; VideoVertexVeo sends it as the JSON number
+    # parameters.durationSeconds (HANDOFF-097, HANDOFF-100). Set it via
     # Video.duration.
     duration_seconds: int = 0
     # aspect_ratio is the output aspect ratio, such as "16:9"; "" means unset.
@@ -282,7 +282,7 @@ def _dispatch_video_submit(
       - VideoQwen (DashScope) nests the prompt under an ``input`` object
         ({model, input:{prompt}}) and requires the X-DashScope-Async: enable
         header.
-      - VideoVeo and VideoVertexVeo carry the model in the submit PATH
+      - VideoVertexVeo carries the model in the submit PATH
         (:predictLongRunning); the body has no model field.
       - VideoBedrock (Nova Reel) nests the prompt under modelInput, carries the
         caller S3 URI under outputDataConfig, and is signed with SigV4 (not the
@@ -318,22 +318,21 @@ def _dispatch_video_submit(
             "aspect_ratio": "16:9",
         }
         post_headers = {**headers, "Ai-trace-id": _new_video_trace_id()}
-    elif vg_cfg.wire_shape in ("VideoVeo", "VideoVertexVeo"):
-        # Veo (Gemini API) and Vertex Veo share the submit body: the model is in
-        # the PATH (:predictLongRunning), not the body, so the body has no model
-        # field. The prompt nests under instances[]; the optional parameters
-        # object is omitted on the prompt-only hot path.
+    elif vg_cfg.wire_shape == "VideoVertexVeo":
+        # Vertex Veo carries the model in the PATH (:predictLongRunning), not
+        # the body, so the body has no model field. The prompt nests under
+        # instances[]; the optional parameters object is omitted on the
+        # prompt-only hot path.
         instance: dict[str, Any] = {"prompt": _join_prompt_text(parts)}
         # First frame (BUG-089): the seed rides at instances[0].image as raw
         # base64 + mimeType (no data: prefix), per the Vertex Veo reference
-        # (read 2026-10-15). The Gemini API shape is not yet live-verified.
+        # (read 2026-10-15).
         veo_seed = _video_seed_image(parts)
         if veo_seed is not None:
             instance["image"] = _veo_image(veo_seed)
         # Last frame and asset reference images (BUG-089): same
         # {bytesBase64Encoded, mimeType} wrapper. Reference images force an
-        # 8-second video, sent as the NUMBER 8 on both APIs (live 2026-10-15:
-        # the Gemini API rejects the string "8" its docs show).
+        # 8-second video, sent as the NUMBER 8.
         if request.last_frame is not None:
             instance["lastFrame"] = _veo_image(request.last_frame)
         body = {"instances": [instance]}
@@ -558,8 +557,8 @@ def _wait_video(
             # it with one more GET before returning.
             if vg_cfg.file_endpoint:
                 resp = _resolve_video_file(base, vg_cfg, resp_body, headers, p.timeout)
-            # Delivery dispatch (VID-005). Download-delivery providers (Veo)
-            # returned a temporary fetch URI in VideoData.url; GET it and fill
+            # Delivery dispatch (VID-005). Download-delivery providers
+            # (OpenRouter) returned a temporary fetch URI in VideoData.url; GET it and fill
             # VideoData.bytes (clearing url, per the source-XOR contract). Url-
             # and output-uri-delivery providers leave the url.
             if vg_cfg.output_delivery == "DeliveryDownload":
@@ -675,7 +674,7 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         status = raw.get("status") if isinstance(raw, dict) else None
         if status == "completed":
             # A completed poll without unsigned_urls[0] must be an error, not an
-            # empty success (mirrors the Veo done-without-uri guard).
+            # empty success (mirrors the Vertex Veo done-without-bytes guard).
             result = _video_result_from_openrouter(vg_cfg, raw)
             if not result.videos or not result.videos[0].url:
                 raise APIError(message="video generation: completed but carried no unsigned_urls", status_code=0)
@@ -743,36 +742,11 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         # Queueing, Preparing, Processing (or any non-terminal status)
         return VideoResponse(), False
 
-    if vg_cfg.wire_shape == "VideoVeo":
-        # Operation-based LRO: poll until done=True (the long-running-operation
-        # done flag, not a status string). A done op carrying an error object is
-        # a terminal failure; otherwise the response holds the finished video.
-        done = raw.get("done") if isinstance(raw, dict) else None
-        if done is not True:
-            return VideoResponse(), False
-        err_obj = raw.get("error") if isinstance(raw, dict) else None
-        if isinstance(err_obj, dict):
-            msg = err_obj.get("message")
-            if not isinstance(msg, str) or not msg:
-                msg = "operation failed"
-            raise APIError(
-                message=f"video generation failed: {msg}", status_code=0
-            )
-        # A done op with neither error nor a usable uri must surface as an error,
-        # not a silent zero-byte success: download delivery would otherwise GET
-        # nothing and return a VideoData with empty bytes and empty url.
-        result = _video_result_from_veo(vg_cfg, raw)
-        if not result.videos or not result.videos[0].url:
-            raise APIError(
-                message="video generation: operation done but carried no video uri",
-                status_code=0,
-            )
-        return result, True
-
     if vg_cfg.wire_shape == "VideoVertexVeo":
-        # Vertex Veo operation poll (fetchPredictOperation): same done/error LRO
-        # shape as Gemini Veo, but the finished video arrives as inline base64 in
-        # the poll body (response.videos[0].bytesBase64Encoded), not a fetch URI.
+        # Vertex Veo operation poll (fetchPredictOperation), an LRO: poll until
+        # done=True; a done op carrying an error object is a terminal failure.
+        # The finished video arrives as inline base64 in the poll body
+        # (response.videos[0].bytesBase64Encoded), not a fetch URI.
         done = raw.get("done") if isinstance(raw, dict) else None
         if done is not True:
             return VideoResponse(), False
@@ -785,8 +759,7 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
                 message=f"video generation failed: {msg}", status_code=0
             )
         result = _video_result_from_vertex_veo(vg_cfg, raw)
-        # Mirror the Veo done+no-uri guard: a done op carrying no decodable bytes
-        # must surface as an error, not a silent zero-byte success.
+        # A done op carrying no decodable bytes must surface as an error, not a silent zero-byte success.
         if not result.videos or not result.videos[0].bytes:
             raise APIError(
                 message="video generation: operation done but carried no video bytes",
@@ -801,8 +774,8 @@ def _parse_video_poll(vg_cfg: VideoGenDef, body: bytes) -> tuple[VideoResponse, 
         status = raw.get("status") if isinstance(raw, dict) else None
         if status == "Completed":
             # A Completed invocation that echoes no output s3 uri must surface as
-            # an error, not a silent empty success (mirrors the Veo done+no-uri
-            # guard): the caller would otherwise get a "successful" VideoResponse
+            # an error, not a silent empty success (mirrors the Vertex Veo
+            # done-without-bytes guard): the caller would otherwise get a "successful" VideoResponse
             # whose url is empty and never find the mp4.
             result = _video_result_from_bedrock(vg_cfg, raw)
             if not result.videos or not result.videos[0].url:
@@ -1022,35 +995,11 @@ def _video_result_from_minimax_file(
     )
 
 
-def _video_result_from_veo(vg_cfg: VideoGenDef, raw: dict[str, Any]) -> VideoResponse:
-    """Extract the finished video reference from a Veo LRO poll response. Veo
-    uses download delivery: the response carries a temporary Files-API download
-    URI at response.generateVideoResponse.generatedSamples[0].video.uri. This
-    places it in VideoData.url; the _wait_video download step
-    (output_delivery=DeliveryDownload) then fetches the bytes into
-    VideoData.bytes and clears url."""
-    mime = _video_fallback_mime(vg_cfg)
-    response = raw.get("response") if isinstance(raw, dict) else None
-    gvr = response.get("generateVideoResponse") if isinstance(response, dict) else None
-    samples = gvr.get("generatedSamples") if isinstance(gvr, dict) else None
-    if not isinstance(samples, list) or not samples:
-        return VideoResponse()
-    first = samples[0]
-    if not isinstance(first, dict):
-        return VideoResponse()
-    video = first.get("video")
-    uri = video.get("uri") if isinstance(video, dict) else None
-    return VideoResponse(
-        videos=[VideoData(mime_type=mime, url=uri if isinstance(uri, str) else "")]
-    )
-
-
 def _video_result_from_vertex_veo(
     vg_cfg: VideoGenDef, raw: dict[str, Any]
 ) -> VideoResponse:
     """Extract the finished video from a Vertex Veo fetchPredictOperation poll
-    response. Unlike Gemini Veo (which returns a fetch URI), Vertex Veo returns
-    the bytes inline as base64 at response.videos[0].bytesBase64Encoded with the
+    response. Vertex Veo returns the bytes inline as base64 at response.videos[0].bytesBase64Encoded with the
     mime at .mimeType. This is download delivery with NO fetch hop: the bytes are
     decoded straight into VideoData.bytes here and VideoData.url stays empty, so
     the _wait_video download step (_download_video_bytes) finds no url and no-ops
@@ -1115,7 +1064,7 @@ def _download_video_bytes(
     headers: dict[str, str],
 ) -> VideoResponse:
     """Fetch the finished video for download-delivery providers
-    (vg_cfg.output_delivery == DeliveryDownload, e.g. Veo). The poll result
+    (vg_cfg.output_delivery == DeliveryDownload, e.g. OpenRouter). The poll result
     placed the temporary fetch URI in VideoData.url; this GETs each one
     (carrying the provider's query-param auth when applicable) and moves the
     payload into VideoData.bytes, clearing url so the source-XOR contract holds
@@ -1164,7 +1113,7 @@ def _join_prompt_text(parts: list[Part]) -> str:
 def _video_seed_image(parts: list[Part]) -> MediaRef | None:
     """Return the single image-to-video seed frame, or None on the
     text-to-video hot path. Raises on more than one image part: every wired
-    image-to-video shape (Grok, BUG-010; Veo first frame, BUG-089) conditions
+    image-to-video shape (Grok, BUG-010; Vertex Veo first frame, BUG-089) conditions
     on a single seed frame, so rejecting is honest where silently using the
     first would reintroduce the silent-drop bug."""
     seed = None
@@ -1199,8 +1148,8 @@ def _veo_image(img: MediaRef) -> dict[str, str]:
     }
 
 
-# The most asset reference images a Veo request takes (Gemini API and Vertex
-# Veo pages, read 2026-10-15).
+# The most asset reference images a Vertex Veo request takes (Vertex Veo page,
+# read 2026-10-15).
 MAX_VIDEO_REFERENCE_IMAGES = 3
 
 
@@ -1226,8 +1175,8 @@ def _validate_video_frames(
             message=f"at most {MAX_VIDEO_REFERENCE_IMAGES} reference images, got {refs}",
         )
     if refs > 0 and (image_count > 0 or request.last_frame is not None):
-        # Live 2026-10-15: Veo answers 400 "Unsupported video generation
-        # request"; Vertex documents the inputs as exclusive.
+        # Vertex documents the inputs as exclusive (live 2026-10-15, the Gemini
+        # API Veo answered 400 "Unsupported video generation request").
         raise ValidationError(
             field="reference_images",
             message="cannot be combined with a first or last frame",
@@ -1253,7 +1202,7 @@ def _set_root_video_options(body: dict[str, Any], request: VideoRequest) -> None
 def _video_shape_sends_options(shape: str) -> bool:
     """Whether a video wire shape has body fields for duration, aspect ratio
     and resolution (HANDOFF-097, HANDOFF-100)."""
-    return shape in ("VideoOpenRouter", "VideoGrok", "VideoVeo", "VideoVertexVeo")
+    return shape in ("VideoOpenRouter", "VideoGrok", "VideoVertexVeo")
 
 
 def _validate_video_options(
