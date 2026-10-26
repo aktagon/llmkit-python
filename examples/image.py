@@ -12,7 +12,7 @@ async def main() -> None:
     c = google(os.environ.get("GOOGLE_API_KEY", "k"))
     img = await (
         c.image
-        .model("gemini-3.1-flash-image-preview")
+        .model("gemini-nano-banana-2.1")
         .aspect_ratio("16:9")
         .image_size("2K")
         .generate("A nano banana dish, studio lighting")
