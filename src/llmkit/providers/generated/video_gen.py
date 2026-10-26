@@ -30,7 +30,7 @@ class VideoModelDef:
 
 @dataclass(frozen=True)
 class VideoGenDef:
-    # wire_shape is VideoGrok | VideoZhipu | VideoTogether | VideoQwen | VideoMinimax | VideoVeo | VideoBedrock | VideoVertexVeo | VideoVidu | VideoPixVerse | VideoOpenRouter.
+    # wire_shape is VideoGrok | VideoZhipu | VideoTogether | VideoQwen | VideoMinimax | VideoBedrock | VideoVertexVeo | VideoVidu | VideoPixVerse | VideoOpenRouter.
     wire_shape: str
     # output_delivery is DeliveryDownload | DeliveryURL | DeliveryOutputURI.
     output_delivery: str
@@ -76,60 +76,6 @@ _VIDEO_GEN: dict[ProviderName, VideoGenDef] = {
                 resolutions=("720p",),
                 aspect_ratios=(),
                 max_input_images=0,
-            ),
-        ),
-    ),
-    ProviderName.GOOGLE: VideoGenDef(
-        wire_shape="VideoVeo",
-        output_delivery="DeliveryDownload",
-        video_base_url="",
-        variants=(
-            RequestVariant(carries=("TextOnly",), shape="", endpoint="/v1beta/models/{model}:predictLongRunning"),
-            RequestVariant(carries=("WithReferenceImages",), shape="", endpoint="/v1beta/models/{model}:predictLongRunning"),
-            RequestVariant(carries=("WithSeedFrame",), shape="", endpoint="/v1beta/models/{model}:predictLongRunning"),
-            RequestVariant(carries=("WithSeedFrame", "WithLastFrame"), shape="", endpoint="/v1beta/models/{model}:predictLongRunning"),
-        ),
-        poll_endpoint="/v1beta/{id}",
-        file_endpoint="",
-        cancel_endpoint="",
-        submit_handle_field="name",
-        requires_output_uri=False,
-        models=(
-            VideoModelDef(
-                model_id="veo-3.1-fast-generate-preview",
-                label="Veo 3.1 Fast",
-                supports_image_to_video=True,
-                supports_last_frame=True,
-                supports_reference_images=True,
-                max_duration_seconds=8,
-                output_mime="video/mp4",
-                resolutions=("1080p", "4k", "720p"),
-                aspect_ratios=("16:9", "9:16"),
-                max_input_images=1,
-            ),
-            VideoModelDef(
-                model_id="veo-3.1-generate-preview",
-                label="Veo 3.1",
-                supports_image_to_video=True,
-                supports_last_frame=True,
-                supports_reference_images=True,
-                max_duration_seconds=8,
-                output_mime="video/mp4",
-                resolutions=("1080p", "720p"),
-                aspect_ratios=("16:9", "9:16"),
-                max_input_images=1,
-            ),
-            VideoModelDef(
-                model_id="veo-3.1-lite-generate-preview",
-                label="Veo 3.1 Lite",
-                supports_image_to_video=True,
-                supports_last_frame=True,
-                supports_reference_images=False,
-                max_duration_seconds=8,
-                output_mime="video/mp4",
-                resolutions=("1080p", "720p"),
-                aspect_ratios=("16:9", "9:16"),
-                max_input_images=1,
             ),
         ),
     ),
