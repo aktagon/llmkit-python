@@ -49,7 +49,7 @@ from .providers.generated.request import (
     system_placement,
 )
 from .providers.generated.stream import stream_config
-from .transforms import select_message_transform, select_tool_def_transform, to_internal
+from .transforms import request_msgs, select_message_transform, select_tool_def_transform
 from .types import File, Options, Provider, Request, Response
 
 StreamCallback = Callable[[str], None]
@@ -151,7 +151,7 @@ def prompt(
 
     # Carrier-validate at the single boundary before firing middleware, so a
     # malformed message rejects without a dangling pre-hook (PIPE-008).
-    msgs = to_internal(request.messages)
+    msgs = request_msgs(request)
 
     base_event = Event(
         op=MiddlewareOp.LLM_REQUEST,
@@ -274,7 +274,7 @@ def prompt_stream(
         )
 
     # Carrier-validate at the single boundary before firing middleware (PIPE-008).
-    msgs = to_internal(request.messages)
+    msgs = request_msgs(request)
 
     base_event = Event(
         op=MiddlewareOp.LLM_REQUEST,
@@ -602,24 +602,19 @@ def _build_request(
     *,
     msgs=None,
 ):
-    # msgs is the internal message sum (ADR-026 PIPE-007). The Text/batch/stream
-    # paths convert their public Message list via to_internal at the single
-    # carrier-validation boundary (PIPE-008); the Agent builds it directly from
-    # its trusted history, with no lossy public-Message hop. When msgs is None
-    # it is derived here (the common Text/batch call), so unit tests and batch
-    # need no change; prompt/prompt_stream pass it in so the carrier check runs
+    # msgs is the internal message sum (ADR-026 PIPE-007) and the only
+    # conversation input the message transforms read. The Text/batch/stream
+    # paths build it with request_msgs: the history, validated at the carrier
+    # boundary (PIPE-008), then the prompt and its media as a final _MsgPrompt
+    # (BUG-108). The Agent builds it directly from its trusted history, with no
+    # lossy public-Message hop. When msgs is None it is derived here (the common
+    # Text/batch call); prompt/prompt_stream pass it in so the carrier check runs
     # before fire_pre (preserving the middleware contract).
-    #
-    # Deliberate scope limit (vs the TS slice, matching the Go slice): only
-    # multi-turn history flows through the sum. The single-turn req.user path —
-    # which also carries media (req.files/req.images) — is handled directly in
-    # each message transform's elif branch, because _MsgText carries only
-    # (role, text). Unifying it is tracked as a follow-up; see CLAUDE.md.
     #
     # tools is the Agent's tool set; Text/batch pass None, so the tool-def step
     # is a no-op there and their wire body stays identical (ADR-026 PIPE-005).
     if msgs is None:
-        msgs = to_internal(req.messages)
+        msgs = request_msgs(req)
     body: dict[str, Any] = {}
     headers: dict[str, str] = {}
 

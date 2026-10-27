@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Callable, NoReturn
+from typing import TYPE_CHECKING, Any, Callable, NoReturn
 
 from .errors import ValidationError
 from .paths import parse_data_uri
@@ -14,7 +14,10 @@ from .providers.generated.request import (
     system_placement,
     tool_call_config,
 )
-from .structs import Message, ToolCall, ToolResult
+from .structs import File, Message, ToolCall, ToolResult
+
+if TYPE_CHECKING:
+    from .types import InputImage, Request
 
 
 MessageTransform = Callable[[dict[str, Any], list["_Msg"], "Request", ProviderSpec], None]
@@ -126,11 +129,23 @@ class _MsgResult:
     result: ToolResult
 
 
-# A message is *exactly one of* the three variants. The public Message
-# (structs.py) is a flat product that can encode an illegal multi-carrier
-# combination; this union cannot, so the transforms below dispatch with
-# match/case rather than the old if/elif silent-drop order.
-_Msg = _MsgText | _MsgCalls | _MsgResult
+@dataclass(frozen=True)
+class _MsgPrompt:
+    """The final user turn of a Text, stream or batch request: the prompt text
+    plus the files and images attached to it (BUG-108). A variant of its own
+    because media rides only on this turn, and _MsgText carries only
+    (role, text). request_msgs appends it after the history, so every transform
+    reads one ordered list and never chooses between history and prompt."""
+    text: str
+    files: list[File]
+    images: list["InputImage"]
+
+
+# A message is *exactly one of* the variants. The public Message (structs.py) is
+# a flat product that can encode an illegal multi-carrier combination; this union
+# cannot, so the transforms below dispatch with match/case rather than the old
+# if/elif silent-drop order.
+_Msg = _MsgText | _MsgCalls | _MsgResult | _MsgPrompt
 
 
 def _assert_never(value: NoReturn) -> NoReturn:
@@ -172,6 +187,17 @@ def to_internal(messages: list[Message]) -> list[_Msg]:
     return out
 
 
+def request_msgs(req: "Request") -> list[_Msg]:
+    """The one place a public Request becomes the message list the transforms
+    read: the validated history, then the prompt as the last user turn
+    (BUG-108). The Agent builds its list from trusted history instead and has
+    no prompt to append."""
+    msgs = to_internal(req.messages)
+    if req.user:
+        msgs.append(_MsgPrompt(text=req.user, files=list(req.files), images=list(req.images)))
+    return msgs
+
+
 # =============================================================================
 # Message transforms — build the messages/contents array in request body
 # =============================================================================
@@ -204,48 +230,37 @@ def _build_flat_message_array(msgs: list[_Msg], req: "Request", cfg: ProviderSpe
             }
         )
 
-    has_media = bool(req.files) or bool(req.images)
-
-    if msgs:
-        # Tool-aware dispatch (ADR-020 / ADR-026): a tool-bearing history routes
-        # through the same builder as plain text — a text turn is the no-tool case.
-        call_t = select_tool_call_transform(cfg)
-        result_t = select_tool_result_transform(cfg)
-        for m in msgs:
-            match m:
-                case _MsgResult():
-                    out.append(result_t(m.result, cfg.role_mappings))
-                case _MsgCalls():
-                    out.append(call_t(m.calls, cfg.role_mappings))
-                case _MsgText():
-                    out.append(
-                        {
-                            "role": map_role(m.role, cfg.role_mappings),
-                            "content": m.text,
-                        }
-                    )
-                case _:
-                    _assert_never(m)
-    elif req.user:
-        if has_media:
-            out.append(
-                {
-                    "role": map_role("user", cfg.role_mappings),
-                    "content": _build_flat_content_parts(req, cfg),
-                }
-            )
-        else:
-            out.append(
-                {
-                    "role": map_role("user", cfg.role_mappings),
-                    "content": req.user,
-                }
-            )
+    # Tool-aware dispatch (ADR-020 / ADR-026): a tool-bearing history routes
+    # through the same builder as plain text — a text turn is the no-tool case.
+    call_t = select_tool_call_transform(cfg)
+    result_t = select_tool_result_transform(cfg)
+    for m in msgs:
+        match m:
+            case _MsgResult():
+                out.append(result_t(m.result, cfg.role_mappings))
+            case _MsgCalls():
+                out.append(call_t(m.calls, cfg.role_mappings))
+            case _MsgText():
+                out.append(
+                    {
+                        "role": map_role(m.role, cfg.role_mappings),
+                        "content": m.text,
+                    }
+                )
+            case _MsgPrompt():
+                # Media rides only on the final prompt turn; history turns carry
+                # plain-string content.
+                content: str | list[dict[str, Any]] = m.text
+                if m.files or m.images:
+                    content = _build_flat_content_parts(m, cfg)
+                out.append({"role": map_role("user", cfg.role_mappings), "content": content})
+            case _:
+                _assert_never(m)
 
     return out
 
 
-def _build_flat_content_parts(req: "Request", cfg: ProviderSpec) -> list[dict[str, Any]]:
+def _build_flat_content_parts(req: _MsgPrompt, cfg: ProviderSpec) -> list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
     is_anthropic = cfg.chat_wire_shape == "ChatAnthropic"
 
@@ -295,56 +310,54 @@ def _build_flat_content_parts(req: "Request", cfg: ProviderSpec) -> list[dict[st
                 }
             )
 
-    parts.append({"type": "text", "text": req.user})
+    parts.append({"type": "text", "text": req.text})
     return parts
 
 
 def transform_google_parts(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> None:
     contents: list[dict[str, Any]] = []
-    if msgs:
-        call_t = select_tool_call_transform(cfg)
-        result_t = select_tool_result_transform(cfg)
-        # Google's wire identifies a tool result by the function NAME, but the
-        # universal ToolResult carries only tool_use_id. Recover id->name from
-        # the call turns, which always precede their result in a valid history,
-        # and resolve the result's name from it. A new ToolResult is built (not
-        # mutated) so the caller's Message/history is untouched. The agent path
-        # is unaffected (its extractor sets id==name); an unmatched id passes
-        # through unchanged (transform_google_tool_result_msg uses tool_use_id).
-        id_to_name: dict[str, str] = {}
-        for m in msgs:
-            match m:
-                case _MsgResult():
-                    r = m.result
-                    name = id_to_name.get(r.tool_use_id)
-                    if name:
-                        r = ToolResult(tool_use_id=name, content=r.content)
-                    contents.append(result_t(r, cfg.role_mappings))
-                case _MsgCalls():
-                    for c in m.calls:
-                        id_to_name[c.id] = c.name
-                    contents.append(call_t(m.calls, cfg.role_mappings))
-                case _MsgText():
-                    contents.append(
-                        {
-                            "role": map_role(m.role, cfg.role_mappings),
-                            "parts": [{"text": m.text}],
-                        }
-                    )
-                case _:
-                    _assert_never(m)
-    elif req.user:
-        parts = _build_google_content_parts(req)
-        contents.append(
-            {
-                "role": map_role("user", cfg.role_mappings),
-                "parts": parts,
-            }
-        )
+    call_t = select_tool_call_transform(cfg)
+    result_t = select_tool_result_transform(cfg)
+    # Google's wire identifies a tool result by the function NAME, but the
+    # universal ToolResult carries only tool_use_id. Recover id->name from
+    # the call turns, which always precede their result in a valid history,
+    # and resolve the result's name from it. A new ToolResult is built (not
+    # mutated) so the caller's Message/history is untouched. The agent path
+    # is unaffected (its extractor sets id==name); an unmatched id passes
+    # through unchanged (transform_google_tool_result_msg uses tool_use_id).
+    id_to_name: dict[str, str] = {}
+    for m in msgs:
+        match m:
+            case _MsgResult():
+                r = m.result
+                name = id_to_name.get(r.tool_use_id)
+                if name:
+                    r = ToolResult(tool_use_id=name, content=r.content)
+                contents.append(result_t(r, cfg.role_mappings))
+            case _MsgCalls():
+                for c in m.calls:
+                    id_to_name[c.id] = c.name
+                contents.append(call_t(m.calls, cfg.role_mappings))
+            case _MsgText():
+                contents.append(
+                    {
+                        "role": map_role(m.role, cfg.role_mappings),
+                        "parts": [{"text": m.text}],
+                    }
+                )
+            case _MsgPrompt():
+                contents.append(
+                    {
+                        "role": map_role("user", cfg.role_mappings),
+                        "parts": _build_google_content_parts(m),
+                    }
+                )
+            case _:
+                _assert_never(m)
     body["contents"] = contents
 
 
-def _build_google_content_parts(req: "Request") -> list[dict[str, Any]]:
+def _build_google_content_parts(req: _MsgPrompt) -> list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
     for f in req.files:
         parts.append(
@@ -377,7 +390,7 @@ def _build_google_content_parts(req: "Request") -> list[dict[str, Any]]:
                     }
                 }
             )
-    parts.append({"text": req.user})
+    parts.append({"text": req.text})
     return parts
 
 
@@ -385,39 +398,37 @@ def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Req
     if req.system:
         body["system"] = [{"text": req.system}]
     out: list[dict[str, Any]] = []
-    if msgs:
-        call_t = select_tool_call_transform(cfg)
-        result_t = select_tool_result_transform(cfg)
-        for m in msgs:
-            match m:
-                case _MsgResult():
-                    out.append(result_t(m.result, cfg.role_mappings))
-                case _MsgCalls():
-                    out.append(call_t(m.calls, cfg.role_mappings))
-                case _MsgText():
-                    out.append(
-                        {
-                            "role": map_role(m.role, cfg.role_mappings),
-                            "content": [{"text": m.text}],
-                        }
-                    )
-                case _:
-                    _assert_never(m)
-    elif req.user:
-        if req.images:
-            content = _build_bedrock_content_parts(req)
-        else:
-            content = [{"text": req.user}]
-        out.append(
-            {
-                "role": map_role("user", cfg.role_mappings),
-                "content": content,
-            }
-        )
+    call_t = select_tool_call_transform(cfg)
+    result_t = select_tool_result_transform(cfg)
+    for m in msgs:
+        match m:
+            case _MsgResult():
+                out.append(result_t(m.result, cfg.role_mappings))
+            case _MsgCalls():
+                out.append(call_t(m.calls, cfg.role_mappings))
+            case _MsgText():
+                out.append(
+                    {
+                        "role": map_role(m.role, cfg.role_mappings),
+                        "content": [{"text": m.text}],
+                    }
+                )
+            case _MsgPrompt():
+                content = [{"text": m.text}]
+                if m.images:
+                    content = _build_bedrock_content_parts(m)
+                out.append(
+                    {
+                        "role": map_role("user", cfg.role_mappings),
+                        "content": content,
+                    }
+                )
+            case _:
+                _assert_never(m)
     body["messages"] = out
 
 
-def _build_bedrock_content_parts(req: "Request") -> list[dict[str, Any]]:
+def _build_bedrock_content_parts(req: _MsgPrompt) -> list[dict[str, Any]]:
     """Converse content array with image blocks (ADR-060). Each image emits
     {image:{format,source:{bytes}}}; the prompt text follows as a trailing
     {text} block, preserving caller order among images. Mirrors go/transforms.go
@@ -435,7 +446,7 @@ def _build_bedrock_content_parts(req: "Request") -> list[dict[str, Any]]:
                 }
             }
         )
-    parts.append({"text": req.user})
+    parts.append({"text": req.text})
     return parts
 
 

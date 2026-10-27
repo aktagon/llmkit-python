@@ -13,7 +13,7 @@ import base64
 from typing import TYPE_CHECKING
 
 from ..client import prompt as legacy_prompt
-from ..types import InputImage, Message, Provider, Request, Response
+from ..types import InputImage, Provider, Request, Response
 
 if TYPE_CHECKING:
     from . import Text
@@ -55,16 +55,11 @@ def _build_request(b: "Text", final_text: str) -> Request:
     if images:
         req.images = images
 
-    # Legacy Request: messages + user are mutually exclusive in the
-    # downstream body builder. Append the final user turn to messages
-    # when history is present; otherwise use the simpler user field.
-    if b._history:
-        msgs = list(b._history)
-        if user:
-            msgs.append(Message(role="user", content=user))
-        req.messages = msgs
-    elif user:
-        req.user = user
+    # History and the final prompt travel separately; request_msgs
+    # (transforms.py) appends the prompt, with its files and images, after the
+    # history (BUG-108).
+    req.messages = list(b._history)
+    req.user = user
     if b._files:
         req.files = b._files
     if b._schema:
