@@ -82,6 +82,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Images and files attached to a prompt after `text.history(...)` are now
+  sent on the last user turn. Before, a call with history dropped them
+ .
+
 - **`submit_batch(..., raw=False)` no longer turns raw on.** The function
   reused the name `raw` for the provider's create response, so every handle
   it returned had raw on. The typed builder was not affected.
