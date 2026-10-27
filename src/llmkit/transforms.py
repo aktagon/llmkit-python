@@ -446,34 +446,33 @@ def _google_projected_entry(
 
 def transform_google_parts(body: dict[str, Any], msgs: list[_Msg], req: "Request", cfg: ProviderSpec) -> None:
     contents: list[dict[str, Any]] = []
-    if msgs:
-        call_t = select_tool_call_transform(cfg)
-        result_t = select_tool_result_transform(cfg)
-        # Google's wire identifies a tool result by the function NAME, but the
-        # universal ToolResult carries only tool_use_id. Recover id->name from
-        # the call turns, which always precede their result in a valid history,
-        # and resolve the result's name from it. A new ToolResult is built (not
-        # mutated) so the caller's Message/history is untouched. The agent path
-        # is unaffected (its extractor sets id==name); an unmatched id passes
-        # through unchanged (transform_google_tool_result_msg uses tool_use_id).
-        id_to_name: dict[str, str] = {}
-        for m in msgs:
-            # A replayed Google turn is candidates[0].content verbatim — the same
-            # {role, parts} object the contents array takes, so it drops straight
-            # in. It still has to feed id_to_name below, because a LATER tool
-            # result is matched by name against calls made on this turn; that
-            # lookup reads the canonical projection, which the fallback still
-            # carries even when the payload is what gets sent.
-            if isinstance(m, _MsgTurn) and m.shape == "ChatGoogle":
-                if isinstance(m.fallback, _MsgCalls):
-                    for c in m.fallback.calls:
-                        id_to_name[c.id] = c.name
-                try:
-                    contents.append(json.loads(m.wire))
-                    continue
-                except ValueError:
-                    pass
-            contents.extend(_google_projected_entry(m, cfg, call_t, result_t, id_to_name))
+    call_t = select_tool_call_transform(cfg)
+    result_t = select_tool_result_transform(cfg)
+    # Google's wire identifies a tool result by the function NAME, but the
+    # universal ToolResult carries only tool_use_id. Recover id->name from
+    # the call turns, which always precede their result in a valid history,
+    # and resolve the result's name from it. A new ToolResult is built (not
+    # mutated) so the caller's Message/history is untouched. The agent path
+    # is unaffected (its extractor sets id==name); an unmatched id passes
+    # through unchanged (transform_google_tool_result_msg uses tool_use_id).
+    id_to_name: dict[str, str] = {}
+    for m in msgs:
+        # A replayed Google turn is candidates[0].content verbatim — the same
+        # {role, parts} object the contents array takes, so it drops straight
+        # in. It still has to feed id_to_name below, because a LATER tool
+        # result is matched by name against calls made on this turn; that
+        # lookup reads the canonical projection, which the fallback still
+        # carries even when the payload is what gets sent.
+        if isinstance(m, _MsgTurn) and m.shape == "ChatGoogle":
+            if isinstance(m.fallback, _MsgCalls):
+                for c in m.fallback.calls:
+                    id_to_name[c.id] = c.name
+            try:
+                contents.append(json.loads(m.wire))
+                continue
+            except ValueError:
+                pass
+        contents.extend(_google_projected_entry(m, cfg, call_t, result_t, id_to_name))
     body["contents"] = contents
 
 
@@ -518,53 +517,52 @@ def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Req
     if req.system:
         body["system"] = [{"text": req.system}]
     out: list[dict[str, Any]] = []
-    if msgs:
-        call_t = select_tool_call_transform(cfg)
-        result_t = select_tool_result_transform(cfg)
-        prev_result = False
-        for m in msgs:
-            # Bedrock never replays: ChatBedrock declares
-            # assistantTurnUnanchored rather than a position (ADR-085 OQ-5),
-            # so there is no container to splice into. Reconstruct from the
-            # projection instead of falling through to _assert_never —
-            # resolve_turns should already have unwrapped this, and raising at a
-            # caller is the wrong way to report that it did not. When OQ-5 anchors
-            # Converse, this becomes a real splice.
-            if isinstance(m, _MsgTurn):
-                m = m.fallback
-            match m:
-                case _MsgResult():
-                    # Converse wants every toolResult answering one assistant
-                    # turn inside ONE user message; one message per result is
-                    # a 400 (live, 2026-10-15). A result that follows a result
-                    # joins the message the first one opened.
-                    entry = result_t(m.result, cfg.role_mappings)
-                    if prev_result:
-                        out[-1]["content"].extend(entry["content"])
-                    else:
-                        out.append(entry)
-                case _MsgCalls():
-                    out.extend(call_t(m.calls, cfg.role_mappings))
-                case _MsgText():
-                    out.append(
-                        {
-                            "role": map_role(m.role, cfg.role_mappings),
-                            "content": [{"text": m.text}],
-                        }
-                    )
-                case _MsgPrompt():
-                    content = [{"text": m.text}]
-                    if m.images:
-                        content = _build_bedrock_content_parts(m)
-                    out.append(
-                        {
-                            "role": map_role("user", cfg.role_mappings),
-                            "content": content,
-                        }
-                    )
-                case _:
-                    _assert_never(m)
-            prev_result = isinstance(m, _MsgResult)
+    call_t = select_tool_call_transform(cfg)
+    result_t = select_tool_result_transform(cfg)
+    prev_result = False
+    for m in msgs:
+        # Bedrock never replays: ChatBedrock declares
+        # assistantTurnUnanchored rather than a position (ADR-085 OQ-5),
+        # so there is no container to splice into. Reconstruct from the
+        # projection instead of falling through to _assert_never —
+        # resolve_turns should already have unwrapped this, and raising at a
+        # caller is the wrong way to report that it did not. When OQ-5 anchors
+        # Converse, this becomes a real splice.
+        if isinstance(m, _MsgTurn):
+            m = m.fallback
+        match m:
+            case _MsgResult():
+                # Converse wants every toolResult answering one assistant
+                # turn inside ONE user message; one message per result is
+                # a 400 (live, 2026-10-15). A result that follows a result
+                # joins the message the first one opened.
+                entry = result_t(m.result, cfg.role_mappings)
+                if prev_result:
+                    out[-1]["content"].extend(entry["content"])
+                else:
+                    out.append(entry)
+            case _MsgCalls():
+                out.extend(call_t(m.calls, cfg.role_mappings))
+            case _MsgText():
+                out.append(
+                    {
+                        "role": map_role(m.role, cfg.role_mappings),
+                        "content": [{"text": m.text}],
+                    }
+                )
+            case _MsgPrompt():
+                content = [{"text": m.text}]
+                if m.images:
+                    content = _build_bedrock_content_parts(m)
+                out.append(
+                    {
+                        "role": map_role("user", cfg.role_mappings),
+                        "content": content,
+                    }
+                )
+            case _:
+                _assert_never(m)
+        prev_result = isinstance(m, _MsgResult)
     body["messages"] = out
 
 
