@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Callable, NoReturn
+from typing import TYPE_CHECKING, Any, Callable, NoReturn
 
 from .errors import ValidationError
 from .paths import matching_blocks, parse_data_uri
@@ -14,7 +14,10 @@ from .providers.generated.request import (
     system_placement,
     tool_call_config,
 )
-from .structs import Message, ToolCall, ToolResult
+from .structs import File, Message, ToolCall, ToolResult
+
+if TYPE_CHECKING:
+    from .types import InputImage, Request
 
 
 MessageTransform = Callable[[dict[str, Any], list["_Msg"], "Request", ProviderSpec], None]
@@ -147,12 +150,24 @@ class _MsgTurn:
     fallback: "_Msg"
 
 
+@dataclass(frozen=True)
+class _MsgPrompt:
+    """The final user turn of a Text, stream or batch request: the prompt text
+    plus the files and images attached to it (BUG-108). A variant of its own
+    because media rides only on this turn, and _MsgText carries only
+    (role, text). request_msgs appends it after the history, so every transform
+    reads one ordered list and never chooses between history and prompt."""
+    text: str
+    files: list[File]
+    images: list["InputImage"]
+
+
 # A message is *exactly one of* the variants. The public Message (structs.py) is
 # a flat product that can encode an illegal multi-carrier combination; this union
 # cannot, so the transforms below dispatch with match/case rather than the old
 # if/elif silent-drop order. _MsgTurn is not a fourth carrier: it WRAPS one of the
 # other three, which stays the projection consumers read.
-_Msg = _MsgText | _MsgCalls | _MsgResult | _MsgTurn
+_Msg = _MsgText | _MsgCalls | _MsgResult | _MsgTurn | _MsgPrompt
 
 
 def _assert_never(value: NoReturn) -> NoReturn:
@@ -206,6 +221,17 @@ def to_internal(messages: list[Message]) -> list[_Msg]:
     return out
 
 
+def request_msgs(req: "Request") -> list[_Msg]:
+    """The one place a public Request becomes the message list the transforms
+    read: the validated history, then the prompt as the last user turn
+    (BUG-108). The Agent builds its list from trusted history instead and has
+    no prompt to append."""
+    msgs = to_internal(req.messages)
+    if req.user:
+        msgs.append(_MsgPrompt(text=req.user, files=list(req.files), images=list(req.images)))
+    return msgs
+
+
 # =============================================================================
 # Message transforms — build the messages/contents array in request body
 # =============================================================================
@@ -245,6 +271,13 @@ def _flat_projected_entry(
                 "role": map_role(m.role, cfg.role_mappings),
                 "content": m.text,
             }]
+        case _MsgPrompt():
+            # Media rides only on the final prompt turn; history turns carry
+            # plain-string content.
+            content: str | list[dict[str, Any]] = m.text
+            if m.files or m.images:
+                content = _build_flat_content_parts(m, cfg)
+            return [{"role": map_role("user", cfg.role_mappings), "content": content}]
         case _MsgTurn():
             # A payload the splice could not place falls back to its projection.
             # resolve_turns should already have unwrapped anything unplaceable —
@@ -308,37 +341,19 @@ def _build_flat_message_array(msgs: list[_Msg], req: "Request", cfg: ProviderSpe
             }
         )
 
-    has_media = bool(req.files) or bool(req.images)
-
-    if msgs:
-        # Tool-aware dispatch (ADR-020 / ADR-026): a tool-bearing history routes
-        # through the same builder as plain text — a text turn is the no-tool case.
-        call_t = select_tool_call_transform(cfg)
-        result_t = select_tool_result_transform(cfg)
-        for m in msgs:
-            if isinstance(m, _MsgTurn) and _append_flat_replayed_turn(out, m, cfg):
-                continue
-            out.extend(_flat_projected_entry(m, cfg, call_t, result_t))
-    elif req.user:
-        if has_media:
-            out.append(
-                {
-                    "role": map_role("user", cfg.role_mappings),
-                    "content": _build_flat_content_parts(req, cfg),
-                }
-            )
-        else:
-            out.append(
-                {
-                    "role": map_role("user", cfg.role_mappings),
-                    "content": req.user,
-                }
-            )
+    # Tool-aware dispatch (ADR-020 / ADR-026): a tool-bearing history routes
+    # through the same builder as plain text — a text turn is the no-tool case.
+    call_t = select_tool_call_transform(cfg)
+    result_t = select_tool_result_transform(cfg)
+    for m in msgs:
+        if isinstance(m, _MsgTurn) and _append_flat_replayed_turn(out, m, cfg):
+            continue
+        out.extend(_flat_projected_entry(m, cfg, call_t, result_t))
 
     return out
 
 
-def _build_flat_content_parts(req: "Request", cfg: ProviderSpec) -> list[dict[str, Any]]:
+def _build_flat_content_parts(req: _MsgPrompt, cfg: ProviderSpec) -> list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
     is_anthropic = cfg.chat_wire_shape == "ChatAnthropic"
 
@@ -388,7 +403,7 @@ def _build_flat_content_parts(req: "Request", cfg: ProviderSpec) -> list[dict[st
                 }
             )
 
-    parts.append({"type": "text", "text": req.user})
+    parts.append({"type": "text", "text": req.text})
     return parts
 
 
@@ -417,6 +432,11 @@ def _google_projected_entry(
             return [{
                 "role": map_role(m.role, cfg.role_mappings),
                 "parts": [{"text": m.text}],
+            }]
+        case _MsgPrompt():
+            return [{
+                "role": map_role("user", cfg.role_mappings),
+                "parts": _build_google_content_parts(m),
             }]
         case _MsgTurn():
             return _google_projected_entry(m.fallback, cfg, call_t, result_t, id_to_name)
@@ -454,18 +474,10 @@ def transform_google_parts(body: dict[str, Any], msgs: list[_Msg], req: "Request
                 except ValueError:
                     pass
             contents.extend(_google_projected_entry(m, cfg, call_t, result_t, id_to_name))
-    elif req.user:
-        parts = _build_google_content_parts(req)
-        contents.append(
-            {
-                "role": map_role("user", cfg.role_mappings),
-                "parts": parts,
-            }
-        )
     body["contents"] = contents
 
 
-def _build_google_content_parts(req: "Request") -> list[dict[str, Any]]:
+def _build_google_content_parts(req: _MsgPrompt) -> list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
     for f in req.files:
         parts.append(
@@ -498,7 +510,7 @@ def _build_google_content_parts(req: "Request") -> list[dict[str, Any]]:
                     }
                 }
             )
-    parts.append({"text": req.user})
+    parts.append({"text": req.text})
     return parts
 
 
@@ -540,24 +552,23 @@ def transform_bedrock_converse(body: dict[str, Any], msgs: list[_Msg], req: "Req
                             "content": [{"text": m.text}],
                         }
                     )
+                case _MsgPrompt():
+                    content = [{"text": m.text}]
+                    if m.images:
+                        content = _build_bedrock_content_parts(m)
+                    out.append(
+                        {
+                            "role": map_role("user", cfg.role_mappings),
+                            "content": content,
+                        }
+                    )
                 case _:
                     _assert_never(m)
             prev_result = isinstance(m, _MsgResult)
-    elif req.user:
-        if req.images:
-            content = _build_bedrock_content_parts(req)
-        else:
-            content = [{"text": req.user}]
-        out.append(
-            {
-                "role": map_role("user", cfg.role_mappings),
-                "content": content,
-            }
-        )
     body["messages"] = out
 
 
-def _build_bedrock_content_parts(req: "Request") -> list[dict[str, Any]]:
+def _build_bedrock_content_parts(req: _MsgPrompt) -> list[dict[str, Any]]:
     """Converse content array with image blocks (ADR-060). Each image emits
     {image:{format,source:{bytes}}}; the prompt text follows as a trailing
     {text} block, preserving caller order among images. Mirrors go/transforms.go
@@ -575,7 +586,7 @@ def _build_bedrock_content_parts(req: "Request") -> list[dict[str, Any]]:
                 }
             }
         )
-    parts.append({"text": req.user})
+    parts.append({"text": req.text})
     return parts
 
 
