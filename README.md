@@ -1,5 +1,11 @@
 # llmkit (Python)
 
+> **Maintenance mode.** This SDK receives security fixes only. It gets no new
+> providers, models or features. For active development, use
+> [Go](https://github.com/aktagon/llmkit-go),
+> [TypeScript](https://github.com/aktagon/llmkit-ts) or
+> [Rust](https://github.com/aktagon/llmkit-rust).
+
 One Python API for Anthropic, OpenAI, Google, and 20+ other providers — including local models through Ollama and vLLM. Switch providers without rewriting your request.
 
 Async. Zero external dependencies — stdlib only, no `httpx`, no `pydantic`. Python 3.10+.
